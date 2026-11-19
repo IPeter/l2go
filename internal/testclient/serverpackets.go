@@ -20,49 +20,74 @@ type Packet interface {
 // follow the Mobius enum: OpCharMoveToLocation is the server
 // MoveToLocation, OpMoveToLocation the client one.
 const (
-	OpCharMoveToLocation   byte = 0x01
-	OpNpcSay               byte = 0x02
-	OpCharInfo             byte = 0x03
-	OpUserInfo             byte = 0x04
-	OpStatusUpdate         byte = 0x0e
-	OpNpcHtmlMessage       byte = 0x0f
-	OpDeleteObject         byte = 0x12
-	OpCharSelected         byte = 0x15
-	OpNpcInfo              byte = 0x16
-	OpItemList             byte = 0x1b
-	OpCharDeleteSuccess    byte = 0x23
-	OpCharDeleteFail       byte = 0x24
-	OpActionFailed         byte = 0x25
-	OpServerClose          byte = 0x26
-	OpInventoryUpdate      byte = 0x27
-	OpTeleportToLocation   byte = 0x28
-	OpTargetSelected       byte = 0x29
-	OpTargetUnselected     byte = 0x2a
-	OpSocialAction         byte = 0x2d
-	OpChangeMoveType       byte = 0x2e
-	OpChangeWaitType       byte = 0x2f
-	OpShortcutInit         byte = 0x45
-	OpStopMove             byte = 0x47
-	OpCreatureSay          byte = 0x4a
-	OpSkillList            byte = 0x58
-	OpRestartResponse      byte = 0x5f
-	OpMoveToPawn           byte = 0x60
-	OpValidateLocation     byte = 0x61
-	OpStartRotation        byte = 0x62
-	OpStopRotation         byte = 0x63
-	OpSystemMessage        byte = 0x64
-	OpLeaveWorld           byte = 0x7e
-	OpAbnormalStatusUpdate byte = 0x7f
-	OpQuestList            byte = 0x80
-	OpServerObjectInfo     byte = 0x8c
-	OpShowMiniMap          byte = 0x9d
-	OpMyTargetSelected     byte = 0xa6
-	OpSkillCoolTime        byte = 0xc1
-	OpRelationChanged      byte = 0xce
-	OpHennaInfo            byte = 0xe4
-	OpSendMacroList        byte = 0xe7
-	OpEtcStatusUpdate      byte = 0xf3
-	OpFriendList           byte = 0xfa
+	OpCharMoveToLocation      byte = 0x01
+	OpNpcSay                  byte = 0x02
+	OpCharInfo                byte = 0x03
+	OpUserInfo                byte = 0x04
+	OpAttack                  byte = 0x05
+	OpDie                     byte = 0x06
+	OpRevive                  byte = 0x07
+	OpSpawnItem               byte = 0x0b
+	OpDropItem                byte = 0x0c
+	OpGetItem                 byte = 0x0d
+	OpStatusUpdate            byte = 0x0e
+	OpNpcHtmlMessage          byte = 0x0f
+	OpSellList                byte = 0x10
+	OpBuyList                 byte = 0x11
+	OpDeleteObject            byte = 0x12
+	OpCharSelected            byte = 0x15
+	OpNpcInfo                 byte = 0x16
+	OpItemList                byte = 0x1b
+	OpCharDeleteSuccess       byte = 0x23
+	OpCharDeleteFail          byte = 0x24
+	OpActionFailed            byte = 0x25
+	OpServerClose             byte = 0x26
+	OpInventoryUpdate         byte = 0x27
+	OpTeleportToLocation      byte = 0x28
+	OpTargetSelected          byte = 0x29
+	OpTargetUnselected        byte = 0x2a
+	OpAutoAttackStart         byte = 0x2b
+	OpAutoAttackStop          byte = 0x2c
+	OpSocialAction            byte = 0x2d
+	OpChangeMoveType          byte = 0x2e
+	OpChangeWaitType          byte = 0x2f
+	OpWareHouseDepositList    byte = 0x41
+	OpWareHouseWithdrawalList byte = 0x42
+	OpShortcutRegister        byte = 0x44
+	OpShortcutInit            byte = 0x45
+	OpStopMove                byte = 0x47
+	OpMagicSkillUse           byte = 0x48
+	OpMagicSkillCanceled      byte = 0x49
+	OpCreatureSay             byte = 0x4a
+	OpEquipUpdate             byte = 0x4b
+	OpSkillList               byte = 0x58
+	OpRestartResponse         byte = 0x5f
+	OpMoveToPawn              byte = 0x60
+	OpValidateLocation        byte = 0x61
+	OpStartRotation           byte = 0x62
+	OpStopRotation            byte = 0x63
+	OpSystemMessage           byte = 0x64
+	OpSetupGauge              byte = 0x6d
+	OpMagicSkillLaunched      byte = 0x76
+	OpLeaveWorld              byte = 0x7e
+	OpAbnormalStatusUpdate    byte = 0x7f
+	OpQuestList               byte = 0x80
+	OpEnchantResult           byte = 0x81
+	OpAcquireSkillList        byte = 0x8a
+	OpAcquireSkillInfo        byte = 0x8b
+	OpServerObjectInfo        byte = 0x8c
+	OpAcquireSkillDone        byte = 0x8e
+	OpShowMiniMap             byte = 0x9d
+	OpMyTargetSelected        byte = 0xa6
+	OpSkillCoolTime           byte = 0xc1
+	OpRelationChanged         byte = 0xce
+	OpMultiSellList           byte = 0xd0
+	OpHennaInfo               byte = 0xe4
+	OpSendMacroList           byte = 0xe7
+	OpPartySpelled            byte = 0xee
+	OpEtcStatusUpdate         byte = 0xf3
+	OpShortBuffStatusUpdate   byte = 0xf4
+	OpFriendList              byte = 0xfa
 	// OpExServer starts every Ex packet. A little-endian uint16 sub-opcode
 	// follows it (Mobius ServerPackets.writeId).
 	OpExServer byte = 0xfe
@@ -70,6 +95,7 @@ const (
 
 // Ex server packet sub-opcodes.
 const (
+	ExOpAutoSoulShot    uint16 = 0x12
 	ExOpStorageMaxCount uint16 = 0x2e
 )
 
@@ -89,90 +115,98 @@ type serverPacket struct {
 // without decode give their Mobius name to Unknown packets, so a recorded
 // stream stays readable. KeyPacket is decoded by parseKeyPacket.
 var serverPackets = map[byte]serverPacket{
-	OpKeyPacket:            {name: "KeyPacket"},
-	OpCharMoveToLocation:   {"MoveToLocation", readMoveToLocation},
-	OpNpcSay:               {"NpcSay", readNpcSay},
-	OpCharInfo:             {"CharInfo", readCharInfoPacket},
-	OpUserInfo:             {"UserInfo", readUserInfo},
-	0x05:                   {name: "Attack"},
-	0x06:                   {name: "Die"},
-	0x07:                   {name: "Revive"},
-	0x0b:                   {name: "SpawnItem"},
-	0x0c:                   {name: "DropItem"},
-	0x0d:                   {name: "GetItem"},
-	OpStatusUpdate:         {"StatusUpdate", readStatusUpdate},
-	OpNpcHtmlMessage:       {"NpcHtmlMessage", readNpcHtmlMessage},
-	0x10:                   {name: "SellList"},
-	0x11:                   {name: "BuyList"},
-	OpDeleteObject:         {"DeleteObject", readDeleteObject},
-	OpCharSelectionInfo:    {"CharSelectionInfo", readCharSelectionInfoPacket},
-	OpGameLoginFail:        {"LoginFail", readGameLoginFail},
-	OpCharSelected:         {"CharSelected", readCharSelected},
-	OpNpcInfo:              {"NpcInfo", readNpcInfo},
-	OpNewCharacterSuccess:  {"NewCharacterSuccess", readNewCharacterSuccessPacket},
-	OpCharCreateOk:         {"CharCreateOk", readCharCreateOk},
-	OpCharCreateFail:       {"CharCreateFail", readCharCreateFail},
-	OpItemList:             {"ItemList", readItemList},
-	0x1c:                   {name: "SunRise"},
-	0x1d:                   {name: "SunSet"},
-	OpCharDeleteSuccess:    {"CharDeleteSuccess", readCharDeleteSuccess},
-	OpCharDeleteFail:       {"CharDeleteFail", readCharDeleteFail},
-	OpActionFailed:         {"ActionFailed", readActionFailed},
-	OpServerClose:          {"ServerClose", readServerClose},
-	OpInventoryUpdate:      {"InventoryUpdate", readInventoryUpdate},
-	OpTeleportToLocation:   {"TeleportToLocation", readTeleportToLocation},
-	OpTargetSelected:       {"TargetSelected", readTargetSelected},
-	OpTargetUnselected:     {"TargetUnselected", readTargetUnselected},
-	0x2b:                   {name: "AutoAttackStart"},
-	0x2c:                   {name: "AutoAttackStop"},
-	OpSocialAction:         {"SocialAction", readSocialAction},
-	OpChangeMoveType:       {"ChangeMoveType", readChangeMoveType},
-	OpChangeWaitType:       {"ChangeWaitType", readChangeWaitType},
-	OpShortcutInit:         {"ShortcutInit", readShortcutInit},
-	OpStopMove:             {"StopMove", readStopMove},
-	0x48:                   {name: "MagicSkillUse"},
-	0x49:                   {name: "MagicSkillCanceled"},
-	OpCreatureSay:          {"CreatureSay", readCreatureSay},
-	0x4b:                   {name: "EquipUpdate"},
-	0x4c:                   {name: "DoorInfo"},
-	0x4d:                   {name: "DoorStatusUpdate"},
-	OpSkillList:            {"SkillList", readSkillList},
-	OpRestartResponse:      {"RestartResponse", readRestartResponse},
-	OpMoveToPawn:           {"MoveToPawn", readMoveToPawn},
-	OpValidateLocation:     {"ValidateLocation", readValidateLocation},
-	OpStartRotation:        {"StartRotation", readStartRotation},
-	OpStopRotation:         {"StopRotation", readStopRotation},
-	OpSystemMessage:        {"SystemMessage", readSystemMessage},
-	0x6d:                   {name: "SetupGauge"},
-	0x76:                   {name: "MagicSkillLaunched"},
-	OpLeaveWorld:           {"LeaveWorld", readLeaveWorld},
-	OpAbnormalStatusUpdate: {"AbnormalStatusUpdate", readAbnormalStatusUpdate},
-	OpQuestList:            {"QuestList", readQuestList},
-	0x83:                   {name: "PledgeInfo"},
-	OpServerObjectInfo:     {"ServerObjectInfo", readServerObjectInfo},
-	0x98:                   {name: "PlaySound"},
-	0x99:                   {name: "StaticObjectInfo"},
-	OpShowMiniMap:          {"ShowMiniMap", readShowMiniMap},
-	OpMyTargetSelected:     {"MyTargetSelected", readMyTargetSelected},
-	0xb1:                   {name: "PetInfo"},
-	OpSkillCoolTime:        {"SkillCoolTime", readSkillCoolTime},
-	OpRelationChanged:      {"RelationChanged", readRelationChanged},
-	0xd3:                   {name: "NetPing"},
-	OpHennaInfo:            {"HennaInfo", readHennaInfo},
-	OpSendMacroList:        {"SendMacroList", readSendMacroList},
-	0xec:                   {name: "ClientSetTime"},
-	0xee:                   {name: "PartySpelled"},
-	OpEtcStatusUpdate:      {"EtcStatusUpdate", readEtcStatusUpdate},
-	0xf4:                   {name: "ShortBuffStatusUpdate"},
-	0xf5:                   {name: "SSQStatus"},
-	0xf9:                   {name: "GameGuardQuery"},
-	OpFriendList:           {"FriendList", readFriendList},
+	OpKeyPacket:               {name: "KeyPacket"},
+	OpCharMoveToLocation:      {"MoveToLocation", readMoveToLocation},
+	OpNpcSay:                  {"NpcSay", readNpcSay},
+	OpCharInfo:                {"CharInfo", readCharInfoPacket},
+	OpUserInfo:                {"UserInfo", readUserInfo},
+	OpAttack:                  {"Attack", readAttack},
+	OpDie:                     {"Die", readDie},
+	OpRevive:                  {"Revive", readRevive},
+	OpSpawnItem:               {"SpawnItem", readSpawnItem},
+	OpDropItem:                {"DropItem", readDropItem},
+	OpGetItem:                 {"GetItem", readGetItem},
+	OpStatusUpdate:            {"StatusUpdate", readStatusUpdate},
+	OpNpcHtmlMessage:          {"NpcHtmlMessage", readNpcHtmlMessage},
+	OpSellList:                {"SellList", readSellList},
+	OpBuyList:                 {"BuyList", readBuyList},
+	OpDeleteObject:            {"DeleteObject", readDeleteObject},
+	OpCharSelectionInfo:       {"CharSelectionInfo", readCharSelectionInfoPacket},
+	OpGameLoginFail:           {"LoginFail", readGameLoginFail},
+	OpCharSelected:            {"CharSelected", readCharSelected},
+	OpNpcInfo:                 {"NpcInfo", readNpcInfo},
+	OpNewCharacterSuccess:     {"NewCharacterSuccess", readNewCharacterSuccessPacket},
+	OpCharCreateOk:            {"CharCreateOk", readCharCreateOk},
+	OpCharCreateFail:          {"CharCreateFail", readCharCreateFail},
+	OpItemList:                {"ItemList", readItemList},
+	0x1c:                      {name: "SunRise"},
+	0x1d:                      {name: "SunSet"},
+	OpCharDeleteSuccess:       {"CharDeleteSuccess", readCharDeleteSuccess},
+	OpCharDeleteFail:          {"CharDeleteFail", readCharDeleteFail},
+	OpActionFailed:            {"ActionFailed", readActionFailed},
+	OpServerClose:             {"ServerClose", readServerClose},
+	OpInventoryUpdate:         {"InventoryUpdate", readInventoryUpdate},
+	OpTeleportToLocation:      {"TeleportToLocation", readTeleportToLocation},
+	OpTargetSelected:          {"TargetSelected", readTargetSelected},
+	OpTargetUnselected:        {"TargetUnselected", readTargetUnselected},
+	OpAutoAttackStart:         {"AutoAttackStart", readAutoAttackStart},
+	OpAutoAttackStop:          {"AutoAttackStop", readAutoAttackStop},
+	OpSocialAction:            {"SocialAction", readSocialAction},
+	OpChangeMoveType:          {"ChangeMoveType", readChangeMoveType},
+	OpChangeWaitType:          {"ChangeWaitType", readChangeWaitType},
+	OpWareHouseDepositList:    {"WareHouseDepositList", readWareHouseDepositList},
+	OpWareHouseWithdrawalList: {"WareHouseWithdrawalList", readWareHouseWithdrawalList},
+	OpShortcutRegister:        {"ShortcutRegister", readShortcutRegister},
+	OpShortcutInit:            {"ShortcutInit", readShortcutInit},
+	OpStopMove:                {"StopMove", readStopMove},
+	OpMagicSkillUse:           {"MagicSkillUse", readMagicSkillUse},
+	OpMagicSkillCanceled:      {"MagicSkillCanceled", readMagicSkillCanceled},
+	OpCreatureSay:             {"CreatureSay", readCreatureSay},
+	OpEquipUpdate:             {"EquipUpdate", readEquipUpdate},
+	0x4c:                      {name: "DoorInfo"},
+	0x4d:                      {name: "DoorStatusUpdate"},
+	OpSkillList:               {"SkillList", readSkillList},
+	OpRestartResponse:         {"RestartResponse", readRestartResponse},
+	OpMoveToPawn:              {"MoveToPawn", readMoveToPawn},
+	OpValidateLocation:        {"ValidateLocation", readValidateLocation},
+	OpStartRotation:           {"StartRotation", readStartRotation},
+	OpStopRotation:            {"StopRotation", readStopRotation},
+	OpSystemMessage:           {"SystemMessage", readSystemMessage},
+	OpSetupGauge:              {"SetupGauge", readSetupGauge},
+	OpMagicSkillLaunched:      {"MagicSkillLaunched", readMagicSkillLaunched},
+	OpLeaveWorld:              {"LeaveWorld", readLeaveWorld},
+	OpAbnormalStatusUpdate:    {"AbnormalStatusUpdate", readAbnormalStatusUpdate},
+	OpQuestList:               {"QuestList", readQuestList},
+	OpEnchantResult:           {"EnchantResult", readEnchantResult},
+	0x83:                      {name: "PledgeInfo"},
+	OpAcquireSkillList:        {"AcquireSkillList", readAcquireSkillList},
+	OpAcquireSkillInfo:        {"AcquireSkillInfo", readAcquireSkillInfo},
+	OpServerObjectInfo:        {"ServerObjectInfo", readServerObjectInfo},
+	OpAcquireSkillDone:        {"AcquireSkillDone", readAcquireSkillDone},
+	0x98:                      {name: "PlaySound"},
+	0x99:                      {name: "StaticObjectInfo"},
+	OpShowMiniMap:             {"ShowMiniMap", readShowMiniMap},
+	OpMyTargetSelected:        {"MyTargetSelected", readMyTargetSelected},
+	0xb1:                      {name: "PetInfo"},
+	OpSkillCoolTime:           {"SkillCoolTime", readSkillCoolTime},
+	OpRelationChanged:         {"RelationChanged", readRelationChanged},
+	OpMultiSellList:           {"MultiSellList", readMultiSellList},
+	0xd3:                      {name: "NetPing"},
+	OpHennaInfo:               {"HennaInfo", readHennaInfo},
+	OpSendMacroList:           {"SendMacroList", readSendMacroList},
+	0xec:                      {name: "ClientSetTime"},
+	OpPartySpelled:            {"PartySpelled", readPartySpelled},
+	OpEtcStatusUpdate:         {"EtcStatusUpdate", readEtcStatusUpdate},
+	OpShortBuffStatusUpdate:   {"ShortBuffStatusUpdate", readShortBuffStatusUpdate},
+	0xf5:                      {name: "SSQStatus"},
+	0xf9:                      {name: "GameGuardQuery"},
+	OpFriendList:              {"FriendList", readFriendList},
 }
 
 // exServerPackets lists the Ex server packets by sub-opcode.
 var exServerPackets = map[uint16]serverPacket{
 	0x01:                {name: "ExRegenMax"},
-	0x12:                {name: "ExAutoSoulShot"},
+	ExOpAutoSoulShot:    {"ExAutoSoulShot", readExAutoSoulShot},
 	0x1a:                {name: "ExShowQuestMark"},
 	0x1b:                {name: "ExSendManorList"},
 	ExOpStorageMaxCount: {"ExStorageMaxCount", readExStorageMaxCount},

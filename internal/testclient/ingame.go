@@ -434,11 +434,11 @@ func (c *GameConn) RequestSocialAction(ctx context.Context, actionID int32) erro
 	return c.send(ctx, encodeInt(OpRequestSocialAction, actionID))
 }
 
-// AttackRequest attacks objectID (AttackRequest) and waits for the
-// ActionFailed the server answers with while monsters cannot be attacked
-// (Milestone 4). Packets queued before the request are dropped first, so a
-// stale ActionFailed does not count. Mobius itself targets or attacks
-// instead.
+// AttackRequest sends AttackRequest for objectID and waits for the
+// ActionFailed the server answers with when it refuses the attack, for
+// example on an object that cannot be attacked. Packets queued before the
+// request are dropped first, so a stale ActionFailed does not count.
+// Attack waits for the attack itself, SendAttackRequest for nothing.
 func (c *GameConn) AttackRequest(ctx context.Context, objectID int32, shift bool) error {
 	_, _ = c.Drain()
 	if err := c.send(ctx, encodeAction(OpAttackRequest, objectID, c.world.Me().Pos, shift)); err != nil {

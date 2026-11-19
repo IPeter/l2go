@@ -77,6 +77,11 @@ type Object struct {
 	// HP and MaxHP come from StatusUpdate (and ServerObjectInfo), 0 while
 	// unknown.
 	HP, MaxHP int32
+	// Dead comes from the dead flag of CharInfo and NpcInfo, Die and Revive.
+	Dead bool
+	// InCombat is the combat stance: the combat flag of CharInfo and
+	// NpcInfo, AutoAttackStart and AutoAttackStop.
+	InCombat bool
 	// Relation and AutoAttackable come from RelationChanged.
 	Relation       int32
 	AutoAttackable bool
@@ -93,6 +98,16 @@ type Me struct {
 	HP, MaxHP int32
 	MP, MaxMP int32
 	CP, MaxCP int32
+	// Load is the weight carried and MaxLoad the limit, from UserInfo and
+	// StatusUpdate.
+	Load, MaxLoad int32
+	// Dead is set by the character's Die and cleared by its Revive. Death is
+	// that Die, with the restart points it offers, while Dead is set.
+	Dead  bool
+	Death Die
+	// InCombat is the combat stance: set by AutoAttackStart, cleared by
+	// AutoAttackStop.
+	InCombat bool
 	// UserInfo is the last UserInfo; HasUserInfo tells whether one came.
 	UserInfo    UserInfo
 	HasUserInfo bool
@@ -100,26 +115,46 @@ type Me struct {
 
 // World is the client's view of the game world, kept up to date from every
 // server packet the connection reads: the character (CharSelected,
-// UserInfo), the visible objects (CharInfo, NpcInfo, ServerObjectInfo,
-// DeleteObject) with their movement, targets and HP, the inventory, the
-// chat and system message logs and the last dialog page. CharSelected and
-// a successful RestartResponse clear it.
+// UserInfo, StatusUpdate, Die, Revive, the combat stance), the visible
+// objects (CharInfo, NpcInfo, ServerObjectInfo, DeleteObject) with their
+// movement, targets, HP and state, the items on the ground (SpawnItem,
+// DropItem, GetItem), the inventory (ItemList, InventoryUpdate), the
+// skills, shortcuts, buffs and automatic shots, the chat and system message
+// logs and the last dialog page. CharSelected and a successful
+// RestartResponse clear it.
 //
 // It is safe for concurrent use. Its methods return copies.
 type World struct {
 	mu      sync.Mutex
 	me      Me
 	objects map[int32]*Object
+	ground  map[int32]GroundItem
 	items   []Item
-	chat    []CreatureSay
-	npcSays []NpcSay
-	sysMsgs []SystemMessage
-	html    NpcHtmlMessage
-	hasHTML bool
+	// skills is the last SkillList, shortcuts the last ShortcutInit with the
+	// ShortcutRegisters after it.
+	skills    []Skill
+	shortcuts []Shortcut
+	// effects is the last AbnormalStatusUpdate, shortBuff the last
+	// ShortBuffStatusUpdate, party the last PartySpelled of each object.
+	effects   []Effect
+	shortBuff ShortBuffStatusUpdate
+	party     map[int32]PartySpelled
+	// autoShots holds the item IDs of the shots in automatic use.
+	autoShots map[int32]bool
+	chat      []CreatureSay
+	npcSays   []NpcSay
+	sysMsgs   []SystemMessage
+	html      NpcHtmlMessage
+	hasHTML   bool
 }
 
 func newWorld() *World {
-	return &World{objects: make(map[int32]*Object)}
+	return &World{
+		objects:   make(map[int32]*Object),
+		ground:    make(map[int32]GroundItem),
+		party:     make(map[int32]PartySpelled),
+		autoShots: make(map[int32]bool),
+	}
 }
 
 // Me returns the character's state.
@@ -254,7 +289,12 @@ func (w *World) selectObjects(keep func(*Object) bool) []Object {
 func (w *World) reset() {
 	w.me = Me{}
 	clear(w.objects)
+	clear(w.ground)
 	w.items = nil
+	w.skills, w.shortcuts = nil, nil
+	w.effects, w.shortBuff = nil, ShortBuffStatusUpdate{}
+	clear(w.party)
+	clear(w.autoShots)
 	w.chat, w.npcSays, w.sysMsgs = nil, nil, nil
 	w.html, w.hasHTML = NpcHtmlMessage{}, false
 }
@@ -306,6 +346,7 @@ func (w *World) apply(p Packet) {
 		w.me.HP, w.me.MaxHP = v.HP, v.MaxHP
 		w.me.MP, w.me.MaxMP = v.MP, v.MaxMP
 		w.me.CP, w.me.MaxCP = v.CP, v.MaxCP
+		w.me.Load, w.me.MaxLoad = v.CurLoad, v.MaxLoad
 		w.me.UserInfo = v
 		w.me.HasUserInfo = true
 	case CharInfoPacket:
@@ -313,12 +354,14 @@ func (w *World) apply(p Packet) {
 		o.Name, o.Title = v.Name, v.Title
 		o.Pos, o.Heading = v.Position(), v.Heading
 		o.Running, o.Sitting = v.Running, !v.Standing
+		o.Dead, o.InCombat = v.AlikeDead, v.InCombat
 		o.Info = v
 	case NpcInfo:
 		o := w.object(v.ObjectID, KindNpc)
 		o.Name, o.Title, o.NpcID = v.Name, v.Title, v.NpcID()
 		o.Pos, o.Heading = v.Position(), v.Heading
 		o.Running, o.Attackable = v.Running, v.Attackable
+		o.Dead, o.InCombat = v.AlikeDead, v.InCombat
 		o.Info = v
 	case ServerObjectInfo:
 		o := w.object(v.ObjectID, KindStatic)
@@ -329,6 +372,7 @@ func (w *World) apply(p Packet) {
 		o.Info = v
 	case DeleteObject:
 		delete(w.objects, v.ObjectID)
+		delete(w.ground, v.ObjectID)
 	case RelationChanged:
 		if o, ok := w.objects[v.ObjectID]; ok {
 			o.Relation, o.AutoAttackable = v.Relation, v.AutoAttackable
@@ -336,6 +380,7 @@ func (w *World) apply(p Packet) {
 	default:
 		w.applyMotion(p)
 		w.applyOther(p)
+		w.applyPlay(p)
 	}
 }
 
@@ -428,6 +473,10 @@ func (w *World) status(s StatusUpdate) {
 				w.me.CP = a.Value
 			case StatusMaxCP:
 				w.me.MaxCP = a.Value
+			case StatusCurLoad:
+				w.me.Load = a.Value
+			case StatusMaxLoad:
+				w.me.MaxLoad = a.Value
 			}
 		}
 		return

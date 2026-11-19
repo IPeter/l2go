@@ -1242,22 +1242,54 @@ const (
 	SMParamSystemString int32 = 13
 )
 
-// System message IDs that the M3 and M4 tests look for (Mobius
+// System message IDs that the M3 to M7 tests look for (Mobius
 // SystemMessageId).
 const (
 	// SysMsgS1IsNotCurrentlyLoggedIn: "$s1 is not currently logged in."
 	SysMsgS1IsNotCurrentlyLoggedIn int32 = 3
+	// SysMsgNotEnoughMP: "Not enough MP."
+	SysMsgNotEnoughMP int32 = 24
+	// SysMsgObtainedAdena: "You have obtained $s1 adena."
+	SysMsgObtainedAdena int32 = 28
+	// SysMsgObtainedItems: "You have obtained $s2 $s1."
+	SysMsgObtainedItems int32 = 29
+	// SysMsgObtainedItem: "You have obtained $s1."
+	SysMsgObtainedItem int32 = 30
 	// SysMsgWelcome: "Welcome to the World of Lineage II."
 	SysMsgWelcome int32 = 34
+	// SysMsgEquipped: "You have equipped your $s1."
+	SysMsgEquipped int32 = 49
+	// SysMsgEarnedExpAndSP: "You have earned $s1 experience and $s2 SP."
+	SysMsgEarnedExpAndSP int32 = 95
+	// SysMsgLevelUp: "Your level has increased!"
+	SysMsgLevelUp int32 = 96
 	// SysMsgIncorrectTarget: "That is the incorrect target."
 	SysMsgIncorrectTarget int32 = 144
 	// SysMsgPlayerNotOnline: "That player is not online."
 	SysMsgPlayerNotOnline int32 = 145
+	// SysMsgLearnedSkill: "You have earned $s1." (YOU_HAVE_EARNED_S1_2),
+	// sent when a skill is learned.
+	SysMsgLearnedSkill int32 = 277
+	// SysMsgNotEnoughSPToLearn: "You do not have enough SP to learn this
+	// skill."
+	SysMsgNotEnoughSPToLearn int32 = 278
 	// SysMsgNotEnoughAdena: "You do not have enough adena."
 	SysMsgNotEnoughAdena int32 = 279
+	// SysMsgSoulshotEnabled: "Power of the spirits enabled."
+	SysMsgSoulshotEnabled int32 = 342
+	// SysMsgDisarmed: "$s1 has been disarmed."
+	SysMsgDisarmed int32 = 417
+	// SysMsgSpiritshotEnabled: "Power of Mana enabled."
+	SysMsgSpiritshotEnabled int32 = 533
+	// SysMsgTransactionComplete: "The transaction is complete."
+	SysMsgTransactionComplete int32 = 880
 	// SysMsgLocationTalkingIsland: "Current location : $s1, $s2, $s3 (Near
 	// Talking Island Village)", the first of the /loc messages.
 	SysMsgLocationTalkingIsland int32 = 910
+	// SysMsgAutoShotOn: "The automatic use of $s1 has been activated."
+	SysMsgAutoShotOn int32 = 1433
+	// SysMsgAutoShotOff: "The automatic use of $s1 has been deactivated."
+	SysMsgAutoShotOff int32 = 1434
 	// SysMsgText is "$s1" (S1_2): the text of Player.sendMessage.
 	SysMsgText int32 = 1983
 )

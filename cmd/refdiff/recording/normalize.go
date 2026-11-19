@@ -72,6 +72,13 @@ var idFields = map[string]bool{
 	"ClanCrestLargeID":   true,
 	"PaperdollObjectIDs": true,
 	"EquipObjectIDs":     true,
+	// Milestone 5–7 packets (ground items, combat, casting).
+	"AttackerID": true,
+	"CasterID":   true,
+	"DropperID":  true,
+	"PlayerID":   true,
+	"Targets":    true,
+	"ObjectID2":  true,
 }
 
 // idKind returns the kind of object an ID field names, for its canonical

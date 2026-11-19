@@ -23,6 +23,15 @@
 // for the answer and skip the packets before it. A Recorder given to
 // DialGame keeps the whole decoded stream in both directions.
 //
+// Beyond moving, chatting and talking to NPCs, the methods cover items
+// (UseItem, DropItem, PickUp, ...), shops and the warehouse (BuyItems,
+// SellItems, MultiSellChoose, DepositItems, WithdrawItems), combat (Attack,
+// RestartPoint) and skills (CastSkill, AcquireSkill, RegisterShortcut,
+// AutoSoulShot). A method whose request Mobius may refuse without a clear
+// answer waits for success only, so a refusal ends with the context; the
+// send-only variants (RequestBuyItem, RequestMagicSkillUse, ...) serve the
+// negative tests.
+//
 // Every call takes a context. Before the reader runs, its deadline becomes
 // the connection deadline and cancelling it aborts a blocked read or write;
 // after an aborted read the connection may be out of step and should be

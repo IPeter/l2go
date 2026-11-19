@@ -10,34 +10,50 @@ import (
 // MoveToLocation is OpMoveToLocation; the server one is
 // OpCharMoveToLocation.
 const (
-	OpMoveToLocation        byte = 0x01
-	OpEnterWorld            byte = 0x03
-	OpAction                byte = 0x04
-	OpLogout                byte = 0x09
-	OpAttackRequest         byte = 0x0a
-	OpCharacterDelete       byte = 0x0c
-	OpCharacterSelect       byte = 0x0d
-	OpRequestSocialAction   byte = 0x1b
-	OpChangeMoveType2       byte = 0x1c
-	OpChangeWaitType2       byte = 0x1d
-	OpRequestLinkHtml       byte = 0x20
-	OpRequestBypassToServer byte = 0x21
-	OpAppearing             byte = 0x30
-	OpCannotMoveAnymore     byte = 0x36
-	OpRequestTargetCanceld  byte = 0x37
-	OpSay2                  byte = 0x38
-	OpRequestSkillList      byte = 0x3f
-	OpRequestActionUse      byte = 0x45
-	OpRequestRestart        byte = 0x46
-	OpValidatePosition      byte = 0x48
-	OpStartRotating         byte = 0x4a
-	OpFinishRotating        byte = 0x4b
-	OpSendBypassBuildCmd    byte = 0x5b
-	OpCharacterRestore      byte = 0x62
-	OpRequestQuestList      byte = 0x63
-	OpRequestSkillCoolTime  byte = 0x9d
-	OpBypassUserCmd         byte = 0xaa
-	OpRequestShowMiniMap    byte = 0xcd
+	OpMoveToLocation            byte = 0x01
+	OpEnterWorld                byte = 0x03
+	OpAction                    byte = 0x04
+	OpLogout                    byte = 0x09
+	OpAttackRequest             byte = 0x0a
+	OpCharacterDelete           byte = 0x0c
+	OpCharacterSelect           byte = 0x0d
+	OpRequestItemList           byte = 0x0f
+	OpRequestUnEquipItem        byte = 0x11
+	OpRequestDropItem           byte = 0x12
+	OpUseItem                   byte = 0x14
+	OpRequestSocialAction       byte = 0x1b
+	OpChangeMoveType2           byte = 0x1c
+	OpChangeWaitType2           byte = 0x1d
+	OpRequestSellItem           byte = 0x1e
+	OpRequestBuyItem            byte = 0x1f
+	OpRequestLinkHtml           byte = 0x20
+	OpRequestBypassToServer     byte = 0x21
+	OpRequestMagicSkillUse      byte = 0x2f
+	OpAppearing                 byte = 0x30
+	OpSendWareHouseDepositList  byte = 0x31
+	OpSendWareHouseWithDrawList byte = 0x32
+	OpRequestShortcutReg        byte = 0x33
+	OpRequestShortcutDel        byte = 0x35
+	OpCannotMoveAnymore         byte = 0x36
+	OpRequestTargetCanceld      byte = 0x37
+	OpSay2                      byte = 0x38
+	OpRequestSkillList          byte = 0x3f
+	OpRequestActionUse          byte = 0x45
+	OpRequestRestart            byte = 0x46
+	OpValidatePosition          byte = 0x48
+	OpStartRotating             byte = 0x4a
+	OpFinishRotating            byte = 0x4b
+	OpRequestDestroyItem        byte = 0x59
+	OpSendBypassBuildCmd        byte = 0x5b
+	OpCharacterRestore          byte = 0x62
+	OpRequestQuestList          byte = 0x63
+	OpRequestAcquireSkillInfo   byte = 0x6b
+	OpRequestAcquireSkill       byte = 0x6c
+	OpRequestRestartPoint       byte = 0x6d
+	OpRequestSkillCoolTime      byte = 0x9d
+	OpMultiSellChoose           byte = 0xa7
+	OpBypassUserCmd             byte = 0xaa
+	OpRequestShowMiniMap        byte = 0xcd
 	// OpExClient starts every Ex client packet. A little-endian uint16
 	// sub-opcode follows it (Mobius GamePacketHandler).
 	OpExClient byte = 0xd0
@@ -45,49 +61,67 @@ const (
 
 // Ex client packet sub-opcodes.
 const (
-	ExOpRequestManorList uint16 = 0x08
+	ExOpRequestAutoSoulShot uint16 = 0x05
+	ExOpRequestManorList    uint16 = 0x08
 )
 
 // clientPacketNames maps client opcodes to Mobius packet names, for the
 // recorder.
 var clientPacketNames = map[byte]string{
-	OpProtocolVersion:       "ProtocolVersion",
-	OpMoveToLocation:        "MoveToLocation",
-	OpEnterWorld:            "EnterWorld",
-	OpAction:                "Action",
-	OpAuthLogin:             "AuthLogin",
-	OpLogout:                "Logout",
-	OpAttackRequest:         "AttackRequest",
-	OpCharacterCreate:       "CharacterCreate",
-	OpCharacterDelete:       "CharacterDelete",
-	OpCharacterSelect:       "CharacterSelect",
-	OpNewCharacter:          "NewCharacter",
-	OpRequestSocialAction:   "RequestSocialAction",
-	OpChangeMoveType2:       "ChangeMoveType2",
-	OpChangeWaitType2:       "ChangeWaitType2",
-	OpRequestLinkHtml:       "RequestLinkHtml",
-	OpRequestBypassToServer: "RequestBypassToServer",
-	OpAppearing:             "Appearing",
-	OpCannotMoveAnymore:     "CannotMoveAnymore",
-	OpRequestTargetCanceld:  "RequestTargetCanceld",
-	OpSay2:                  "Say2",
-	OpRequestSkillList:      "RequestSkillList",
-	OpRequestActionUse:      "RequestActionUse",
-	OpRequestRestart:        "RequestRestart",
-	OpValidatePosition:      "ValidatePosition",
-	OpStartRotating:         "StartRotating",
-	OpFinishRotating:        "FinishRotating",
-	OpSendBypassBuildCmd:    "SendBypassBuildCmd",
-	OpCharacterRestore:      "CharacterRestore",
-	OpRequestQuestList:      "RequestQuestList",
-	OpRequestSkillCoolTime:  "RequestSkillCoolTime",
-	OpBypassUserCmd:         "BypassUserCmd",
-	OpRequestShowMiniMap:    "RequestShowMiniMap",
+	OpProtocolVersion:           "ProtocolVersion",
+	OpMoveToLocation:            "MoveToLocation",
+	OpEnterWorld:                "EnterWorld",
+	OpAction:                    "Action",
+	OpAuthLogin:                 "AuthLogin",
+	OpLogout:                    "Logout",
+	OpAttackRequest:             "AttackRequest",
+	OpCharacterCreate:           "CharacterCreate",
+	OpCharacterDelete:           "CharacterDelete",
+	OpCharacterSelect:           "CharacterSelect",
+	OpNewCharacter:              "NewCharacter",
+	OpRequestItemList:           "RequestItemList",
+	OpRequestUnEquipItem:        "RequestUnEquipItem",
+	OpRequestDropItem:           "RequestDropItem",
+	OpUseItem:                   "UseItem",
+	OpRequestSocialAction:       "RequestSocialAction",
+	OpChangeMoveType2:           "ChangeMoveType2",
+	OpChangeWaitType2:           "ChangeWaitType2",
+	OpRequestSellItem:           "RequestSellItem",
+	OpRequestBuyItem:            "RequestBuyItem",
+	OpRequestLinkHtml:           "RequestLinkHtml",
+	OpRequestBypassToServer:     "RequestBypassToServer",
+	OpRequestMagicSkillUse:      "RequestMagicSkillUse",
+	OpAppearing:                 "Appearing",
+	OpSendWareHouseDepositList:  "SendWareHouseDepositList",
+	OpSendWareHouseWithDrawList: "SendWareHouseWithDrawList",
+	OpRequestShortcutReg:        "RequestShortcutReg",
+	OpRequestShortcutDel:        "RequestShortcutDel",
+	OpCannotMoveAnymore:         "CannotMoveAnymore",
+	OpRequestTargetCanceld:      "RequestTargetCanceld",
+	OpSay2:                      "Say2",
+	OpRequestSkillList:          "RequestSkillList",
+	OpRequestActionUse:          "RequestActionUse",
+	OpRequestRestart:            "RequestRestart",
+	OpValidatePosition:          "ValidatePosition",
+	OpStartRotating:             "StartRotating",
+	OpFinishRotating:            "FinishRotating",
+	OpRequestDestroyItem:        "RequestDestroyItem",
+	OpSendBypassBuildCmd:        "SendBypassBuildCmd",
+	OpCharacterRestore:          "CharacterRestore",
+	OpRequestQuestList:          "RequestQuestList",
+	OpRequestAcquireSkillInfo:   "RequestAcquireSkillInfo",
+	OpRequestAcquireSkill:       "RequestAcquireSkill",
+	OpRequestRestartPoint:       "RequestRestartPoint",
+	OpRequestSkillCoolTime:      "RequestSkillCoolTime",
+	OpMultiSellChoose:           "MultiSellChoose",
+	OpBypassUserCmd:             "BypassUserCmd",
+	OpRequestShowMiniMap:        "RequestShowMiniMap",
 }
 
 // exClientPacketNames maps Ex client sub-opcodes to Mobius packet names.
 var exClientPacketNames = map[uint16]string{
-	ExOpRequestManorList: "RequestManorList",
+	ExOpRequestAutoSoulShot: "RequestAutoSoulShot",
+	ExOpRequestManorList:    "RequestManorList",
 }
 
 // clientPacketName returns the Mobius name of a raw client packet (opcode
