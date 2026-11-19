@@ -1,7 +1,9 @@
 GO       ?= go
 TOOL     := $(GO) tool -modfile=tools/go.mod
 FUZZTIME ?= 60s
-MONGO_URI ?= mongodb://127.0.0.1:27017
+# The compose mongo from the host: a one-node replica set whose member name
+# (mongo) only resolves inside compose, hence the direct connection.
+MONGO_URI ?= mongodb://127.0.0.1:27017/?directConnection=true
 
 # This machine's LAN IP: macOS (Wi-Fi or Ethernet), then Linux. Empty if none.
 PUBLIC_IP ?= $(shell ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | cut -d' ' -f1)
@@ -68,10 +70,11 @@ vuln:
 scripts-check:
 	$(GO) run ./cmd/l2go scripts check -dir scripts
 
-## integration: MongoDB tests against the compose mongo service
+## integration: MongoDB tests against the compose mongo service, a one-node
+## replica set (--wait returns once the set is initiated and has a primary)
 integration:
 	docker compose up -d --wait mongo
-	L2GO_MONGO_URI=$(MONGO_URI) $(GO) test -tags integration -count=1 ./internal/storage/...
+	L2GO_MONGO_URI="$(MONGO_URI)" $(GO) test -tags integration -count=1 ./internal/storage/...
 
 ## smoke: run the full client flow against the running stack (make up first;
 ## L2GO_LOGIN_ADDR changes the login address; the game address comes from

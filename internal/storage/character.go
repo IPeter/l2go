@@ -10,6 +10,11 @@ import (
 // L2J, which keeps lower IDs for static objects such as NPCs and doors.
 const FirstObjectID int32 = 0x10000000
 
+// FirstRuntimeObjectID is the first ID of the runtime range: NPCs and other
+// objects that are never stored take IDs from here up (decision W3, the
+// world package's FirstRuntimeID). Persistent IDs stay below it.
+const FirstRuntimeObjectID int32 = 0x60000000
+
 // PaperdollSlot is the equipment slot an item is worn in. The values match
 // the PAPERDOLL_* indexes of the Mobius Inventory class.
 //
@@ -47,13 +52,69 @@ func (s PaperdollSlot) Equipped() bool {
 	return s >= 0 && s < PaperdollTotalSlots
 }
 
+// ItemLocation is where an item is kept. The values are the names of the
+// Mobius ItemLocation enum, which its items table stores in the loc column.
+type ItemLocation string
+
+// Item locations. Others (CLANWH, FREIGHT, PET, PET_EQUIP) come with the
+// features that use them; the stores keep any value.
+const (
+	LocInventory ItemLocation = "INVENTORY" // carried, not worn
+	LocPaperdoll ItemLocation = "PAPERDOLL" // worn in the paperdoll slot Item.Slot
+	LocWarehouse ItemLocation = "WAREHOUSE" // in the owner's private warehouse
+)
+
+// NoMana is Item.Mana for an item without mana, which is every item except
+// shadow items (Mobius mana_left -1).
+const NoMana int32 = -1
+
 // Item is one item a character owns.
+//
+// For an item the character carries, Slot decides whether it is worn: the
+// item is in the paperdoll (LocPaperdoll) when Slot is a paperdoll slot and
+// in the inventory (LocInventory) otherwise, whichever of the two Loc names.
+// An empty Loc also means a carried item, so code that only knows about the
+// paperdoll can keep setting Slot alone. Items kept elsewhere, such as in the
+// warehouse, have no slot. Normalized makes Loc and Slot agree, and the stores
+// return items normalized.
 type Item struct {
 	ObjectID int32 // unique across characters and items, from an IDAllocator
 	ItemID   int32 // item template ID
 	Count    int64
 	Enchant  int32         // enchant level
-	Slot     PaperdollSlot // PaperdollNone if not equipped
+	Slot     PaperdollSlot // the paperdoll slot if worn, else PaperdollNone (Mobius loc_data)
+	Loc      ItemLocation  // where the item is kept (Mobius loc); see above
+	// Mana is the mana a shadow item has left, in minutes, or NoMana. The
+	// zero value is not NoMana: whoever creates an item sets it.
+	Mana        int32
+	CustomType1 int32 // Mobius custom_type1, usually 0
+	CustomType2 int32 // Mobius custom_type2, usually 0
+}
+
+// Carried reports whether the character carries the item, in the inventory
+// or worn, as opposed to keeping it somewhere else such as the warehouse.
+func (it Item) Carried() bool {
+	switch it.Loc {
+	case "", LocInventory, LocPaperdoll:
+		return true
+	}
+	return false
+}
+
+// Normalized returns it with Loc and Slot in agreement, as the stores keep
+// it: a carried item gets LocPaperdoll if Slot is a paperdoll slot, and
+// LocInventory with PaperdollNone otherwise; an item kept elsewhere keeps its
+// Loc and gets PaperdollNone.
+func (it Item) Normalized() Item {
+	switch {
+	case !it.Carried():
+		it.Slot = PaperdollNone
+	case it.Slot.Equipped():
+		it.Loc = LocPaperdoll
+	default:
+		it.Loc, it.Slot = LocInventory, PaperdollNone
+	}
+	return it
 }
 
 // Character is a player character.
@@ -90,10 +151,12 @@ type Character struct {
 	CreatedAt   time.Time
 	LastAccess  time.Time // creation or last save; zero if never set
 
-	// Items are stored inside the character, so creating a character with
-	// its starting items is one atomic write: a standalone MongoDB (as in
-	// docker compose) has no transactions. Items may move to their own
-	// collection later.
+	// Items are all the character's items: the carried ones and those in
+	// its warehouse. The stores keep items apart from the character (one
+	// MongoDB document per item) and write a character together with its
+	// items in one transaction. Get and ListByAccount return the items
+	// normalized (Item.Normalized) and in object ID order, which is the
+	// order they were created in.
 	Items []Item
 }
 
@@ -105,35 +168,75 @@ func NameKey(name string) string {
 
 // CharacterStore stores player characters. Names are unique and compared
 // case-insensitively (see NameKey). Account names are compared exactly.
+//
+// Create, Update and Delete write the character and its items in one
+// transaction: either all of it is stored or none of it.
 type CharacterStore interface {
 	// Create stores c with its items. The caller assigns the object IDs of c
 	// and its items from an IDAllocator. If c.CreatedAt is zero, Create sets
 	// it to the current time. Create returns ErrExists if the name is taken,
-	// ignoring case, or if the object ID is taken.
+	// ignoring case, if the object ID is taken, or if an item's object ID is
+	// taken or listed twice.
 	Create(ctx context.Context, c *Character) error
-	// ListByAccount returns the account's characters, oldest first.
+	// ListByAccount returns the account's characters, oldest first, each
+	// with all its items.
 	ListByAccount(ctx context.Context, account string) ([]Character, error)
 	// CountByAccount returns how many characters the account has.
 	CountByAccount(ctx context.Context, account string) (int, error)
 	// NameExists reports whether a character has this name, ignoring case.
 	NameExists(ctx context.Context, name string) (bool, error)
-	// Get returns the character with this object ID or ErrNotFound.
+	// Get returns the character with this object ID, with all its items, or
+	// ErrNotFound.
 	Get(ctx context.Context, objectID int32) (Character, error)
 
 	// Update saves the state of the character with c.ObjectID: position and
 	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
-	// and kill counts, clan, items, delete time, last access and access
-	// level. The identity fields (account, name, race and creation time)
-	// are kept as stored. It returns ErrNotFound if there is no such
-	// character.
+	// and kill counts, clan, delete time, last access and access level. The
+	// identity fields (account, name, race and creation time) are kept as
+	// stored. c.Items replaces the character's items: those it owned that
+	// c.Items does not list are deleted, and the listed ones are stored with
+	// c as their owner, also when another character owned them before. Of
+	// an object ID listed twice, the last one counts. Update returns
+	// ErrNotFound if there is no such character.
 	Update(ctx context.Context, c *Character) error
-	// Delete removes the character and its items. Its name becomes free.
-	// It returns ErrNotFound if there is no such character.
+	// Delete removes the character and all its items, wherever they are
+	// kept. Its name becomes free. It returns ErrNotFound if there is no
+	// such character.
 	Delete(ctx context.Context, objectID int32) error
 	// SetDeleteTime sets when the character will be deleted. The zero time
 	// clears it (the character is restored). It returns ErrNotFound if
 	// there is no such character.
 	SetDeleteTime(ctx context.Context, objectID int32, t time.Time) error
+}
+
+// ItemChanges are the changes to a character's items since its last save
+// (decision I2). The game keeps them per inventory, so a save writes only
+// what changed.
+type ItemChanges struct {
+	// Upserts are the new and changed items. They are stored with the
+	// character as their owner, also when another character owned them
+	// before: the receiving side of a transfer.
+	Upserts []Item
+	// Destroyed lists items that no longer exist: sold, used up, merged
+	// into a stack, expired. They are deleted whoever owns them.
+	Destroyed []int32
+	// Left lists items that left the character: dropped or given away.
+	// They are deleted only while the character still owns them, so an
+	// item another character saved first stays with that character.
+	Left []int32
+}
+
+// CharacterSaver saves a character with only the changes to its items, the
+// saving side of decision I2. Both stores implement it next to
+// CharacterStore.
+type CharacterSaver interface {
+	// Save stores what Update stores of c, except its items: c.Items is not
+	// used. Instead it applies changes to the character's items. Deletes
+	// come first, so an object ID in changes.Upserts wins over the same ID
+	// in Destroyed or Left, and of an object ID listed twice in Upserts the
+	// last one counts. Everything is one transaction. Save returns
+	// ErrNotFound if there is no such character.
+	Save(ctx context.Context, c *Character, changes ItemChanges) error
 }
 
 // Deleting reports whether the character is marked for deletion.
@@ -148,7 +251,8 @@ func (c *Character) DeleteExpired(now time.Time) bool {
 
 // IDAllocator hands out object IDs for characters and items. IDs are unique
 // across both, and across restarts for persistent implementations. They
-// start at FirstObjectID.
+// start at FirstObjectID and stay below FirstRuntimeObjectID. The world loop
+// takes IDs from an IDPool instead, which never waits for the allocator.
 type IDAllocator interface {
 	// NextID returns one new ID.
 	NextID(ctx context.Context) (int32, error)

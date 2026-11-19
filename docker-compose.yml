@@ -36,17 +36,37 @@ x-l2go: &l2go
 services:
   mongo:
     image: mongo:8
+    # A one-node replica set, rs0: the game server writes a character and its
+    # items in one transaction, and MongoDB has transactions only on replica
+    # sets. On the first start the healthcheck initiates the set with this
+    # node as mongo:27017 (an existing standalone volume keeps its data), and
+    # it reports healthy only once this node is the primary, so the servers
+    # start after that. Servers connect with
+    # mongodb://mongo:27017/?replicaSet=rs0 (deploy/compose/server.json).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - mongo-data:/data/db
     # Published on localhost only, for `make integration` and local tools.
+    # From the host, connect directly, because the set's member name mongo
+    # only resolves inside compose:
+    #   mongosh "mongodb://127.0.0.1:27017/?directConnection=true"
     ports:
       - "127.0.0.1:27017:27017"
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - >-
+          try { rs.status() } catch (e) {
+          if (e.codeName !== 'NotYetInitialized') throw e;
+          rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}) }
+          if (!db.adminCommand({hello: 1}).isWritablePrimary) throw new Error('not the primary yet')
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
 
   login:
     <<: *l2go

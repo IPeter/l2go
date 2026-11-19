@@ -6,7 +6,9 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"log/slog"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -15,18 +17,20 @@ import (
 	"github.com/IPeter/l2go/internal/storage/storagetest"
 )
 
-// mongoURI returns the test deployment, by default the docker compose one.
+// mongoURI returns the test deployment, by default the docker compose one: a
+// one-node replica set whose member name, mongo, only resolves inside
+// compose, so the host connects directly.
 func mongoURI() string {
 	if uri := os.Getenv("L2GO_MONGO_URI"); uri != "" {
 		return uri
 	}
-	return "mongodb://127.0.0.1:27017"
+	return "mongodb://127.0.0.1:27017/?directConnection=true"
 }
 
 // open opens database name and closes it when the test ends.
 func open(t *testing.T, name string) *mongostore.Store {
 	t.Helper()
-	s, err := mongostore.Open(t.Context(), mongoURI(), name)
+	s, err := mongostore.Open(t.Context(), mongoURI(), name, mongostore.WithLogger(slog.New(slog.DiscardHandler)))
 	if err != nil {
 		t.Fatalf("Open: %v (is MongoDB running? try: docker compose up -d --wait mongo)", err)
 	}
@@ -65,6 +69,13 @@ func TestCharacters(t *testing.T) {
 	})
 }
 
+func TestCharacterSaver(t *testing.T) {
+	storagetest.TestCharacterSaver(t, func(t *testing.T) storagetest.SaverStore {
+		s, _ := openFresh(t)
+		return s.Characters()
+	})
+}
+
 func TestIDs(t *testing.T) {
 	storagetest.TestIDAllocator(t, func(t *testing.T) storage.IDAllocator {
 		s, _ := openFresh(t)
@@ -86,13 +97,8 @@ func TestCharactersSurviveReopen(t *testing.T) {
 	if got.Name != want.Name || got.Account != want.Account || !got.CreatedAt.Equal(want.CreatedAt) {
 		t.Errorf("Get after reopen = %+v, want %+v", got, want)
 	}
-	if len(got.Items) != len(want.Items) {
-		t.Fatalf("Items after reopen = %+v, want %+v", got.Items, want.Items)
-	}
-	for i := range want.Items {
-		if got.Items[i] != want.Items[i] {
-			t.Errorf("Items[%d] after reopen = %+v, want %+v", i, got.Items[i], want.Items[i])
-		}
+	if wantItems := storagetest.StoredItems(want.Items); !slices.Equal(got.Items, wantItems) {
+		t.Errorf("Items after reopen = %+v, want %+v", got.Items, wantItems)
 	}
 	list, err := s.Characters().ListByAccount(t.Context(), want.Account)
 	if err != nil {

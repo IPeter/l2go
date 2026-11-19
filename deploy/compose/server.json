@@ -10,10 +10,7 @@
     "internalNetworks": ["127.0.0.0/8"],
     "database": {
       "name": "l2go-login",
-      "host": "mongo",
-      "port": 27017,
-      "user": "",
-      "password": ""
+      "uri": "mongodb://mongo:27017/?replicaSet=rs0"
     }
   },
 
@@ -32,10 +29,7 @@
 
       "database": {
         "name": "l2go-server",
-        "host": "mongo",
-        "port": 27017,
-        "user": "",
-        "password": ""
+        "uri": "mongodb://mongo:27017/?replicaSet=rs0"
       },
 
       "options": {

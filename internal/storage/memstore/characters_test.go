@@ -17,6 +17,37 @@ func TestCharacters(t *testing.T) {
 	})
 }
 
+func TestCharacterSaver(t *testing.T) {
+	storagetest.TestCharacterSaver(t, func(*testing.T) storagetest.SaverStore {
+		return memstore.NewCharacters()
+	})
+}
+
+// TestItemsWithoutLocation checks the callers that only know about the
+// paperdoll, as before items had a location: an item without Loc is worn
+// or carried by its slot, and comes back with the location filled in.
+func TestItemsWithoutLocation(t *testing.T) {
+	s := memstore.NewCharacters()
+	c := storage.Character{ObjectID: 1, Name: "Old", Items: []storage.Item{
+		{ObjectID: 3, ItemID: 57, Count: 100, Slot: storage.PaperdollNone},
+		{ObjectID: 2, ItemID: 2369, Count: 1, Slot: storage.PaperdollRHand},
+	}}
+	if err := s.Create(t.Context(), &c); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := s.Get(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	want := []storage.Item{
+		{ObjectID: 2, ItemID: 2369, Count: 1, Slot: storage.PaperdollRHand, Loc: storage.LocPaperdoll},
+		{ObjectID: 3, ItemID: 57, Count: 100, Slot: storage.PaperdollNone, Loc: storage.LocInventory},
+	}
+	if len(got.Items) != len(want) || got.Items[0] != want[0] || got.Items[1] != want[1] {
+		t.Errorf("Items = %+v, want %+v", got.Items, want)
+	}
+}
+
 func TestIDs(t *testing.T) {
 	storagetest.TestIDAllocator(t, func(*testing.T) storage.IDAllocator {
 		return memstore.NewIDs()
@@ -24,12 +55,27 @@ func TestIDs(t *testing.T) {
 }
 
 func TestCharactersZeroValue(t *testing.T) {
+	var empty memstore.Characters
+	if err := empty.Update(t.Context(), &storage.Character{ObjectID: 1}); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("Update on zero value: error = %v, want ErrNotFound", err)
+	}
+	if err := empty.Save(t.Context(), &storage.Character{ObjectID: 1}, storage.ItemChanges{Destroyed: []int32{2}}); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("Save on zero value: error = %v, want ErrNotFound", err)
+	}
+	if err := empty.Delete(t.Context(), 1); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("Delete on zero value: error = %v, want ErrNotFound", err)
+	}
+	if list, err := empty.ListByAccount(t.Context(), ""); err != nil || len(list) != 0 {
+		t.Errorf("ListByAccount on zero value = %+v, %v, want none", list, err)
+	}
+
 	var s memstore.Characters
-	if err := s.Create(t.Context(), &storage.Character{ObjectID: 1, Name: "x"}); err != nil {
+	c := storage.Character{ObjectID: 1, Name: "x", Items: []storage.Item{{ObjectID: 2, ItemID: 57, Count: 1, Slot: storage.PaperdollNone}}}
+	if err := s.Create(t.Context(), &c); err != nil {
 		t.Fatalf("Create on zero value: %v", err)
 	}
-	if _, err := s.Get(t.Context(), 1); err != nil {
-		t.Errorf("Get: %v", err)
+	if got, err := s.Get(t.Context(), 1); err != nil || len(got.Items) != 1 {
+		t.Errorf("Get = %+v, %v, want the character with its item", got, err)
 	}
 }
 
@@ -65,6 +111,9 @@ func TestCharactersCanceledContext(t *testing.T) {
 	}
 	if err := s.Update(ctx, &storage.Character{ObjectID: 1}); !errors.Is(err, context.Canceled) {
 		t.Errorf("Update error = %v, want context.Canceled", err)
+	}
+	if err := s.Save(ctx, &storage.Character{ObjectID: 1}, storage.ItemChanges{}); !errors.Is(err, context.Canceled) {
+		t.Errorf("Save error = %v, want context.Canceled", err)
 	}
 	if err := s.Delete(ctx, 1); !errors.Is(err, context.Canceled) {
 		t.Errorf("Delete error = %v, want context.Canceled", err)

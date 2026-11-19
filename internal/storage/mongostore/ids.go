@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -30,8 +29,10 @@ func (s *Store) IDs() *IDs {
 //
 // NextIDs reserves n IDs with one atomic $inc of used, so concurrent callers
 // and servers never get the same ID. The reserved IDs are
-// storage.FirstObjectID+used-n up to storage.FirstObjectID+used-1. The first
-// call creates the document (upsert).
+// storage.FirstObjectID+used-n up to storage.FirstObjectID+used-1, and they
+// end below storage.FirstRuntimeObjectID. The first call creates the
+// document (upsert). The world loop does not call it: a storage.IDPool
+// reserves blocks of IDs in the background.
 type IDs struct {
 	coll    *mongo.Collection
 	timeout time.Duration
@@ -76,12 +77,12 @@ func (a *IDs) NextIDs(ctx context.Context, n int) ([]int32, error) {
 		return nil, fmt.Errorf("mongostore: reserve object IDs: %w", err)
 	}
 	first := int64(storage.FirstObjectID) + doc.Used - int64(n)
-	if first+int64(n)-1 > math.MaxInt32 {
+	if first+int64(n) > int64(storage.FirstRuntimeObjectID) {
 		return nil, errIDsExhausted
 	}
 	ids := make([]int32, n)
 	for i := range ids {
-		ids[i] = int32(first + int64(i)) //nolint:gosec // range checked against math.MaxInt32 above
+		ids[i] = int32(first + int64(i)) //nolint:gosec // range checked against storage.FirstRuntimeObjectID above
 	}
 	return ids, nil
 }

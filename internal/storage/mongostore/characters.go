@@ -13,7 +13,10 @@ import (
 	"github.com/IPeter/l2go/internal/storage"
 )
 
-const charactersCollection = "characters"
+const (
+	charactersCollection = "characters"
+	itemsCollection      = "items"
+)
 
 // characterIndexes are the indexes of the characters collection.
 //
@@ -39,24 +42,45 @@ func characterIndexes() []mongo.IndexModel {
 	}
 }
 
+// itemIndexes are the indexes of the items collection (decision I1): an
+// owner's items, also by where they are kept. The object ID is _id.
+func itemIndexes() []mongo.IndexModel {
+	return []mongo.IndexModel{
+		{Keys: bson.D{{Key: "owner_id", Value: 1}, {Key: "loc", Value: 1}}},
+	}
+}
+
 // Characters returns the character store backed by this database.
 func (s *Store) Characters() *Characters {
-	return &Characters{coll: s.db.Collection(charactersCollection), timeout: s.timeout}
+	return &Characters{
+		store: s,
+		chars: s.db.Collection(charactersCollection),
+		items: s.db.Collection(itemsCollection),
+	}
 }
 
-// Characters is a storage.CharacterStore on the "characters" collection.
-// Each character is one document with its items embedded, so a character and
-// its starting items are written in one atomic insert. A standalone MongoDB
-// has no multi-document transactions. Items may move to their own collection
-// later.
+// Characters is a storage.CharacterStore and storage.CharacterSaver on two
+// collections: "characters" with one document per character, and "items"
+// with one document per item, the Mobius items table (decision I1):
+//
+//	{_id: <object ID>, owner_id, item_id, count, enchant_level, loc,
+//	 loc_data, custom_type1, custom_type2, mana_left}
+//
+// Every write that touches both runs in one transaction. Reads that need
+// both run in a transaction too, so they see a character and its items as
+// one write left them.
 type Characters struct {
-	coll    *mongo.Collection
-	timeout time.Duration
+	store *Store
+	chars *mongo.Collection
+	items *mongo.Collection
 }
 
-var _ storage.CharacterStore = (*Characters)(nil)
+var (
+	_ storage.CharacterStore = (*Characters)(nil)
+	_ storage.CharacterSaver = (*Characters)(nil)
+)
 
-// characterDoc is the stored form of storage.Character.
+// characterDoc is the stored form of storage.Character without its items.
 type characterDoc struct {
 	ObjectID    int32      `bson:"_id"`
 	Account     string     `bson:"account"`
@@ -90,29 +114,24 @@ type characterDoc struct {
 	DeleteTime  *time.Time `bson:"delete_time,omitempty"` // absent if not deleting
 	CreatedAt   time.Time  `bson:"created_at"`
 	LastAccess  *time.Time `bson:"last_access,omitempty"` // absent if never entered the world
-	Items       []itemDoc  `bson:"items"`
 }
 
-// itemDoc is the stored form of storage.Item.
+// itemDoc is the stored form of storage.Item, with the column names of the
+// Mobius items table.
 type itemDoc struct {
-	ObjectID int32 `bson:"object_id"`
-	ItemID   int32 `bson:"item_id"`
-	Count    int64 `bson:"count"`
-	Enchant  int32 `bson:"enchant"`
-	Slot     int8  `bson:"slot"` // -1 if not equipped
+	ObjectID    int32  `bson:"_id"`
+	OwnerID     int32  `bson:"owner_id"`
+	ItemID      int32  `bson:"item_id"`
+	Count       int64  `bson:"count"`
+	Enchant     int32  `bson:"enchant_level"`
+	Loc         string `bson:"loc"`      // a storage.ItemLocation
+	LocData     int32  `bson:"loc_data"` // the paperdoll slot of a worn item, else 0 as in Mobius
+	CustomType1 int32  `bson:"custom_type1"`
+	CustomType2 int32  `bson:"custom_type2"`
+	ManaLeft    int32  `bson:"mana_left"` // storage.NoMana if none
 }
 
 func toCharacterDoc(c *storage.Character) characterDoc {
-	items := make([]itemDoc, len(c.Items))
-	for i, it := range c.Items {
-		items[i] = itemDoc{
-			ObjectID: it.ObjectID,
-			ItemID:   it.ItemID,
-			Count:    it.Count,
-			Enchant:  it.Enchant,
-			Slot:     int8(it.Slot),
-		}
-	}
 	return characterDoc{
 		ObjectID:    c.ObjectID,
 		Account:     c.Account,
@@ -146,24 +165,12 @@ func toCharacterDoc(c *storage.Character) characterDoc {
 		DeleteTime:  optionalTime(c.DeleteTime),
 		CreatedAt:   c.CreatedAt,
 		LastAccess:  optionalTime(c.LastAccess),
-		Items:       items,
 	}
 }
 
-func (d *characterDoc) character() storage.Character {
-	var items []storage.Item
-	if len(d.Items) > 0 {
-		items = make([]storage.Item, len(d.Items))
-		for i, it := range d.Items {
-			items[i] = storage.Item{
-				ObjectID: it.ObjectID,
-				ItemID:   it.ItemID,
-				Count:    it.Count,
-				Enchant:  it.Enchant,
-				Slot:     storage.PaperdollSlot(it.Slot),
-			}
-		}
-	}
+// character returns the character with items, which are already in object
+// ID order. A character without items gets a nil Items slice.
+func (d *characterDoc) character(items []storage.Item) storage.Character {
 	return storage.Character{
 		ObjectID:    d.ObjectID,
 		Account:     d.Account,
@@ -200,6 +207,60 @@ func (d *characterDoc) character() storage.Character {
 	}
 }
 
+// toItemDoc returns it, normalized, as owner's item document.
+func toItemDoc(owner int32, it storage.Item) itemDoc {
+	it = it.Normalized()
+	d := itemDoc{
+		ObjectID:    it.ObjectID,
+		OwnerID:     owner,
+		ItemID:      it.ItemID,
+		Count:       it.Count,
+		Enchant:     it.Enchant,
+		Loc:         string(it.Loc),
+		CustomType1: it.CustomType1,
+		CustomType2: it.CustomType2,
+		ManaLeft:    it.Mana,
+	}
+	if it.Loc == storage.LocPaperdoll {
+		d.LocData = int32(it.Slot)
+	}
+	return d
+}
+
+// item returns the stored item, normalized. loc_data counts only for a worn
+// item; a slot out of range, which L2Go never writes, makes it a carried one.
+func (d *itemDoc) item() storage.Item {
+	it := storage.Item{
+		ObjectID:    d.ObjectID,
+		ItemID:      d.ItemID,
+		Count:       d.Count,
+		Enchant:     d.Enchant,
+		Slot:        storage.PaperdollNone,
+		Loc:         storage.ItemLocation(d.Loc),
+		Mana:        d.ManaLeft,
+		CustomType1: d.CustomType1,
+		CustomType2: d.CustomType2,
+	}
+	if it.Loc == storage.LocPaperdoll && d.LocData >= 0 && d.LocData < storage.PaperdollTotalSlots {
+		it.Slot = storage.PaperdollSlot(d.LocData) //nolint:gosec // range checked above
+	}
+	return it.Normalized()
+}
+
+// itemUpserts returns the writes that store items with owner as their owner:
+// a replace by object ID that inserts the item if it is missing, and takes
+// it from another owner if it has one.
+func itemUpserts(owner int32, items []storage.Item) []mongo.WriteModel {
+	models := make([]mongo.WriteModel, len(items))
+	for i, it := range items {
+		models[i] = mongo.NewReplaceOneModel().
+			SetFilter(bson.D{{Key: "_id", Value: it.ObjectID}}).
+			SetReplacement(toItemDoc(owner, it)).
+			SetUpsert(true)
+	}
+	return models
+}
+
 // optionalTime returns nil for the zero time, so the field is left out.
 func optionalTime(t time.Time) *time.Time {
 	if t.IsZero() {
@@ -215,15 +276,30 @@ func timeOrZero(t *time.Time) time.Time {
 	return *t
 }
 
-// Create implements storage.CharacterStore.
+// Create implements storage.CharacterStore. The character and its items are
+// inserted in one transaction.
 func (s *Characters) Create(ctx context.Context, c *storage.Character) error {
 	if c.CreatedAt.IsZero() {
 		// MongoDB keeps milliseconds; truncate so c matches what Get returns.
 		c.CreatedAt = time.Now().UTC().Truncate(time.Millisecond)
 	}
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	doc := toCharacterDoc(c)
+	items := make([]itemDoc, len(c.Items))
+	for i, it := range c.Items {
+		items[i] = toItemDoc(c.ObjectID, it)
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
-	_, err := s.coll.InsertOne(ctx, toCharacterDoc(c))
+	err := s.store.write(ctx, func(ctx context.Context) error {
+		if _, err := s.chars.InsertOne(ctx, doc); err != nil {
+			return err
+		}
+		if len(items) == 0 {
+			return nil
+		}
+		_, err := s.items.InsertMany(ctx, items)
+		return err
+	})
 	if mongo.IsDuplicateKeyError(err) {
 		return storage.ErrExists
 	}
@@ -233,31 +309,67 @@ func (s *Characters) Create(ctx context.Context, c *storage.Character) error {
 	return nil
 }
 
+// findItems returns the items that match filter by owner, each owner's in
+// object ID order.
+func (s *Characters) findItems(ctx context.Context, filter bson.D) (map[int32][]storage.Item, error) {
+	cur, err := s.items.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	var docs []itemDoc
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	byOwner := make(map[int32][]storage.Item)
+	for i := range docs {
+		byOwner[docs[i].OwnerID] = append(byOwner[docs[i].OwnerID], docs[i].item())
+	}
+	return byOwner, nil
+}
+
 // ListByAccount implements storage.CharacterStore.
 func (s *Characters) ListByAccount(ctx context.Context, account string) ([]storage.Character, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}, {Key: "_id", Value: 1}})
-	cur, err := s.coll.Find(ctx, bson.D{{Key: "account", Value: account}}, opts)
+	var list []storage.Character
+	err := s.store.read(ctx, func(ctx context.Context) error {
+		list = nil
+		opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}, {Key: "_id", Value: 1}})
+		cur, err := s.chars.Find(ctx, bson.D{{Key: "account", Value: account}}, opts)
+		if err != nil {
+			return err
+		}
+		var docs []characterDoc
+		if err := cur.All(ctx, &docs); err != nil {
+			return err
+		}
+		if len(docs) == 0 {
+			return nil
+		}
+		ids := make([]int32, len(docs))
+		for i := range docs {
+			ids[i] = docs[i].ObjectID
+		}
+		items, err := s.findItems(ctx, bson.D{{Key: "owner_id", Value: bson.D{{Key: "$in", Value: ids}}}})
+		if err != nil {
+			return err
+		}
+		for i := range docs {
+			list = append(list, docs[i].character(items[docs[i].ObjectID]))
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("mongostore: list characters: %w", err)
-	}
-	var docs []characterDoc
-	if err := cur.All(ctx, &docs); err != nil {
-		return nil, fmt.Errorf("mongostore: list characters: %w", err)
-	}
-	var list []storage.Character
-	for i := range docs {
-		list = append(list, docs[i].character())
 	}
 	return list, nil
 }
 
 // CountByAccount implements storage.CharacterStore.
 func (s *Characters) CountByAccount(ctx context.Context, account string) (int, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
-	n, err := s.coll.CountDocuments(ctx, bson.D{{Key: "account", Value: account}})
+	n, err := s.chars.CountDocuments(ctx, bson.D{{Key: "account", Value: account}})
 	if err != nil {
 		return 0, fmt.Errorf("mongostore: count characters: %w", err)
 	}
@@ -266,9 +378,9 @@ func (s *Characters) CountByAccount(ctx context.Context, account string) (int, e
 
 // NameExists implements storage.CharacterStore.
 func (s *Characters) NameExists(ctx context.Context, name string) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
-	n, err := s.coll.CountDocuments(ctx,
+	n, err := s.chars.CountDocuments(ctx,
 		bson.D{{Key: "name_lower", Value: storage.NameKey(name)}},
 		options.Count().SetLimit(1))
 	if err != nil {
@@ -277,9 +389,36 @@ func (s *Characters) NameExists(ctx context.Context, name string) (bool, error) 
 	return n > 0, nil
 }
 
-// Update implements storage.CharacterStore. The identity fields (_id,
-// account, name, name_lower, race, created_at) are not written.
-func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
+// Get implements storage.CharacterStore.
+func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
+	defer cancel()
+	var c storage.Character
+	err := s.store.read(ctx, func(ctx context.Context) error {
+		var doc characterDoc
+		if err := s.chars.FindOne(ctx, bson.D{{Key: "_id", Value: objectID}}).Decode(&doc); err != nil {
+			return err
+		}
+		items, err := s.findItems(ctx, bson.D{{Key: "owner_id", Value: objectID}})
+		if err != nil {
+			return err
+		}
+		c = doc.character(items[objectID])
+		return nil
+	})
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return storage.Character{}, storage.ErrNotFound
+	}
+	if err != nil {
+		return storage.Character{}, fmt.Errorf("mongostore: get character: %w", err)
+	}
+	return c, nil
+}
+
+// characterUpdate returns the update that stores the fields Update saves.
+// The identity fields (_id, account, name, name_lower, race, created_at) are
+// not written.
+func characterUpdate(c *storage.Character) bson.D {
 	doc := toCharacterDoc(c)
 	set := bson.D{
 		{Key: "sex", Value: doc.Sex},
@@ -306,7 +445,6 @@ func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
 		{Key: "z", Value: doc.Z},
 		{Key: "heading", Value: doc.Heading},
 		{Key: "access_level", Value: doc.AccessLevel},
-		{Key: "items", Value: doc.Items},
 	}
 	var unset bson.D
 	for _, f := range []struct {
@@ -326,12 +464,15 @@ func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
 	if len(unset) > 0 {
 		update = append(update, bson.E{Key: "$unset", Value: unset})
 	}
+	return update
+}
 
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-	res, err := s.coll.UpdateOne(ctx, bson.D{{Key: "_id", Value: c.ObjectID}}, update)
+// updateFields applies a characterUpdate inside a transaction. It returns
+// storage.ErrNotFound if there is no such character.
+func (s *Characters) updateFields(ctx context.Context, objectID int32, update bson.D) error {
+	res, err := s.chars.UpdateOne(ctx, bson.D{{Key: "_id", Value: objectID}}, update)
 	if err != nil {
-		return fmt.Errorf("mongostore: update character: %w", err)
+		return err
 	}
 	if res.MatchedCount == 0 {
 		return storage.ErrNotFound
@@ -339,18 +480,105 @@ func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
 	return nil
 }
 
-// Delete implements storage.CharacterStore.
-func (s *Characters) Delete(ctx context.Context, objectID int32) error {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+// upsertItems runs itemUpserts inside a transaction.
+func (s *Characters) upsertItems(ctx context.Context, models []mongo.WriteModel) error {
+	if len(models) == 0 {
+		return nil
+	}
+	_, err := s.items.BulkWrite(ctx, models)
+	return err
+}
+
+// Update implements storage.CharacterStore: in one transaction it stores the
+// character's fields, deletes the items it owns that c.Items does not list,
+// and upserts c.Items.
+func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
+	update := characterUpdate(c)
+	keep := make([]int32, len(c.Items)) // never nil: $nin needs an array
+	for i, it := range c.Items {
+		keep[i] = it.ObjectID
+	}
+	upserts := itemUpserts(c.ObjectID, c.Items)
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
-	res, err := s.coll.DeleteOne(ctx, bson.D{{Key: "_id", Value: objectID}})
-	if err != nil {
-		return fmt.Errorf("mongostore: delete character: %w", err)
-	}
-	if res.DeletedCount == 0 {
+	err := s.store.write(ctx, func(ctx context.Context) error {
+		if err := s.updateFields(ctx, c.ObjectID, update); err != nil {
+			return err
+		}
+		_, err := s.items.DeleteMany(ctx, bson.D{
+			{Key: "owner_id", Value: c.ObjectID},
+			{Key: "_id", Value: bson.D{{Key: "$nin", Value: keep}}},
+		})
+		if err != nil {
+			return err
+		}
+		return s.upsertItems(ctx, upserts)
+	})
+	return writeError("update character", err)
+}
+
+// Save implements storage.CharacterSaver: in one transaction it stores the
+// character's fields, deletes the destroyed items, deletes the items that
+// left while the character still owns them, and upserts the changed ones.
+func (s *Characters) Save(ctx context.Context, c *storage.Character, changes storage.ItemChanges) error {
+	update := characterUpdate(c)
+	upserts := itemUpserts(c.ObjectID, changes.Upserts)
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
+	defer cancel()
+	err := s.store.write(ctx, func(ctx context.Context) error {
+		if err := s.updateFields(ctx, c.ObjectID, update); err != nil {
+			return err
+		}
+		if len(changes.Destroyed) > 0 {
+			_, err := s.items.DeleteMany(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: changes.Destroyed}}}})
+			if err != nil {
+				return err
+			}
+		}
+		if len(changes.Left) > 0 {
+			_, err := s.items.DeleteMany(ctx, bson.D{
+				{Key: "_id", Value: bson.D{{Key: "$in", Value: changes.Left}}},
+				{Key: "owner_id", Value: c.ObjectID},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return s.upsertItems(ctx, upserts)
+	})
+	return writeError("save character", err)
+}
+
+// Delete implements storage.CharacterStore: the character and all its items
+// go in one transaction.
+func (s *Characters) Delete(ctx context.Context, objectID int32) error {
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
+	defer cancel()
+	err := s.store.write(ctx, func(ctx context.Context) error {
+		res, err := s.chars.DeleteOne(ctx, bson.D{{Key: "_id", Value: objectID}})
+		if err != nil {
+			return err
+		}
+		if res.DeletedCount == 0 {
+			return storage.ErrNotFound
+		}
+		_, err = s.items.DeleteMany(ctx, bson.D{{Key: "owner_id", Value: objectID}})
+		return err
+	})
+	return writeError("delete character", err)
+}
+
+// writeError returns the error of a write transaction: storage.ErrNotFound
+// as it is, anything else wrapped.
+func writeError(what string, err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, storage.ErrNotFound):
 		return storage.ErrNotFound
+	default:
+		return fmt.Errorf("mongostore: %s: %w", what, err)
 	}
-	return nil
 }
 
 // SetDeleteTime implements storage.CharacterStore. The zero time removes
@@ -360,9 +588,9 @@ func (s *Characters) SetDeleteTime(ctx context.Context, objectID int32, t time.T
 	if !t.IsZero() {
 		update = bson.D{{Key: "$set", Value: bson.D{{Key: "delete_time", Value: t}}}}
 	}
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
-	res, err := s.coll.UpdateOne(ctx, bson.D{{Key: "_id", Value: objectID}}, update)
+	res, err := s.chars.UpdateOne(ctx, bson.D{{Key: "_id", Value: objectID}}, update)
 	if err != nil {
 		return fmt.Errorf("mongostore: set character delete time: %w", err)
 	}
@@ -370,19 +598,4 @@ func (s *Characters) SetDeleteTime(ctx context.Context, objectID int32, t time.T
 		return storage.ErrNotFound
 	}
 	return nil
-}
-
-// Get implements storage.CharacterStore.
-func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-	var doc characterDoc
-	err := s.coll.FindOne(ctx, bson.D{{Key: "_id", Value: objectID}}).Decode(&doc)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return storage.Character{}, storage.ErrNotFound
-	}
-	if err != nil {
-		return storage.Character{}, fmt.Errorf("mongostore: get character: %w", err)
-	}
-	return doc.character(), nil
 }

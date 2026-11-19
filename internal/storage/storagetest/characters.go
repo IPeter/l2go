@@ -1,8 +1,10 @@
 package storagetest
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -16,9 +18,21 @@ import (
 // baseTime is a creation time with millisecond precision, as stored.
 var baseTime = time.Date(2026, time.November, 19, 12, 0, 0, 123_000_000, time.UTC)
 
+// Item IDs of the sample characters.
+const (
+	itemSquireSword  = 2369
+	itemSquireShirt  = 1146
+	itemAdena        = 57
+	itemBoneArrow    = 1835
+	itemShadowWeapon = 6730 // any template; only its mana matters here
+	itemBrandish     = 124
+)
+
 // sampleCharacter returns a character with every field set to a distinct
 // value, so a field that is stored under the wrong name or not at all shows up
-// as a difference.
+// as a difference. Its items, objectID+1 to objectID+5, cover the item
+// fields: worn ones (one with Loc empty, one with Loc set), carried adena, a
+// warehouse item with custom types and no slot, and a shadow item with mana.
 func sampleCharacter(objectID int32, account, name string, created time.Time) storage.Character {
 	return storage.Character{
 		ObjectID:    objectID,
@@ -53,15 +67,19 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 		CreatedAt:   created,
 		LastAccess:  created.Add(time.Hour),
 		Items: []storage.Item{
-			{ObjectID: objectID + 1, ItemID: 2369, Count: 1, Slot: storage.PaperdollRHand},
-			{ObjectID: objectID + 2, ItemID: 1146, Count: 1, Enchant: 3, Slot: storage.PaperdollChest},
-			{ObjectID: objectID + 3, ItemID: 57, Count: 5_000_000_000, Slot: storage.PaperdollNone},
+			{ObjectID: objectID + 1, ItemID: itemSquireSword, Count: 1, Slot: storage.PaperdollRHand, Mana: storage.NoMana},
+			{ObjectID: objectID + 2, ItemID: itemSquireShirt, Count: 1, Enchant: 3, Slot: storage.PaperdollChest, Loc: storage.LocPaperdoll, Mana: storage.NoMana},
+			{ObjectID: objectID + 3, ItemID: itemAdena, Count: 5_000_000_000, Slot: storage.PaperdollNone, Mana: storage.NoMana},
+			{ObjectID: objectID + 4, ItemID: itemBoneArrow, Count: 700, Loc: storage.LocWarehouse, Mana: storage.NoMana, CustomType1: 2, CustomType2: 3},
+			{ObjectID: objectID + 5, ItemID: itemShadowWeapon, Count: 1, Slot: storage.PaperdollNone, Loc: storage.LocInventory, Mana: 45},
 		},
 	}
 }
 
 // changedCharacter returns c with every field that Update saves set to a new
-// value, as after a session in the world.
+// value, as after a session in the world. Of its items, the sword came off,
+// a new weapon is worn, the shirt was sold, the adena grew, the arrows left
+// the warehouse and other arrows went in, and the shadow item lost mana.
 func changedCharacter(c storage.Character) storage.Character {
 	c.Sex = 0
 	c.ClassID = 57
@@ -90,18 +108,49 @@ func changedCharacter(c storage.Character) storage.Character {
 	c.DeleteTime = baseTime.Add(48 * time.Hour)
 	c.LastAccess = baseTime.Add(36 * time.Hour)
 	c.Items = []storage.Item{
-		{ObjectID: c.ObjectID + 1, ItemID: 2369, Count: 1, Slot: storage.PaperdollNone},
-		{ObjectID: c.ObjectID + 4, ItemID: 124, Count: 1, Enchant: 5, Slot: storage.PaperdollRHand},
-		{ObjectID: c.ObjectID + 3, ItemID: 57, Count: 7_000_000_000, Slot: storage.PaperdollNone},
-		{ObjectID: c.ObjectID + 5, ItemID: 1835, Count: 300, Slot: storage.PaperdollNone},
+		{ObjectID: c.ObjectID + 1, ItemID: itemSquireSword, Count: 1, Slot: storage.PaperdollNone, Mana: storage.NoMana},
+		{ObjectID: c.ObjectID + 6, ItemID: itemBrandish, Count: 1, Enchant: 5, Slot: storage.PaperdollRHand, Mana: storage.NoMana},
+		{ObjectID: c.ObjectID + 3, ItemID: itemAdena, Count: 7_000_000_000, Slot: storage.PaperdollNone, Mana: storage.NoMana},
+		{ObjectID: c.ObjectID + 4, ItemID: itemBoneArrow, Count: 700, Slot: storage.PaperdollNone, Loc: storage.LocInventory, Mana: storage.NoMana},
+		{ObjectID: c.ObjectID + 7, ItemID: itemBoneArrow, Count: 300, Loc: storage.LocWarehouse, Mana: storage.NoMana},
+		{ObjectID: c.ObjectID + 5, ItemID: itemShadowWeapon, Count: 1, Slot: storage.PaperdollNone, Mana: 44},
 	}
 	return c
 }
 
-// diffCharacter describes how got differs from want, or returns "" if they
-// are equal. Times are compared with time.Equal, and a nil Items slice equals
-// an empty one.
+// StoredItems returns items as a store gives them back: normalized
+// (storage.Item.Normalized), in object ID order, the last one of an object
+// ID that is listed twice, and nil when there are none.
+func StoredItems(items []storage.Item) []storage.Item {
+	byID := make(map[int32]storage.Item, len(items))
+	for _, it := range items {
+		byID[it.ObjectID] = it.Normalized()
+	}
+	if len(byID) == 0 {
+		return nil
+	}
+	return slices.SortedFunc(maps.Values(byID), func(a, b storage.Item) int {
+		return cmp.Compare(a.ObjectID, b.ObjectID)
+	})
+}
+
+// diffCharacter describes how got, as a store returned it, differs from
+// want, as it was given to the store, or returns "" if they are equal.
+// Times are compared with time.Equal, and want's items in their stored form
+// (StoredItems).
 func diffCharacter(got, want storage.Character) string {
+	var diffs []string
+	if d := diffFields(got, want); d != "" {
+		diffs = append(diffs, d)
+	}
+	if items := StoredItems(want.Items); !slices.Equal(got.Items, items) {
+		diffs = append(diffs, fmt.Sprintf("Items = %+v, want %+v", got.Items, items))
+	}
+	return strings.Join(diffs, "; ")
+}
+
+// diffFields is diffCharacter for everything but the items.
+func diffFields(got, want storage.Character) string {
 	var diffs []string
 	for _, f := range []struct {
 		name      string
@@ -115,15 +164,65 @@ func diffCharacter(got, want storage.Character) string {
 			diffs = append(diffs, fmt.Sprintf("%s = %v, want %v", f.name, f.got, f.want))
 		}
 	}
-	if !slices.Equal(got.Items, want.Items) {
-		diffs = append(diffs, fmt.Sprintf("Items = %+v, want %+v", got.Items, want.Items))
-	}
 	got.DeleteTime, got.CreatedAt, got.LastAccess, got.Items = time.Time{}, time.Time{}, time.Time{}, nil
 	want.DeleteTime, want.CreatedAt, want.LastAccess, want.Items = time.Time{}, time.Time{}, time.Time{}, nil
 	if !reflect.DeepEqual(got, want) {
 		diffs = append(diffs, fmt.Sprintf("other fields = %+v, want %+v", got, want))
 	}
 	return strings.Join(diffs, "; ")
+}
+
+// mustCreate stores the characters, failing the test on an error. It works
+// on copies, so the callers' characters keep their items unchanged.
+func mustCreate(t *testing.T, s storage.CharacterStore, chars ...storage.Character) {
+	t.Helper()
+	for _, c := range chars {
+		c.Items = slices.Clone(c.Items)
+		if err := s.Create(t.Context(), &c); err != nil {
+			t.Fatalf("Create(%s): %v", c.Name, err)
+		}
+	}
+}
+
+// mustGet returns the stored character, failing the test on an error.
+func mustGet(t *testing.T, s storage.CharacterStore, objectID int32) storage.Character {
+	t.Helper()
+	c, err := s.Get(t.Context(), objectID)
+	if err != nil {
+		t.Fatalf("Get(%d): %v", objectID, err)
+	}
+	return c
+}
+
+// checkStored fails the test if a stored character differs from want.
+func checkStored(t *testing.T, s storage.CharacterStore, want storage.Character) {
+	t.Helper()
+	if d := diffCharacter(mustGet(t, s, want.ObjectID), want); d != "" {
+		t.Errorf("stored %s: %s", want.Name, d)
+	}
+}
+
+// checkItemIDsFree creates a character with items of these object IDs,
+// which only succeeds if no stored item has one of them, for example because
+// a failed or deleted write left none behind. The probe character stays.
+func checkItemIDsFree(t *testing.T, s storage.CharacterStore, probeID int32, ids ...int32) {
+	t.Helper()
+	probe := storage.Character{ObjectID: probeID, Account: "probe", Name: fmt.Sprintf("Probe%d", probeID)}
+	for _, id := range ids {
+		probe.Items = append(probe.Items, storage.Item{ObjectID: id, ItemID: itemAdena, Count: 1, Slot: storage.PaperdollNone, Mana: storage.NoMana})
+	}
+	if err := s.Create(t.Context(), &probe); err != nil {
+		t.Errorf("Create with item IDs %d: %v; want them free", ids, err)
+	}
+}
+
+// itemIDs returns the object IDs of items.
+func itemIDs(items []storage.Item) []int32 {
+	ids := make([]int32, len(items))
+	for i, it := range items {
+		ids[i] = it.ObjectID
+	}
+	return ids
 }
 
 // TestCharacterStore runs the CharacterStore conformance tests. newStore must
@@ -137,16 +236,10 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		if err := s.Create(t.Context(), &c); err != nil {
 			t.Fatalf("Create: %v", err)
 		}
-		if d := diffCharacter(c, want); d != "" {
-			t.Errorf("Create changed its argument: %s", d)
+		if d := diffFields(c, want); d != "" || !slices.Equal(c.Items, want.Items) {
+			t.Errorf("Create changed its argument: %s; items %+v, want %+v", d, c.Items, want.Items)
 		}
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if d := diffCharacter(got, want); d != "" {
-			t.Errorf("Get: %s", d)
-		}
+		checkStored(t, s, want)
 	})
 
 	t.Run("CreateSetsCreatedAt", func(t *testing.T) {
@@ -160,10 +253,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		if c.CreatedAt.Before(before) || c.CreatedAt.After(time.Now().Add(time.Second)) {
 			t.Errorf("CreatedAt = %v, want about now", c.CreatedAt)
 		}
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
+		got := mustGet(t, s, 100)
 		if d := diffCharacter(got, c); d != "" {
 			t.Errorf("Get: %s", d)
 		}
@@ -186,11 +276,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		middle := sampleCharacter(200, "alice", "Middle", baseTime.Add(time.Hour))
 		other := sampleCharacter(400, "bob", "Other", baseTime)
 		// Created out of order: the list must follow the creation time.
-		for _, c := range []storage.Character{newest, oldest, other, middle} {
-			if err := s.Create(t.Context(), &c); err != nil {
-				t.Fatalf("Create(%s): %v", c.Name, err)
-			}
-		}
+		mustCreate(t, s, newest, oldest, other, middle)
 
 		got, err := s.ListByAccount(t.Context(), "alice")
 		if err != nil {
@@ -230,10 +316,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		if ok, err := s.NameExists(t.Context(), "Gandalf"); err != nil || ok {
 			t.Fatalf("NameExists on empty store = %v, %v, want false, nil", ok, err)
 		}
-		c := sampleCharacter(100, "alice", "Gandalf", baseTime)
-		if err := s.Create(t.Context(), &c); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
+		mustCreate(t, s, sampleCharacter(100, "alice", "Gandalf", baseTime))
 		for name, want := range map[string]bool{"Gandalf": true, "gandalf": true, "GANDALF": true, "Gandal": false, "Gandalf2": false} {
 			ok, err := s.NameExists(t.Context(), name)
 			if err != nil {
@@ -248,9 +331,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 	t.Run("DuplicateNameIgnoringCase", func(t *testing.T) {
 		s := newStore(t)
 		first := sampleCharacter(100, "alice", "Frodo", baseTime)
-		if err := s.Create(t.Context(), &first); err != nil {
-			t.Fatalf("first Create: %v", err)
-		}
+		mustCreate(t, s, first)
 		second := sampleCharacter(200, "bob", "fRODO", baseTime)
 		if err := s.Create(t.Context(), &second); !errors.Is(err, storage.ErrExists) {
 			t.Fatalf("second Create error = %v, want ErrExists", err)
@@ -261,28 +342,25 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		if n, err := s.CountByAccount(t.Context(), "bob"); err != nil || n != 0 {
 			t.Errorf("CountByAccount(bob) = %d, %v, want 0, nil", n, err)
 		}
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get(first): %v", err)
-		}
-		if got.Name != "Frodo" {
-			t.Errorf("Name = %q, want the first character kept", got.Name)
-		}
+		checkStored(t, s, first)
+		// The rejected character's items were not stored either.
+		checkItemIDsFree(t, s, 900, itemIDs(second.Items)...)
 	})
 
 	t.Run("DuplicateObjectID", func(t *testing.T) {
 		s := newStore(t)
 		first := sampleCharacter(100, "alice", "Merry", baseTime)
-		if err := s.Create(t.Context(), &first); err != nil {
-			t.Fatalf("first Create: %v", err)
-		}
+		mustCreate(t, s, first)
 		second := sampleCharacter(100, "alice", "Pippin", baseTime)
+		second.Items = sampleCharacter(200, "alice", "Pippin", baseTime).Items
 		if err := s.Create(t.Context(), &second); !errors.Is(err, storage.ErrExists) {
 			t.Fatalf("second Create error = %v, want ErrExists", err)
 		}
 		if ok, err := s.NameExists(t.Context(), "Pippin"); err != nil || ok {
 			t.Errorf("NameExists(rejected name) = %v, %v, want false, nil", ok, err)
 		}
+		checkStored(t, s, first)
+		checkItemIDsFree(t, s, 900, itemIDs(second.Items)...)
 	})
 
 	t.Run("ConcurrentCreateSameName", func(t *testing.T) {
@@ -329,23 +407,24 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 				Count:    1,
 				Enchant:  int32(slot % 4),
 				Slot:     storage.PaperdollSlot(slot),
+				Mana:     storage.NoMana,
 			})
 		}
 		c.Items = append(c.Items,
-			storage.Item{ObjectID: 1100, ItemID: 57, Count: 2_000_000_000_000, Slot: storage.PaperdollNone},
-			storage.Item{ObjectID: 1101, ItemID: 1835, Count: 500, Slot: storage.PaperdollNone},
+			storage.Item{ObjectID: 1100, ItemID: itemAdena, Count: 2_000_000_000_000, Slot: storage.PaperdollNone, Mana: storage.NoMana},
+			storage.Item{ObjectID: 1101, ItemID: itemBoneArrow, Count: 500, Slot: storage.PaperdollNone, Mana: storage.NoMana},
 		)
-		want := slices.Clone(c.Items)
-		if err := s.Create(t.Context(), &c); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
+		want := StoredItems(c.Items)
+		mustCreate(t, s, c)
 
-		got, err := s.Get(t.Context(), 1000)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
+		got := mustGet(t, s, 1000)
 		if !slices.Equal(got.Items, want) {
 			t.Errorf("Get items = %+v, want %+v", got.Items, want)
+		}
+		for _, it := range got.Items {
+			if worn := it.Loc == storage.LocPaperdoll; worn != it.Slot.Equipped() {
+				t.Errorf("item %d: Loc %s with slot %d", it.ObjectID, it.Loc, it.Slot)
+			}
 		}
 		list, err := s.ListByAccount(t.Context(), "alice")
 		if err != nil {
@@ -356,32 +435,121 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		}
 	})
 
+	t.Run("ItemLocations", func(t *testing.T) {
+		// For carried items the slot decides between PAPERDOLL and
+		// INVENTORY; other locations keep their Loc and lose the slot.
+		tests := []struct {
+			name     string
+			loc      storage.ItemLocation
+			slot     storage.PaperdollSlot
+			wantLoc  storage.ItemLocation
+			wantSlot storage.PaperdollSlot
+		}{
+			{"empty loc, worn", "", storage.PaperdollRHand, storage.LocPaperdoll, storage.PaperdollRHand},
+			{"empty loc, worn under", "", storage.PaperdollUnder, storage.LocPaperdoll, storage.PaperdollUnder},
+			{"empty loc, carried", "", storage.PaperdollNone, storage.LocInventory, storage.PaperdollNone},
+			{"inventory with a slot", storage.LocInventory, storage.PaperdollFeet, storage.LocPaperdoll, storage.PaperdollFeet},
+			{"paperdoll without a slot", storage.LocPaperdoll, storage.PaperdollNone, storage.LocInventory, storage.PaperdollNone},
+			{"paperdoll hair2", storage.LocPaperdoll, storage.PaperdollHair2, storage.LocPaperdoll, storage.PaperdollHair2},
+			{"warehouse with a slot", storage.LocWarehouse, storage.PaperdollHead, storage.LocWarehouse, storage.PaperdollNone},
+			{"warehouse, zero slot", storage.LocWarehouse, storage.PaperdollUnder, storage.LocWarehouse, storage.PaperdollNone},
+			{"a location of a later milestone", "FREIGHT", storage.PaperdollNone, "FREIGHT", storage.PaperdollNone},
+		}
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Arwen", baseTime)
+		c.Items = nil
+		for i, tt := range tests {
+			c.Items = append(c.Items, storage.Item{
+				ObjectID:    int32(1000 + i), //nolint:gosec // small test loop index
+				ItemID:      itemBoneArrow,
+				Count:       int64(i + 1),
+				Slot:        tt.slot,
+				Loc:         tt.loc,
+				Mana:        int32(i) - 1, //nolint:gosec // small test loop index
+				CustomType1: int32(i),     //nolint:gosec // small test loop index
+				CustomType2: int32(2 * i), //nolint:gosec // small test loop index
+			})
+		}
+		mustCreate(t, s, c)
+		got := mustGet(t, s, 100)
+		if len(got.Items) != len(tests) {
+			t.Fatalf("Get returned %d items, want %d: %+v", len(got.Items), len(tests), got.Items)
+		}
+		for i, tt := range tests {
+			want := c.Items[i]
+			want.Loc, want.Slot = tt.wantLoc, tt.wantSlot
+			if got.Items[i] != want {
+				t.Errorf("%s: stored %+v, want %+v", tt.name, got.Items[i], want)
+			}
+			if n := c.Items[i].Normalized(); n != want {
+				t.Errorf("%s: Normalized() = %+v, want %+v as stored", tt.name, n, want)
+			}
+		}
+	})
+
+	t.Run("ItemsInObjectIDOrder", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Eowyn", baseTime)
+		slices.Reverse(c.Items)
+		mustCreate(t, s, c)
+		got := mustGet(t, s, 100)
+		if !slices.IsSortedFunc(got.Items, func(a, b storage.Item) int { return cmp.Compare(a.ObjectID, b.ObjectID) }) {
+			t.Errorf("items %d, want them in object ID order", itemIDs(got.Items))
+		}
+		if d := diffCharacter(got, c); d != "" {
+			t.Errorf("Get: %s", d)
+		}
+	})
+
 	t.Run("NoItems", func(t *testing.T) {
 		s := newStore(t)
 		c := sampleCharacter(100, "alice", "Boromir", baseTime)
 		c.Items = nil
-		if err := s.Create(t.Context(), &c); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if len(got.Items) != 0 {
+		mustCreate(t, s, c)
+		if got := mustGet(t, s, 100); len(got.Items) != 0 {
 			t.Errorf("Items = %+v, want none", got.Items)
 		}
+	})
+
+	t.Run("CreateWithTakenItemID", func(t *testing.T) {
+		s := newStore(t)
+		owner := sampleCharacter(100, "alice", "Faramir", baseTime)
+		mustCreate(t, s, owner)
+		c := sampleCharacter(200, "bob", "Denethor", baseTime)
+		c.Items[3].ObjectID = 103 // the owner's adena
+		if err := s.Create(t.Context(), &c); !errors.Is(err, storage.ErrExists) {
+			t.Fatalf("Create error = %v, want ErrExists", err)
+		}
+		// Nothing of the new character was stored: not the character, which
+		// was written first, nor its other items.
+		if _, err := s.Get(t.Context(), 200); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("Get(rejected character) error = %v, want ErrNotFound", err)
+		}
+		if ok, err := s.NameExists(t.Context(), "Denethor"); err != nil || ok {
+			t.Errorf("NameExists(rejected name) = %v, %v, want false", ok, err)
+		}
+		checkStored(t, s, owner)
+		checkItemIDsFree(t, s, 900, 201, 202, 203, 205)
+	})
+
+	t.Run("CreateWithDuplicateItemIDs", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Theoden", baseTime)
+		c.Items[4].ObjectID = c.Items[1].ObjectID
+		if err := s.Create(t.Context(), &c); !errors.Is(err, storage.ErrExists) {
+			t.Fatalf("Create error = %v, want ErrExists", err)
+		}
+		if _, err := s.Get(t.Context(), 100); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("Get(rejected character) error = %v, want ErrNotFound", err)
+		}
+		mustCreate(t, s, sampleCharacter(100, "alice", "Theoden", baseTime))
 	})
 
 	t.Run("Update", func(t *testing.T) {
 		s := newStore(t)
 		orig := sampleCharacter(100, "alice", "Thorin", baseTime)
-		if err := s.Create(t.Context(), &orig); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
 		other := sampleCharacter(200, "alice", "Balin", baseTime)
-		if err := s.Create(t.Context(), &other); err != nil {
-			t.Fatalf("Create(other): %v", err)
-		}
+		mustCreate(t, s, orig, other)
 
 		upd := changedCharacter(orig)
 		arg := upd
@@ -393,13 +561,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		}
 		arg.Items[0].Count = 999 // must not reach the store
 
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if d := diffCharacter(got, upd); d != "" {
-			t.Errorf("Get after Update: %s", d)
-		}
+		checkStored(t, s, upd)
 		list, err := s.ListByAccount(t.Context(), "alice")
 		if err != nil {
 			t.Fatalf("ListByAccount: %v", err)
@@ -421,27 +583,67 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 				t.Errorf("NameExists(%s) = %v, %v, want %v", name, ok, err, want)
 			}
 		}
+		// The item Update dropped (the shirt) is deleted, so its ID is free.
+		checkItemIDsFree(t, s, 900, 102)
 	})
 
 	t.Run("UpdateClearsTimesAndItems", func(t *testing.T) {
 		s := newStore(t)
 		c := sampleCharacter(100, "alice", "Dwalin", baseTime)
-		if err := s.Create(t.Context(), &c); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
+		mustCreate(t, s, c)
 		c.DeleteTime, c.LastAccess, c.Items = time.Time{}, time.Time{}, nil
 		if err := s.Update(t.Context(), &c); err != nil {
 			t.Fatalf("Update: %v", err)
 		}
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
+		got := mustGet(t, s, 100)
 		if d := diffCharacter(got, c); d != "" {
 			t.Errorf("Get: %s", d)
 		}
 		if !got.DeleteTime.IsZero() || !got.LastAccess.IsZero() || len(got.Items) != 0 {
 			t.Errorf("DeleteTime %v, LastAccess %v, Items %+v; want all empty", got.DeleteTime, got.LastAccess, got.Items)
+		}
+		checkItemIDsFree(t, s, 900, 101, 102, 103, 104, 105)
+	})
+
+	t.Run("UpdateMovesItemsBetweenCharacters", func(t *testing.T) {
+		s := newStore(t)
+		giver := sampleCharacter(100, "alice", "Bilbo", baseTime)
+		receiver := sampleCharacter(200, "bob", "Frodo", baseTime)
+		mustCreate(t, s, giver, receiver)
+
+		// The receiver is saved first: the item becomes its own.
+		gift := giver.Items[2]
+		gift.Count = 1000
+		receiver.Items = append(slices.Clone(receiver.Items), gift)
+		if err := s.Update(t.Context(), &receiver); err != nil {
+			t.Fatalf("Update(receiver): %v", err)
+		}
+		checkStored(t, s, receiver)
+		wantGiver := giver
+		wantGiver.Items = slices.Delete(slices.Clone(giver.Items), 2, 3)
+		checkStored(t, s, wantGiver)
+
+		// Then the giver, without the item: the receiver keeps it.
+		if err := s.Update(t.Context(), &wantGiver); err != nil {
+			t.Fatalf("Update(giver): %v", err)
+		}
+		checkStored(t, s, wantGiver)
+		checkStored(t, s, receiver)
+	})
+
+	t.Run("UpdateDuplicateItemIDs", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Gloin", baseTime)
+		mustCreate(t, s, c)
+		last := c.Items[2]
+		last.Count = 42
+		c.Items = append(c.Items, last)
+		if err := s.Update(t.Context(), &c); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		got := mustGet(t, s, 100)
+		if d := diffCharacter(got, c); d != "" {
+			t.Errorf("Get: %s; want the last of the object ID listed twice", d)
 		}
 	})
 
@@ -457,17 +659,15 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		if ok, err := s.NameExists(t.Context(), "Ghost"); err != nil || ok {
 			t.Errorf("NameExists after a failed Update = %v, %v, want false", ok, err)
 		}
+		// Its items were not stored either.
+		mustCreate(t, s, sampleCharacter(100, "alice", "Ghost", baseTime))
 	})
 
 	t.Run("Delete", func(t *testing.T) {
 		s := newStore(t)
 		gone := sampleCharacter(100, "alice", "Fili", baseTime)
 		kept := sampleCharacter(200, "alice", "Kili", baseTime.Add(time.Minute))
-		for _, c := range []storage.Character{gone, kept} {
-			if err := s.Create(t.Context(), &c); err != nil {
-				t.Fatalf("Create(%s): %v", c.Name, err)
-			}
-		}
+		mustCreate(t, s, gone, kept)
 		if err := s.Delete(t.Context(), 100); err != nil {
 			t.Fatalf("Delete: %v", err)
 		}
@@ -484,6 +684,9 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		if len(list) != 1 || list[0].ObjectID != 200 {
 			t.Errorf("ListByAccount after Delete = %+v, want only Kili", list)
 		}
+		if d := diffCharacter(list[0], kept); d != "" {
+			t.Errorf("Delete changed another character: %s", d)
+		}
 		if n, err := s.CountByAccount(t.Context(), "alice"); err != nil || n != 1 {
 			t.Errorf("CountByAccount after Delete = %d, %v, want 1", n, err)
 		}
@@ -491,18 +694,11 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 			t.Errorf("second Delete error = %v, want ErrNotFound", err)
 		}
 
-		// The name and the object ID are free again.
+		// The name, the object ID and the item IDs, the warehouse item's
+		// too, are free again.
 		again := sampleCharacter(100, "bob", "fili", baseTime)
-		if err := s.Create(t.Context(), &again); err != nil {
-			t.Fatalf("Create with the deleted name and ID: %v", err)
-		}
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if d := diffCharacter(got, again); d != "" {
-			t.Errorf("Get of the new character: %s", d)
-		}
+		mustCreate(t, s, again)
+		checkStored(t, s, again)
 	})
 
 	t.Run("DeleteNotFound", func(t *testing.T) {
@@ -516,9 +712,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		s := newStore(t)
 		c := sampleCharacter(100, "alice", "Oin", baseTime)
 		c.DeleteTime = time.Time{}
-		if err := s.Create(t.Context(), &c); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
+		mustCreate(t, s, c)
 		// Sub-millisecond parts are dropped and the zone becomes UTC.
 		at := baseTime.Add(7*24*time.Hour + 456*time.Microsecond).In(time.FixedZone("CET", 3600))
 		if err := s.SetDeleteTime(t.Context(), 100, at); err != nil {
@@ -526,10 +720,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		}
 		want := c
 		want.DeleteTime = baseTime.Add(7 * 24 * time.Hour)
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
+		got := mustGet(t, s, 100)
 		if d := diffCharacter(got, want); d != "" {
 			t.Errorf("Get after SetDeleteTime: %s", d)
 		}
@@ -548,10 +739,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		if err := s.SetDeleteTime(t.Context(), 100, time.Time{}); err != nil {
 			t.Fatalf("SetDeleteTime(zero): %v", err)
 		}
-		got, err = s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
+		got = mustGet(t, s, 100)
 		if d := diffCharacter(got, c); d != "" {
 			t.Errorf("Get after the restore: %s", d)
 		}
@@ -578,21 +766,14 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 			t.Fatalf("Create: %v", err)
 		}
 		c.Items[0].Count = 99
-		got, err := s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
+		got := mustGet(t, s, 100)
 		got.Items[1].Count = 98
 		list, err := s.ListByAccount(t.Context(), "alice")
 		if err != nil {
 			t.Fatalf("ListByAccount: %v", err)
 		}
 		list[0].Items[2].Count = 97
-		got, err = s.Get(t.Context(), 100)
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if d := diffCharacter(got, want); d != "" {
+		if d := diffCharacter(mustGet(t, s, 100), want); d != "" {
 			t.Errorf("stored character changed through a caller's slice: %s", d)
 		}
 	})
