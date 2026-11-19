@@ -22,6 +22,9 @@
       "internalIP": "127.0.0.1",
       "externalIP": "192.168.1.2",
       "port": 7777,
+      "allowedProtocols": [746],
+      "dataDir": "data",
+      "maxCharactersPerAccount": 7,
 
       "database": {
         "name": "l2go-server",

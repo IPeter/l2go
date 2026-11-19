@@ -17,15 +17,10 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
-	"time"
 
 	"github.com/IPeter/l2go/internal/config"
-	"github.com/IPeter/l2go/internal/gameserver"
-	"github.com/IPeter/l2go/internal/loginserver"
 	"github.com/IPeter/l2go/internal/scripting"
-	"github.com/IPeter/l2go/internal/storage/mongostore"
 )
 
 const usage = `Usage:
@@ -189,81 +184,4 @@ func loadConfig(path string, logger *slog.Logger) (config.Config, error) {
 		return config.Config{}, err
 	}
 	return cfg, nil
-}
-
-func runLogin(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	db := cfg.LoginServer.Database
-	store, err := mongostore.Open(ctx, db.MongoURI(), db.Name)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := store.Close(context.Background()); err != nil {
-			logger.Warn("closing the database", "err", err)
-		}
-	}()
-	logger.Info("connected to the database", "name", db.Name)
-
-	srv, err := loginserver.New(cfg, store.Accounts(), logger)
-	if err != nil {
-		return err
-	}
-	return srv.Run(ctx)
-}
-
-func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.Logger) error {
-	gs, ok := cfg.GameServerByID(opts.serverID)
-	if !ok {
-		return fmt.Errorf("no game server with id %d in the config", opts.serverID)
-	}
-	engine, err := scripting.New(ctx, scripting.Options{
-		Dir:     gs.Scripts.Dir,
-		Timeout: time.Duration(gs.Scripts.EventTimeout),
-		Logger:  logger.With("server", gs.ID),
-	})
-	if err != nil {
-		return err
-	}
-	srv, err := gameserver.New(cfg, opts.serverID, engine, logger)
-	if err != nil {
-		return err
-	}
-
-	// The engine outlives the server, so connections that are closing still
-	// get answers from the scripts.
-	engineCtx, stopEngine := context.WithCancel(context.WithoutCancel(ctx))
-	var wg sync.WaitGroup
-	wg.Go(func() { _ = engine.Run(engineCtx) })
-	wg.Go(func() { reloadOnSIGHUP(engineCtx, engine, logger) })
-	if opts.devReload || gs.Scripts.DevReload {
-		wg.Go(func() {
-			if err := engine.Watch(engineCtx, scripting.DefaultDebounce); err != nil {
-				logger.Error("dev reload is off", "err", err)
-			}
-		})
-	}
-
-	err = srv.Run(ctx)
-	stopEngine()
-	wg.Wait()
-	return err
-}
-
-// reloadOnSIGHUP reloads the scripts on every SIGHUP until ctx is done
-// (docker compose kill -s HUP game). A failed reload keeps the old scripts.
-func reloadOnSIGHUP(ctx context.Context, engine *scripting.Engine, logger *slog.Logger) {
-	hup := make(chan os.Signal, 1)
-	signal.Notify(hup, syscall.SIGHUP)
-	defer signal.Stop(hup)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-hup:
-			logger.Info("SIGHUP: reloading scripts")
-			if err := engine.Reload(ctx); err != nil && ctx.Err() == nil {
-				logger.Error("script reload failed, keeping the old scripts", "err", err)
-			}
-		}
-	}
 }

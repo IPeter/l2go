@@ -4,14 +4,14 @@ import "github.com/IPeter/l2go/internal/packets"
 
 // CharCreateFailReason is the reason code of CharCreateFail. The client
 // shows a fixed message for each.
-type CharCreateFailReason uint32
+type CharCreateFailReason int32
 
-// C1 reason codes (Mobius CharCreateFail.java).
+// Interlude reason codes (Mobius CharCreateFail.java).
 const (
 	CharCreateFailCreationFailed      CharCreateFailReason = 0x00 // "Your character creation has failed."
-	CharCreateFailTooManyCharacters   CharCreateFailReason = 0x01 // "You cannot create another character."
+	CharCreateFailTooManyCharacters   CharCreateFailReason = 0x01 // "You cannot create another character. ..."
 	CharCreateFailNameExists          CharCreateFailReason = 0x02 // "This name already exists."
-	CharCreateFailNameTooLong         CharCreateFailReason = 0x03 // "... cannot exceed 16 characters."
+	CharCreateFailNameTooLong         CharCreateFailReason = 0x03 // "... cannot exceed 16 characters ..." (also an empty name)
 	CharCreateFailIncorrectName       CharCreateFailReason = 0x04 // "Incorrect name. Please try again."
 	CharCreateFailCreationNotAllowed  CharCreateFailReason = 0x05 // "Characters cannot be created from this server."
 	CharCreateFailChooseAnotherServer CharCreateFailReason = 0x06 // "... choose another server."
@@ -38,7 +38,7 @@ func CharCreateFailReasonByName(name string) (CharCreateFailReason, bool) {
 // NewCharCreateFailPacket builds CharCreateFail.
 func NewCharCreateFailPacket(reason CharCreateFailReason) []byte {
 	w := packets.NewWriter(5)
-	w.WriteUint8(0x26) // CharCreateFail
-	w.WriteUint32(uint32(reason))
+	w.WriteUint8(OpCharCreateFail)
+	w.WriteInt32(int32(reason))
 	return w.Bytes()
 }

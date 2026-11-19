@@ -56,8 +56,10 @@ services:
       - ./scripts:/opt/l2go/scripts:ro
     ports:
       - "7777:7777"
-    # The game server connects to login:9413 at startup; restart: on-failure
-    # retries if the login server is not listening yet.
+    # The game server stores characters in mongo and registers with the
+    # login server at login:9413. If the login server is not listening yet,
+    # or restarts later, the game server keeps retrying the link; until it
+    # is up, clients get "system error" at AuthLogin.
     depends_on:
       mongo:
         condition: service_healthy

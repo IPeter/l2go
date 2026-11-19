@@ -19,13 +19,16 @@
 
   "gameservers": [
     {
-      "_comment": "Inside Docker the login server sees clients coming from the Docker gateway, not 127.0.0.1, so they get externalIP. The client runs on the host and connects to the published port, so both IPs are 127.0.0.1. For remote players, set externalIP to the host's public address.",
+      "_comment": "Inside Docker the login server sees clients coming from the Docker gateway, not 127.0.0.1, so they get externalIP. The client runs on the host and connects to the published port, so both IPs are 127.0.0.1. For remote players, set externalIP to the host's public address. secret must match on the login server, which reads this same file. allowedProtocols lists the accepted client protocol versions (746 is Interlude). dataDir is relative to the working directory /opt/l2go; the image contains /opt/l2go/data. maxCharactersPerAccount 0 means no limit; the client shows at most 7.",
       "id": 1,
       "name": "Bartz",
       "secret": "CHANGE_ME_PLEASE",
       "internalIP": "127.0.0.1",
       "externalIP": "127.0.0.1",
       "port": 7777,
+      "allowedProtocols": [746],
+      "dataDir": "data",
+      "maxCharactersPerAccount": 7,
 
       "database": {
         "name": "l2go-server",
