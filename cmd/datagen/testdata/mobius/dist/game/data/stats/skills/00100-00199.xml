@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/skills.xsd">
+	<skill id="141" levels="3" name="Weapon Mastery">
+		<!-- Attack power increase. -->
+		<table name="#magicLevel">5 10 15</table>
+		<table name="#pAtk">2 3 4</table>
+		<icon>icon.skill0141</icon>
+		<operateType>P</operateType>
+		<targetType>SELF</targetType>
+		<magicLevel>#magicLevel</magicLevel>
+		<effects>
+			<effect name="Buff">
+				<mul stat="pAtk">1.085</mul>
+				<add stat="pAtk">#pAtk</add>
+			</effect>
+		</effects>
+	</skill>
+</list>

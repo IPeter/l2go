@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/skills.xsd">
+	<skill id="3500" levels="1" name="Wooden Set">
+		<!-- Increases P. Def. and Max HP. -->
+		<icon>icon.armor_t06_u_i00</icon>
+		<operateType>P</operateType>
+		<targetType>SELF</targetType>
+		<magicLevel>1</magicLevel>
+		<effects>
+			<effect name="Buff">
+				<mul stat="pDef">1.022</mul> <!-- P. Def. +2.2% -->
+				<add stat="maxHp">41</add> <!-- HP +41 -->
+			</effect>
+		</effects>
+	</skill>
+</list>

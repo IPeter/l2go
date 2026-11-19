@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/skills.xsd">
+	<skill id="3006" levels="1" name="Equip Set Items">
+		<!-- Additional effects given, when equipping set items. -->
+		<icon>icon.skill0042</icon>
+		<operateType>P</operateType>
+		<targetType>SELF</targetType>
+		<magicLevel>0</magicLevel>
+	</skill>
+</list>

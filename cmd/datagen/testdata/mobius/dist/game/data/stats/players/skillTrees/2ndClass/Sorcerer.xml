@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../../xsd/skillTrees.xsd">
+	<!-- Sorcerer (cut down for the datagen tests) -->
+	<skillTree type="classSkillTree" classId="12" parentClassId="11">
+		<skill skillName="Wind Strike" skillId="1177" skillLevel="4" getLevel="40" levelUpSp="5000" learnedByNpc="true" />
+		<skill skillName="Might" skillId="1068" skillLevel="2" getLevel="40" levelUpSp="5000" learnedByNpc="true" />
+		<skill skillName="Weapon Mastery" skillId="141" skillLevel="2" getLevel="40" autoGet="true" />
+	</skillTree>
+</list>

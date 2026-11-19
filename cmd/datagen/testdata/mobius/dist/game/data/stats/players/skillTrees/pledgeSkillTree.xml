@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../xsd/skillTrees.xsd">
+	<skillTree type="pledgeSkillTree">
+		<!-- Clan Skills (a stand-in for the datagen tests) -->
+		<skill skillName="Wooden Set" skillId="3500" skillLevel="1" getLevel="5" levelUpSp="500">
+			<socialClass>HEIR</socialClass>
+			<item id="57" count="1000" /> <!-- Adena -->
+		</skill>
+	</skillTree>
+</list>

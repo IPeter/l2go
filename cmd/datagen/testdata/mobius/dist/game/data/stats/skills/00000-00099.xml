@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/skills.xsd">
+	<skill id="3" levels="9" name="Power Strike">
+		<!-- Level 1: Gathers power for a fierce strike. Used when equipped with a sword or blunt weapon. Over-hit is possible. Power 25. -->
+		<table name="#effectPoints">-52 -54 -57 -64 -67 -70 -79 -83 -86</table>
+		<table name="#magicLevel">3 4 5 8 9 10 13 14 15</table>
+		<table name="#mpConsume">10 10 11 13 13 14 17 18 19</table>
+		<table name="#power">25 27 30 39 42 46 60 65 70</table>
+		<icon>icon.skill0003</icon>
+		<operateType>A1</operateType>
+		<targetType>ONE</targetType>
+		<castRange>40</castRange>
+		<coolTime>720</coolTime>
+		<effectPoint>#effectPoints</effectPoint>
+		<effectRange>400</effectRange>
+		<hitTime>1080</hitTime>
+		<magicLevel>#magicLevel</magicLevel>
+		<mpConsume>#mpConsume</mpConsume>
+		<nextActionAttack>true</nextActionAttack>
+		<overHit>true</overHit>
+		<power>#power</power>
+		<reuseDelay>13000</reuseDelay>
+		<conditions msgId="113" addName="1">
+			<using kind="SWORD,BLUNT" />
+		</conditions>
+		<effects>
+			<effect name="PhysicalDamage" />
+		</effects>
+	</skill>
+	<skill id="8" levels="7" name="Sonic Focus">
+		<!-- Level 1: Channels force energy for use with other Sonic skills. -->
+		<table name="#magicLevel">40 43 49 55 60 66 70</table>
+		<table name="#maxCharges">1 2 3 4 5 6 7</table>
+		<icon>icon.skill0008</icon>
+		<operateType>A1</operateType>
+		<targetType>SELF</targetType>
+		<effectPoint>200</effectPoint>
+		<hitTime>900</hitTime>
+		<hpConsume>25</hpConsume>
+		<magicLevel>#magicLevel</magicLevel>
+		<mpConsume>5</mpConsume>
+		<reuseDelay>1000</reuseDelay>
+		<conditions msgId="113" addName="1">
+			<using kind="DUAL,SWORD,BLUNT" />
+		</conditions>
+		<conditions msgId="324">
+			<not>
+				<player Charges="#maxCharges" />
+			</not>
+		</conditions>
+		<effects>
+			<effect name="FocusEnergy">
+				<charge>#maxCharges</charge>
+			</effect>
+		</effects>
+	</skill>
+</list>

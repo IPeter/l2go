@@ -1,0 +1,23 @@
+[
+{"type":"classSkillTree","classId":10,"parentClassId":-1,"skills":[
+{"name":"Wind Strike","skillId":1177,"level":1,"getLevel":1,"learnedByNpc":true},
+{"name":"Wind Strike","skillId":1177,"level":2,"getLevel":7,"sp":150,"learnedByNpc":true},
+{"name":"Weapon Mastery","skillId":141,"level":1,"getLevel":5,"sp":50,"learnedByNpc":true}
+]},
+{"type":"classSkillTree","classId":11,"parentClassId":10,"skills":[
+{"name":"Wind Strike","skillId":1177,"level":3,"getLevel":20,"sp":1400,"learnedByNpc":true},
+{"name":"Wind Strike","skillId":1177,"level":2,"getLevel":20,"sp":999,"learnedByNpc":true},
+{"name":"Might","skillId":1068,"level":1,"getLevel":20,"sp":1400,"learnedByNpc":true,"items":[{"id":5588,"count":1}]}
+]},
+{"type":"classSkillTree","classId":12,"parentClassId":11,"skills":[
+{"name":"Wind Strike","skillId":1177,"level":4,"getLevel":40,"sp":5000,"learnedByNpc":true},
+{"name":"Might","skillId":1068,"level":2,"getLevel":40,"sp":5000,"learnedByNpc":true},
+{"name":"Weapon Mastery","skillId":141,"level":2,"getLevel":40,"autoGet":true}
+]},
+{"type":"fishingSkillTree","classId":-1,"parentClassId":-1,"skills":[
+{"name":"Soulshot: No Grade","skillId":2039,"level":1,"getLevel":10,"sp":100,"races":["DWARF"]}
+]},
+{"type":"pledgeSkillTree","classId":-1,"parentClassId":-1,"skills":[
+{"name":"Wooden Set","skillId":3500,"level":1,"getLevel":5,"sp":500,"items":[{"id":57,"count":1000}],"socialClass":"HEIR"}
+]}
+]
