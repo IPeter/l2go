@@ -1,9 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests.
+     Items 450 and 489 are made up. -->
 <list>
 	<item id="425" type="Armor" name="Apprentice's Tunic">
 		<set name="icon" val="icon.armor_t01_u_i00" />
+		<set name="default_action" val="EQUIP" />
 		<set name="armor_type" val="MAGIC" />
 		<set name="bodypart" val="chest" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="CLOTH" />
+		<set name="weight" val="2150" />
+		<set name="price" val="26" />
+		<set name="is_tradable" val="false" />
+		<stats>
+			<stat type="pDef">17</stat>
+			<stat type="maxMp">19</stat>
+		</stats>
+		<skills>
+			<skill id="3500" level="1" type="ON_ENCHANT_4" />
+		</skills>
+	</item>
+	<item id="450" type="Armor" name="Sample Earring">
+		<!-- A jewel: item list types 0 and 2, enchant on M.Def. -->
+		<set name="default_action" val="EQUIP" />
+		<set name="bodypart" val="rear;lear" />
+		<set name="crystal_type" val="D" />
+		<set name="crystal_count" val="20" />
+		<set name="material" val="GOLD" />
+		<set name="enchant_enabled" val="true" />
+		<stats>
+			<stat type="mDef">19</stat>
+		</stats>
+	</item>
+	<item id="489" type="Armor" name="Sample Robe">
+		<set name="default_action" val="EQUIP" />
+		<set name="armor_type" val="MAGIC" />
+		<set name="bodypart" val="onepiece" />
+		<set name="material" val="CLOTH" />
+		<set name="equip_reuse_delay" val="10" />
 	</item>
 </list>

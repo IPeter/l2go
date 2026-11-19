@@ -1,0 +1,129 @@
+[
+  {
+    "npcId": 30001,
+    "lists": [
+      {
+        "name": "tel1",
+        "type": "OTHER",
+        "file": "others/Samples.xml",
+        "locations": [
+          {
+            "name": "The Town of Gludio",
+            "x": -12694,
+            "y": 122776,
+            "z": -3114,
+            "feeItemId": 57,
+            "feeCount": 9200,
+            "castleIds": [1]
+          },
+          {
+            "x": -21726,
+            "y": 77385,
+            "z": -5177,
+            "feeItemId": 57
+          }
+        ]
+      },
+      {
+        "name": "list2",
+        "type": "OTHER",
+        "file": "others/Samples.xml",
+        "locations": [
+          {
+            "name": "Between Two Castles",
+            "x": 1,
+            "y": 2,
+            "z": 3,
+            "feeItemId": 57,
+            "castleIds": [1,2]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "npcId": 30006,
+    "lists": [
+      {
+        "name": "NORMAL",
+        "type": "NORMAL",
+        "file": "town/30006.xml",
+        "locations": [
+          {
+            "name": "The Village of Gludin",
+            "x": -80749,
+            "y": 149834,
+            "z": -3043,
+            "feeItemId": 57,
+            "feeCount": 18000
+          },
+          {
+            "name": "Dark Elf Village",
+            "x": 9716,
+            "y": 15502,
+            "z": -4500,
+            "feeItemId": 57,
+            "feeCount": 24000
+          }
+        ]
+      },
+      {
+        "name": "NOBLES_TOKEN",
+        "type": "NOBLES_TOKEN",
+        "file": "town/30006.xml",
+        "locations": [
+          {
+            "name": "Gludin Arena",
+            "x": -87328,
+            "y": 142266,
+            "z": -3640,
+            "feeItemId": 6651,
+            "feeCount": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "npcId": 30099,
+    "lists": [
+      {
+        "name": "tel1",
+        "type": "OTHER",
+        "file": "others/Samples.xml",
+        "locations": [
+          {
+            "name": "The Town of Gludio",
+            "x": -12694,
+            "y": 122776,
+            "z": -3114,
+            "feeItemId": 57,
+            "feeCount": 9200,
+            "castleIds": [1]
+          },
+          {
+            "x": -21726,
+            "y": 77385,
+            "z": -5177,
+            "feeItemId": 57
+          }
+        ]
+      },
+      {
+        "name": "list2",
+        "type": "OTHER",
+        "file": "others/Samples.xml",
+        "locations": [
+          {
+            "name": "Between Two Castles",
+            "x": 1,
+            "y": 2,
+            "z": 3,
+            "feeItemId": 57,
+            "castleIds": [1,2]
+          }
+        ]
+      }
+    ]
+  }
+]

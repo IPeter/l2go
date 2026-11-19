@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TODO: Remove "castle" attributes from here, it should be loaded from TaxZones -->
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/MapRegion.xsd">
+	<!-- Talking Island Town, with fewer respawn points -->
+	<region name="talking_island_town" town="Talking Island Town" castle="1" locId="910" bbs="1">
+		<respawnPoint X="-83990" Y="243336" Z="-3700" />
+		<respawnPoint X="-83964" Y="242680" Z="-3700" />
+		<respawnPoint X="-79411" Y="240677" Z="-3450" isChaotic="true" />
+		<respawnPoint X="-80480" Y="242640" Z="-3690" isChaotic="true" />
+		<map X="15" Y="23" />
+		<map X="15" Y="24" />
+		<map X="15" Y="25" />
+		<map X="16" Y="23" />
+		<map X="16" Y="24" />
+		<map X="16" Y="25" />
+		<map X="17" Y="24" />
+		<map X="17" Y="25" />
+		<map X="18" Y="25" />
+	</region>
+	<!-- Cedric's Training Hall -->
+	<region name="Cedric's_Training_Hall" town="Talking Island Town" castle="1" locId="910" bbs="1">
+		<respawnPoint X="-71338" Y="258271" Z="-3104" />
+		<respawnPoint X="-79411" Y="240677" Z="-3450" isChaotic="true" />
+	</region>
+</list>

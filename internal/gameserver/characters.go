@@ -98,7 +98,7 @@ func checkAppearance(req clientpackets.CharacterCreate) string {
 // account, name taken. The script hook runs after them, so scripts only see
 // characters the server would accept.
 func (s *Server) createCharacter(ctx context.Context, c *client, req clientpackets.CharacterCreate) (serverpackets.CharCreateFailReason, bool) {
-	logger := c.logger.With("name", req.Name, "class", req.ClassID)
+	logger := c.log().With("name", req.Name, "class", req.ClassID)
 	if reason, ok := checkName(req.Name); !ok {
 		logger.Info("character name refused", "reason", reason)
 		return reason, false
@@ -117,11 +117,12 @@ func (s *Server) createCharacter(ctx context.Context, c *client, req clientpacke
 
 	// Count, name check and save happen under one lock per account, so two
 	// connections of the same account cannot both pass the limit.
-	unlock := s.accountLocks.lock(c.account)
+	account := c.Account()
+	unlock := s.accountLocks.lock(account)
 	defer unlock()
 
 	if limit := s.gs.MaxCharactersPerAccount; limit > 0 {
-		n, err := s.chars.CountByAccount(ctx, c.account)
+		n, err := s.chars.CountByAccount(ctx, account)
 		if err != nil {
 			logger.Error("character creation failed: cannot count characters", "err", err)
 			return serverpackets.CharCreateFailCreationFailed, false
@@ -145,7 +146,7 @@ func (s *Server) createCharacter(ctx context.Context, c *client, req clientpacke
 		return reason, false
 	}
 
-	ch, err := s.newCharacter(ctx, c.account, req, tmpl)
+	ch, err := s.newCharacter(ctx, account, req, tmpl)
 	if err != nil {
 		logger.Error("character creation failed", "err", err)
 		return serverpackets.CharCreateFailCreationFailed, false
@@ -163,16 +164,14 @@ func (s *Server) createCharacter(ctx context.Context, c *client, req clientpacke
 	return 0, true
 }
 
-// allowCharacterCreate runs the character_create script hook. It returns
-// false and the code to send if a script rejects the character, or if the
-// hook could not run. Handler errors are logged by the engine and do not
-// block creation.
+// allowCharacterCreate runs the character_create script hook on the world
+// loop, which owns the scripts engine. It returns false and the code to
+// send if a script rejects the character, or if the hook could not run (the
+// loop or the engine stopped). Handler errors are logged by the engine and
+// do not block creation. A game without a scripts engine allows everything.
 func (s *Server) allowCharacterCreate(ctx context.Context, c *client, req clientpackets.CharacterCreate, tmpl data.Template) (serverpackets.CharCreateFailReason, bool) {
-	if s.scripts == nil {
-		return 0, true
-	}
-	res, err := s.scripts.Call(ctx, scripting.CharacterCreate{
-		Account:   c.account,
+	ev := scripting.CharacterCreate{
+		Account:   c.Account(),
 		Name:      req.Name,
 		Race:      tmpl.Race,
 		Sex:       int(sexOf(req)),
@@ -180,9 +179,24 @@ func (s *Server) allowCharacterCreate(ctx context.Context, c *client, req client
 		HairStyle: int(req.HairStyle),
 		HairColor: int(req.HairColor),
 		Face:      int(req.Face),
-	}.Event())
+	}.Event()
+	// res may be read only when OnLoop returns nil: after an error the
+	// function may still run later.
+	var res scripting.Result
+	err := s.game.OnLoop(ctx, func() {
+		if eng := s.game.Scripts(); eng != nil {
+			res = eng.Invoke(ctx, ev)
+		}
+	})
+	switch {
+	case err != nil:
+	case ctx.Err() != nil: // handlers may have been cut short
+		err = ctx.Err()
+	case errors.Is(res.Err, scripting.ErrStopped):
+		err = res.Err
+	}
 	if err != nil {
-		c.logger.Warn("character creation refused: the script hook did not run", "name", req.Name, "err", err)
+		c.log().Warn("character creation refused: the script hook did not run", "name", req.Name, "err", err)
 		return serverpackets.CharCreateFailCreationFailed, false
 	}
 	if !res.Rejected {
@@ -190,10 +204,10 @@ func (s *Server) allowCharacterCreate(ctx context.Context, c *client, req client
 	}
 	code, ok := serverpackets.CharCreateFailReasonByName(res.Reason)
 	if !ok {
-		c.logger.Warn("unknown character creation reason, using creation_failed", "reason", res.Reason)
+		c.log().Warn("unknown character creation reason, using creation_failed", "reason", res.Reason)
 		code = serverpackets.CharCreateFailCreationFailed
 	}
-	c.logger.Info("character creation rejected by a script", "name", req.Name, "reason", res.Reason)
+	c.log().Info("character creation rejected by a script", "name", req.Name, "reason", res.Reason)
 	return code, false
 }
 

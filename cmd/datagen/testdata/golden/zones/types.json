@@ -1,0 +1,50 @@
+[
+  {
+    "name": "EffectZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "NpcSpawnTerritory"
+  },
+  {
+    "name": "PeaceZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "ResidenceTeleportZone",
+    "parent": "ZoneRespawn",
+    "usable": true
+  },
+  {
+    "name": "ResidenceZone",
+    "parent": "ZoneRespawn",
+    "abstract": true
+  },
+  {
+    "name": "RespawnZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "TownZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "WaterZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "ZoneRespawn",
+    "parent": "ZoneType",
+    "abstract": true
+  },
+  {
+    "name": "ZoneType",
+    "parent": "ListenersContainer",
+    "abstract": true
+  }
+]

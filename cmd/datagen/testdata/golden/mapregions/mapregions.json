@@ -1,0 +1,162 @@
+[
+  {
+    "name": "Cedric's_Training_Hall",
+    "town": "Talking Island Town",
+    "locId": 910,
+    "castle": 1,
+    "bbs": 1,
+    "file": "talking_island_town.xml",
+    "respawnPoints": [
+      {
+        "x": -71338,
+        "y": 258271,
+        "z": -3104
+      }
+    ],
+    "chaoticRespawnPoints": [
+      {
+        "x": -79411,
+        "y": 240677,
+        "z": -3450
+      }
+    ]
+  },
+  {
+    "name": "orc_town",
+    "town": "Orc Town",
+    "locId": 920,
+    "castle": 9,
+    "bbs": 9,
+    "file": "orc_town.xml",
+    "respawnPoints": [
+      {
+        "x": -44316,
+        "y": -113136,
+        "z": -80
+      }
+    ],
+    "chaoticRespawnPoints": [
+      {
+        "x": -43552,
+        "y": -121488,
+        "z": -233
+      }
+    ],
+    "cells": [
+      {
+        "x": 18,
+        "y": 14
+      },
+      {
+        "x": 20,
+        "y": 15
+      }
+    ]
+  },
+  {
+    "name": "rune_town",
+    "town": "Rune Town",
+    "locId": 1537,
+    "castle": 8,
+    "bbs": 14,
+    "file": "rune_town.xml",
+    "respawnPoints": [
+      {
+        "x": 38096,
+        "y": -46976,
+        "z": 899
+      }
+    ],
+    "chaoticRespawnPoints": [
+      {
+        "x": 42640,
+        "y": -54496,
+        "z": -2310
+      }
+    ],
+    "cells": [
+      {
+        "x": 21,
+        "y": 15
+      },
+      {
+        "x": 20,
+        "y": 16
+      },
+      {
+        "x": 19,
+        "y": 16
+      }
+    ]
+  },
+  {
+    "name": "talking_island_town",
+    "town": "Talking Island Town",
+    "locId": 910,
+    "castle": 1,
+    "bbs": 1,
+    "file": "talking_island_town.xml",
+    "respawnPoints": [
+      {
+        "x": -83990,
+        "y": 243336,
+        "z": -3700
+      },
+      {
+        "x": -83964,
+        "y": 242680,
+        "z": -3700
+      }
+    ],
+    "chaoticRespawnPoints": [
+      {
+        "x": -79411,
+        "y": 240677,
+        "z": -3450
+      },
+      {
+        "x": -80480,
+        "y": 242640,
+        "z": -3690
+      }
+    ],
+    "cells": [
+      {
+        "x": 15,
+        "y": 23
+      },
+      {
+        "x": 15,
+        "y": 24
+      },
+      {
+        "x": 15,
+        "y": 25
+      },
+      {
+        "x": 16,
+        "y": 23
+      },
+      {
+        "x": 16,
+        "y": 24
+      },
+      {
+        "x": 16,
+        "y": 25
+      },
+      {
+        "x": 17,
+        "y": 24
+      },
+      {
+        "x": 17,
+        "y": 25
+      },
+      {
+        "x": 18,
+        "y": 25
+      }
+    ]
+  }
+]

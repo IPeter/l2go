@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/zones.xsd">
+	<!-- (vertices, min Z and Max Z are estimated) -->
+	<zone name="Den of Evil 1" type="EffectZone" shape="Cylinder" minZ="-2300" maxZ="-2100" rad="750">
+		<stat name="reuse" val="9000" />
+		<stat name="targetClass" val="Creature" />
+		<node X="74313" Y="-116888" />
+	</zone>
+</list>

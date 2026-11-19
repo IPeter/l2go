@@ -1,0 +1,9 @@
+/*
+ * Sample of an L2J Mobius actor class, for the datagen golden test: no NPC
+ * type extends it, so it is not in the NPC type list.
+ */
+package org.l2jmobius.gameserver.entity.actor;
+
+public class Player extends Playable
+{
+}

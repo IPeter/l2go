@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/npcs.xsd">
+	<npc id="20001" level="1" type="Monster" name="Gremlin">
+		<parameters>
+			<param name="MoveAroundSocial" value="0" />
+			<param name="MoveAroundSocial1" value="0" />
+			<param name="MoveAroundSocial2" value="0" />
+		</parameters>
+		<race>FAIRY</race>
+		<sex>MALE</sex>
+		<acquire exp="29" sp="2" />
+		<stats str="40" int="21" dex="30" wit="20" con="43" men="10">
+			<vitals hp="39.74519" hpRegen="2" mp="40" mpRegen="0.9" />
+			<attack physical="8.47458" magical="5.78704" random="30" critical="4" accuracy="4.75" attackSpeed="253" type="SWORD" range="40" distance="80" width="120" />
+			<defence physical="44.44444" magical="29.5916164000214" />
+			<speed>
+				<walk ground="20" />
+				<run ground="50" />
+			</speed>
+			<hitTime>370</hitTime>
+		</stats>
+		<status undying="false" canBeSown="true" />
+		<skillList>
+			<skill id="4416" level="13" /> <!-- Fairies -->
+		</skillList>
+		<exCrtEffect>false</exCrtEffect>
+		<ai aggroRange="1000" clanHelpRange="300" isAggressive="false" />
+		<collision>
+			<radius normal="10" />
+			<height normal="15" />
+		</collision>
+	</npc>
+	<!-- Not Mobius data: a raid boss that exercises the defaults, minions, AI and attributes. -->
+	<npc id="20090" type="RaidBoss" name="Sample Boss" title="Raid Boss">
+		<parameters>
+			<minions name="Privates">
+				<npc id="20001" count="2" respawnTime="360" weightPoint="1" />
+			</minions>
+			<param name="RaidSpawnMusic" value="Rm03_A" />
+			<skill name="RangeHold_a" id="4197" level="2" />
+		</parameters>
+		<equipment rhand="2369" weaponEnchant="3" />
+		<stats>
+			<attack physical="100" />
+			<speed>
+				<walk ground="0" swim="15" />
+			</speed>
+			<attribute>
+				<attack type="FIRE" value="20" />
+				<defence fire="10" water="-5" />
+			</attribute>
+		</stats>
+		<status canMove="false" />
+		<shots soul="10" shotChance="20" />
+		<corpseTime>30</corpseTime>
+		<ai type="MAGE" aggroRange="300" isChaos="true">
+			<skill minChance="5" primaryId="4197" />
+			<clanList>
+				<clan>ORC</clan>
+				<ignoreNpcId>20001</ignoreNpcId>
+			</clanList>
+		</ai>
+		<collision>
+			<radius normal="20" grown="24" />
+			<height normal="40" />
+		</collision>
+	</npc>
+	<!-- Not Mobius data: Mobius skips fake players unless they are enabled. -->
+	<npc id="20091" type="Folk" name="Fake Player">
+		<fakePlayer classId="0" hair="1" />
+	</npc>
+</list>

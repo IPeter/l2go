@@ -119,6 +119,31 @@ type CharacterStore interface {
 	NameExists(ctx context.Context, name string) (bool, error)
 	// Get returns the character with this object ID or ErrNotFound.
 	Get(ctx context.Context, objectID int32) (Character, error)
+
+	// Update saves the state of the character with c.ObjectID: position and
+	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
+	// and kill counts, clan, items, delete time, last access and access
+	// level. The identity fields (account, name, race and creation time)
+	// are kept as stored. It returns ErrNotFound if there is no such
+	// character.
+	Update(ctx context.Context, c *Character) error
+	// Delete removes the character and its items. Its name becomes free.
+	// It returns ErrNotFound if there is no such character.
+	Delete(ctx context.Context, objectID int32) error
+	// SetDeleteTime sets when the character will be deleted. The zero time
+	// clears it (the character is restored). It returns ErrNotFound if
+	// there is no such character.
+	SetDeleteTime(ctx context.Context, objectID int32, t time.Time) error
+}
+
+// Deleting reports whether the character is marked for deletion.
+func (c *Character) Deleting() bool { return !c.DeleteTime.IsZero() }
+
+// DeleteExpired reports whether the character is marked for deletion and
+// its delete time has passed at now (Mobius CharSelectionInfo deletes it
+// then).
+func (c *Character) DeleteExpired(now time.Time) bool {
+	return c.Deleting() && now.After(c.DeleteTime)
 }
 
 // IDAllocator hands out object IDs for characters and items. IDs are unique

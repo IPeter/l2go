@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not Mobius data: spawn features the Talking Island samples do not use. -->
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/spawns.xsd">
+	<spawn name="sample_guards" zone="sample_square">
+		<AIData>
+			<disableRandomWalk>true</disableRandomWalk>
+			<aggroRange>500</aggroRange>
+		</AIData>
+		<territory minZ="-3500" maxZ="-3401">
+			<node x="-1000" y="-1000" />
+			<node x="1000" y="-1000" />
+			<node x="1000" y="1000" />
+			<node x="-1000" y="1000" />
+		</territory>
+		<banned_territory minZ="-3600" maxZ="-3300">
+			<node x="-100" y="-100" />
+			<node x="100" y="-100" />
+			<node x="100" y="100" />
+			<node x="-100" y="100" />
+		</banned_territory>
+		<npc id="30099" count="3" respawnDelay="60" respawnRandom="20" chaseRange="1500" />
+		<npc id="20481" periodOfDay="Night" respawnDelay="30" />
+	</spawn>
+	<!-- A territory defined in another file. -->
+	<spawn zone="gludio32_1725_01">
+		<npc id="20001" count="2" respawnDelay="25" />
+	</spawn>
+	<!-- A raid boss: kept in the data, but World.Spawnable says no. -->
+	<spawn>
+		<npc id="20090" x="-80000" y="250000" z="-3500" heading="0" />
+	</spawn>
+</list>

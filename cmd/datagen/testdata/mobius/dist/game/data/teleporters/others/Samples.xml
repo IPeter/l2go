@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not Mobius data: teleporter features the Roxxy sample does not use. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/teleporterData.xsd">
+	<npc id="30001">
+		<npcs>
+			<npc id="30099" />
+			<npc id="50000" /> <!-- a custom NPC: left out -->
+		</npcs>
+		<teleport name="tel1" type="OTHER">
+			<location name="The Town of Gludio" x="-12694" y="122776" z="-3114" feeCount="9200" castleId="1" />
+			<location x="-21726" y="77385" z="-5177" />
+		</teleport>
+		<teleport name="list2" type="OTHER">
+			<location name="Between Two Castles" x="1" y="2" z="3" castleId="1;2" />
+		</teleport>
+	</npc>
+</list>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/zones.xsd">
+	<!-- Castle Teleport Zones -->
+	<zone name="gludio_castle_owner_restart_territory" type="ResidenceTeleportZone" shape="NPoly" minZ="-1840" maxZ="-1540">
+		<stat name="residenceId" val="1" />
+		<!-- owner_restart_territory -->
+		<node X="-17242" Y="109135" />
+		<node X="-16215" Y="109135" />
+		<node X="-16217" Y="109588" />
+		<node X="-17246" Y="109587" />
+		<!-- gk_teleport_points -->
+		<spawn X="-18099" Y="109297" Z="-2475" />
+	</zone>
+</list>

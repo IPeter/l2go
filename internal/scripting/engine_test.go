@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -38,23 +40,9 @@ func writeScript(t testing.TB, dir, name, src string) {
 	}
 }
 
-// start runs e until the test ends.
-func start(t testing.TB, e *Engine) {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_ = e.Run(ctx)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-	})
-}
-
 // newEngine loads files with opts (Dir is set to a temporary folder when
-// empty) and runs the engine until the test ends.
+// empty) and closes the engine when the test ends. Tests call the engine
+// on their own goroutine, which plays the world loop.
 func newEngine(t testing.TB, files map[string]string, opts Options) *Engine {
 	t.Helper()
 	if opts.Dir == "" {
@@ -64,7 +52,7 @@ func newEngine(t testing.TB, files map[string]string, opts Options) *Engine {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	start(t, e)
+	t.Cleanup(e.Close)
 	return e
 }
 
@@ -74,7 +62,7 @@ func loadErr(t *testing.T, files map[string]string, opts Options) *LoadError {
 	opts.Dir = writeScripts(t, files)
 	e, err := New(context.Background(), opts)
 	if err == nil {
-		start(t, e)
+		e.Close()
 		t.Fatal("New succeeded, want a load error")
 	}
 	le, ok := errors.AsType[*LoadError](err)
@@ -92,11 +80,18 @@ func call(t testing.TB, e *Engine, name string) Result {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	res, err := e.Call(ctx, createEvent(name))
+	return e.Invoke(ctx, createEvent(name))
+}
+
+// reload reloads e the way the server does, with the test's goroutine as
+// the loop: Prepare, then Swap.
+func reload(e *Engine) error {
+	p, err := e.Prepare(context.Background())
 	if err != nil {
-		t.Fatalf("Call(%q): %v", name, err)
+		return err
 	}
-	return res
+	e.Swap(p)
+	return nil
 }
 
 // rejectName is a script that rejects one character name.
@@ -182,6 +177,52 @@ func waitFor(t testing.TB, what string, cond func() bool) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+// testLoop runs posted functions one at a time on one goroutine, like the
+// world loop.
+type testLoop struct{ jobs chan func() }
+
+func newTestLoop(t testing.TB) *testLoop {
+	l := &testLoop{jobs: make(chan func())}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for job := range l.jobs {
+			job()
+		}
+	}()
+	t.Cleanup(func() {
+		close(l.jobs)
+		<-done
+	})
+	return l
+}
+
+// Post hands job to the loop.
+func (l *testLoop) Post(job func()) { l.jobs <- job }
+
+// Do runs job on the loop and waits for it.
+func (l *testLoop) Do(job func()) {
+	done := make(chan struct{})
+	l.jobs <- func() {
+		defer close(done)
+		job()
+	}
+	<-done
+}
+
+// goroutineID returns the ID of the calling goroutine, from its stack
+// header ("goroutine 7 [running]:").
+func goroutineID() uint64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	fields := strings.Fields(string(buf[:n]))
+	if len(fields) < 2 {
+		return 0
+	}
+	id, _ := strconv.ParseUint(fields[1], 10, 64)
+	return id
 }
 
 // --- Loading ---
@@ -297,6 +338,7 @@ func TestLoadOrderAndSkippedFiles(t *testing.T) {
 		".hidden.lua":   `error("hidden file ran")`,
 		".git/x.lua":    `error("hidden folder ran")`,
 		"notes.txt":     `not lua`,
+		"page.htm":      `<html><body>not lua either</body></html>`,
 		"types/api.lua": "---@meta\nerror('types ran')",
 	}, Options{Logger: logs.logger()})
 	var got []string
@@ -349,12 +391,9 @@ events.on_character_create(function(ev)
   return events.reject("name_exists")
 end)
 `}, Options{})
-	res, err := e.Call(context.Background(), CharacterCreate{
+	res := e.Invoke(context.Background(), CharacterCreate{
 		Account: "acc1", Name: "Hero", Race: 1, Sex: 1, ClassID: 18, HairStyle: 2, HairColor: 3, Face: 1,
 	}.Event())
-	if err != nil {
-		t.Fatal(err)
-	}
 	wantRejected(t, res, ReasonNameExists)
 }
 
@@ -442,24 +481,176 @@ func TestHandlerBadReturnValue(t *testing.T) {
 
 func TestUnknownEvent(t *testing.T) {
 	e := newEngine(t, nil, Options{})
-	res, err := e.Call(context.Background(), Event{Name: "no_such_event"})
-	if err != nil || res.Err == nil {
-		t.Errorf("Call = %+v, %v; want Result.Err", res, err)
+	if res := e.Invoke(context.Background(), Event{Name: "no_such_event"}); res.Err == nil {
+		t.Errorf("Invoke = %+v, want Result.Err", res)
 	}
 }
 
-func TestDispatch(t *testing.T) {
-	logs := &logBuffer{}
-	e := newEngine(t, map[string]string{
-		"a.lua": `events.on_character_create(function(ev) log.info("dispatched", "name", ev.name) end)`,
-	}, Options{Logger: logs.logger()})
-	if !e.Dispatch(createEvent("Async")) {
-		t.Fatal("Dispatch = false")
+// --- Synchronous use ---
+
+// Invoke runs the handlers on the caller's goroutine: the engine has no
+// goroutine of its own. (A handler on another goroutine would also be a
+// data race on calledOn under -race.)
+func TestInvokeRunsOnCallerGoroutine(t *testing.T) {
+	e := newEngine(t, map[string]string{"chat.lua": `
+events.on_chat(function(ev)
+  return ev.text .. " from " .. ev.player:name()
+end)`}, Options{})
+	var calledOn uint64
+	p := hero()
+	p.onCall = func() { calledOn = goroutineID() }
+
+	res := e.Invoke(context.Background(), ChatMessage{Player: p, Text: "hi"}.Event())
+	if res.Err != nil || res.Text != "hi from Hero" {
+		t.Fatalf("Invoke = %+v", res)
 	}
-	waitFor(t, "the dispatched handler", func() bool {
-		rec, ok := logs.find(t, "dispatched")
-		return ok && rec["name"] == "Async"
+	if want := goroutineID(); calledOn != want {
+		t.Errorf("the handler ran on goroutine %d, want the caller's %d", calledOn, want)
+	}
+}
+
+// The engine used the way the server uses it: one goroutine (the world
+// loop) runs every Invoke and Swap, posted from many goroutines, while
+// Prepare runs off the loop at the same time. Run with -race.
+func TestLoopSerializedUse(t *testing.T) {
+	dir := writeScripts(t, map[string]string{"a.lua": `
+events.on_character_create(function(ev)
+  if ev.name:sub(1, 3) == "bad" then
+    return events.reject("incorrect_name")
+  end
+end)`})
+	e := newEngine(t, nil, Options{Dir: dir})
+	loop := newTestLoop(t)
+
+	const goroutines, calls = 16, 50
+	var wg sync.WaitGroup
+	for g := range goroutines {
+		wg.Go(func() {
+			for i := range calls {
+				name := fmt.Sprintf("good-%d-%d", g, i)
+				if i%2 == 0 {
+					name = fmt.Sprintf("bad-%d-%d", g, i)
+				}
+				var res Result
+				loop.Do(func() { res = e.Invoke(context.Background(), createEvent(name)) })
+				if want := i%2 == 0; res.Rejected != want || res.Err != nil {
+					t.Errorf("Invoke(%s) = %+v, want rejected=%v", name, res, want)
+				}
+			}
+		})
+	}
+	wg.Go(func() {
+		for range 5 {
+			p, err := e.Prepare(context.Background()) // off the loop
+			if err != nil {
+				t.Errorf("Prepare: %v", err)
+				return
+			}
+			loop.Post(func() { e.Swap(p) })
+		}
 	})
+	wg.Wait()
+}
+
+// A Go function called by a handler may call the engine again on the same
+// goroutine. The nested run works, the outer handler's values keep
+// working after it, and the outer run's time limit still holds.
+func TestNestedRun(t *testing.T) {
+	out := &fakeOutput{}
+	e := newEngine(t, map[string]string{
+		"chat.lua": `events.on_chat(function(ev) return "[" .. ev.player:name() .. "] " .. ev.text end)`,
+		"npc.lua": `
+local s = script.new("Nested")
+s:on_first_talk(30733, function(npc, player)
+  npc:say("hello")
+  if player:name() ~= "Hero" then error("the player stopped working") end
+  if npc:id() ~= 30733 then error("the NPC stopped working") end
+  return "<html><body>" .. player:name() .. "</body></html>"
+end)
+s:on_event(function(event, npc, player)
+  npc:say("loop")
+  while true do end
+end)`,
+	}, Options{Output: out, Timeout: 50 * time.Millisecond})
+
+	var inner []Result
+	out.onSay = func(npc NpcRef, text string) {
+		inner = append(inner, e.Invoke(context.Background(), ChatMessage{Player: hero(), Text: text}.Event()))
+	}
+	reply, ok := e.FirstTalk(context.Background(), 30733, hero(), guardNpc())
+	if !ok || reply.Kind != ReplyHTML || reply.Content != "<html><body>Hero</body></html>" {
+		t.Errorf("outer reply = %+v, %v", reply, ok)
+	}
+	if len(inner) != 1 || inner[0].Err != nil || inner[0].Text != "[Hero] hello" {
+		t.Errorf("nested chat = %+v", inner)
+	}
+
+	begin := time.Now()
+	reply, ok = e.Event(context.Background(), "Nested", "x", hero(), guardNpc())
+	if ok || !errors.Is(reply.Err, ErrTimeout) {
+		t.Errorf("reply = %+v, %v; want a timeout after the nested run", reply, ok)
+	}
+	if d := time.Since(begin); d > 2*time.Second {
+		t.Errorf("the endless loop ran for %v", d)
+	}
+	if reply, ok := e.FirstTalk(context.Background(), 30733, hero(), guardNpc()); !ok || reply.Err != nil {
+		t.Errorf("after the timeout: %+v, %v", reply, ok)
+	}
+}
+
+func TestInvokeContextCanceled(t *testing.T) {
+	e := newEngine(t, map[string]string{"a.lua": rejectName("x", ReasonNameExists)}, Options{})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if res := e.Invoke(ctx, createEvent("x")); !errors.Is(res.Err, context.Canceled) || res.Rejected {
+		t.Errorf("Invoke with a canceled context = %+v, want context.Canceled", res)
+	}
+	wantRejected(t, call(t, e, "x"), ReasonNameExists)
+}
+
+func TestCancelStopsHandler(t *testing.T) {
+	e := newEngine(t, map[string]string{"loop.lua": `
+events.on_character_create(function(ev) while true do end end)`}, Options{Timeout: time.Minute})
+	ctx, cancel := context.WithCancel(context.Background())
+	stop := time.AfterFunc(20*time.Millisecond, cancel)
+	defer stop.Stop()
+	res := e.Invoke(ctx, createEvent("x"))
+	if !errors.Is(res.Err, context.Canceled) {
+		t.Errorf("Err = %v, want context.Canceled", res.Err)
+	}
+}
+
+func TestClose(t *testing.T) {
+	dir := writeScripts(t, map[string]string{"a.lua": rejectName("x", ReasonNameExists) + `
+script.new("S"):on_first_talk(30733, function() return "a.htm" end)`})
+	e, err := New(context.Background(), Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRejected(t, call(t, e, "x"), ReasonNameExists)
+	p, err := e.Prepare(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e.Close()
+	e.Close() // twice is fine
+	if res := call(t, e, "x"); !errors.Is(res.Err, ErrStopped) || res.Rejected {
+		t.Errorf("Invoke after Close = %+v, want ErrStopped", res)
+	}
+	if res := e.Invoke(context.Background(), ChatMessage{Text: "hi"}.Event()); !errors.Is(res.Err, ErrStopped) || res.Text != "hi" {
+		t.Errorf("chat after Close = %+v, want ErrStopped and the text unchanged", res)
+	}
+	if e.HasFirstTalk(30733) || e.HasScript("S") || e.TalkScripts(30733) != nil {
+		t.Error("a closed engine still reports scripts")
+	}
+	if reply, ok := e.FirstTalk(context.Background(), 30733, hero(), guardNpc()); ok || !errors.Is(reply.Err, ErrStopped) {
+		t.Errorf("FirstTalk after Close = %+v, %v", reply, ok)
+	}
+	e.Swap(p)
+	if p.Files() != 0 {
+		t.Error("Swap on a closed engine did not close the prepared scripts")
+	}
 }
 
 // --- Timeouts ---
@@ -504,45 +695,6 @@ end)
 			wantRejected(t, call(t, e, "bad"), ReasonIncorrectName)
 			wantAccepted(t, call(t, e, "good"))
 		})
-	}
-}
-
-func TestCallContextCanceled(t *testing.T) {
-	e := newEngine(t, map[string]string{"a.lua": rejectName("x", ReasonNameExists)}, Options{})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, err := e.Call(ctx, createEvent("x")); !errors.Is(err, context.Canceled) {
-		t.Errorf("Call with a canceled context = %v, want context.Canceled", err)
-	}
-	wantRejected(t, call(t, e, "x"), ReasonNameExists)
-}
-
-func TestStopped(t *testing.T) {
-	dir := writeScripts(t, map[string]string{"a.lua": rejectName("x", ReasonNameExists)})
-	e, err := New(context.Background(), Options{Dir: dir})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- e.Run(ctx) }()
-	wantRejected(t, call(t, e, "x"), ReasonNameExists)
-	cancel()
-	if err := <-done; err != nil {
-		t.Errorf("Run = %v", err)
-	}
-
-	if _, err := e.Call(context.Background(), createEvent("x")); !errors.Is(err, ErrStopped) {
-		t.Errorf("Call after stop = %v, want ErrStopped", err)
-	}
-	if e.Dispatch(createEvent("x")) {
-		t.Error("Dispatch after stop = true")
-	}
-	if err := e.Reload(context.Background()); !errors.Is(err, ErrStopped) {
-		t.Errorf("Reload after stop = %v, want ErrStopped", err)
-	}
-	if err := e.Run(context.Background()); err == nil {
-		t.Error("second Run succeeded")
 	}
 }
 
@@ -729,7 +881,7 @@ print("p", 1, nil)
 	}
 }
 
-// --- Reload ---
+// --- Reload: Prepare and Swap ---
 
 func TestReloadReplacesHandlers(t *testing.T) {
 	dir := writeScripts(t, map[string]string{
@@ -744,15 +896,48 @@ func TestReloadReplacesHandlers(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "events", "gone.lua")); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Reload(context.Background()); err != nil {
-		t.Fatalf("Reload: %v", err)
+	if err := reload(e); err != nil {
+		t.Fatalf("reload: %v", err)
 	}
 	wantAccepted(t, call(t, e, "Old"))
 	wantAccepted(t, call(t, e, "Gone"))
 	wantRejected(t, call(t, e, "New"), ReasonIncorrectName)
 }
 
-func TestReloadBrokenKeepsOld(t *testing.T) {
+// Prepare loads into a fresh state and leaves the running scripts alone
+// until Swap.
+func TestPrepareThenSwap(t *testing.T) {
+	logs := &logBuffer{}
+	dir := writeScripts(t, map[string]string{"events/names.lua": rejectName("Old", ReasonIncorrectName)})
+	e := newEngine(t, nil, Options{Dir: dir, Logger: logs.logger()})
+
+	writeScript(t, dir, "events/names.lua", rejectName("New", ReasonIncorrectName))
+	p, err := e.Prepare(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Files() != 1 {
+		t.Errorf("Files = %d, want 1", p.Files())
+	}
+	wantRejected(t, call(t, e, "Old"), ReasonIncorrectName)
+	wantAccepted(t, call(t, e, "New"))
+
+	e.Swap(p)
+	wantAccepted(t, call(t, e, "Old"))
+	wantRejected(t, call(t, e, "New"), ReasonIncorrectName)
+	if _, ok := logs.find(t, "scripts reloaded"); !ok {
+		t.Error("the swap was not logged")
+	}
+
+	// Swapping the same scripts again, or nil, or closing them after the
+	// swap does nothing.
+	e.Swap(p)
+	e.Swap(nil)
+	p.Close()
+	wantRejected(t, call(t, e, "New"), ReasonIncorrectName)
+}
+
+func TestPrepareErrorKeepsOld(t *testing.T) {
 	dir := writeScripts(t, map[string]string{
 		"events/names.lua": rejectName("Old", ReasonIncorrectName),
 	})
@@ -760,9 +945,9 @@ func TestReloadBrokenKeepsOld(t *testing.T) {
 
 	writeScript(t, dir, "events/names.lua", rejectName("New", ReasonIncorrectName))
 	writeScript(t, dir, "events/broken.lua", "events.on_character_create(")
-	err := e.Reload(context.Background())
-	if _, ok := errors.AsType[*LoadError](err); !ok {
-		t.Fatalf("Reload = %v, want a *LoadError", err)
+	p, err := e.Prepare(context.Background())
+	if _, ok := errors.AsType[*LoadError](err); !ok || p != nil {
+		t.Fatalf("Prepare = %v, %v; want a *LoadError", p, err)
 	}
 	if !strings.Contains(err.Error(), "broken.lua") {
 		t.Errorf("error does not name the broken file: %v", err)
@@ -775,8 +960,8 @@ func TestReloadBrokenKeepsOld(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "events", "broken.lua")); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Reload(context.Background()); err != nil {
-		t.Fatalf("Reload: %v", err)
+	if err := reload(e); err != nil {
+		t.Fatalf("reload: %v", err)
 	}
 	wantRejected(t, call(t, e, "New"), ReasonIncorrectName)
 }
@@ -788,53 +973,42 @@ events.on_character_create(function(ev)
   if counter ~= 1 then return events.reject("creation_failed") end
 end)`})
 	e := newEngine(t, nil, Options{Dir: dir})
-	if err := e.Reload(context.Background()); err != nil {
+	if err := reload(e); err != nil {
 		t.Fatal(err)
 	}
 	wantAccepted(t, call(t, e, "x"))
 }
 
-// --- Concurrency ---
-
-// Run with -race.
-func TestConcurrentCalls(t *testing.T) {
-	dir := writeScripts(t, map[string]string{"a.lua": `
-events.on_character_create(function(ev)
-  if ev.name:sub(1, 3) == "bad" then
-    return events.reject("incorrect_name")
-  end
+// A Swap called while a handler runs (from a Go function the handler
+// called) waits until the run ends: the running handler finishes on the
+// old scripts.
+func TestSwapDuringHandlerWaits(t *testing.T) {
+	out := &fakeOutput{}
+	dir := writeScripts(t, map[string]string{"npc.lua": `
+local s = script.new("Old")
+s:on_first_talk(30733, function(npc, player)
+  npc:say("swap now")
+  return "old.htm", { name = player:name() }
 end)`})
-	e := newEngine(t, nil, Options{Dir: dir})
-
-	const goroutines, calls = 16, 50
-	var wg sync.WaitGroup
-	for g := range goroutines {
-		wg.Go(func() {
-			for i := range calls {
-				name := fmt.Sprintf("good-%d-%d", g, i)
-				if i%2 == 0 {
-					name = fmt.Sprintf("bad-%d-%d", g, i)
-				}
-				res, err := e.Call(context.Background(), createEvent(name))
-				if err != nil {
-					t.Errorf("Call(%s): %v", name, err)
-					return
-				}
-				if want := i%2 == 0; res.Rejected != want || res.Err != nil {
-					t.Errorf("Call(%s) = %+v, want rejected=%v", name, res, want)
-				}
-			}
-		})
+	e := newEngine(t, nil, Options{Dir: dir, Output: out})
+	writeScript(t, dir, "npc.lua", `
+local s = script.new("New")
+s:on_first_talk(30733, function(npc, player) return "new.htm" end)`)
+	p, err := e.Prepare(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
-	wg.Go(func() {
-		for range 5 {
-			if err := e.Reload(context.Background()); err != nil {
-				t.Errorf("Reload: %v", err)
-			}
-			e.Dispatch(createEvent("bad-dispatch"))
-		}
-	})
-	wg.Wait()
+
+	out.onSay = func(NpcRef, string) { e.Swap(p) }
+	reply, ok := e.FirstTalk(context.Background(), 30733, hero(), guardNpc())
+	if !ok || reply.Script != "Old" || reply.Content != "old.htm" || reply.Vars["name"] != "Hero" {
+		t.Errorf("during the swap, reply = %+v, %v; want the old script's", reply, ok)
+	}
+	out.onSay = nil
+	reply, ok = e.FirstTalk(context.Background(), 30733, hero(), guardNpc())
+	if !ok || reply.Script != "New" || reply.Content != "new.htm" {
+		t.Errorf("after the run, reply = %+v, %v; want the new script's", reply, ok)
+	}
 }
 
 // --- Errors ---
@@ -861,7 +1035,7 @@ func TestToError(t *testing.T) {
 
 // --- Benchmarks ---
 
-func BenchmarkCall(b *testing.B) {
+func BenchmarkInvoke(b *testing.B) {
 	e := newEngine(b, map[string]string{"names.lua": `
 local forbidden = { "annou", "ammou", "amnou", "anmou", "anou", "amou" }
 events.on_character_create(function(ev)
@@ -875,19 +1049,36 @@ end)`}, Options{})
 	ev := createEvent("Frostwind")
 	ctx := context.Background()
 	for b.Loop() {
-		if _, err := e.Call(ctx, ev); err != nil {
-			b.Fatal(err)
+		if res := e.Invoke(ctx, ev); res.Err != nil {
+			b.Fatal(res.Err)
 		}
 	}
 }
 
-func BenchmarkCallNoHandlers(b *testing.B) {
+func BenchmarkInvokeNoHandlers(b *testing.B) {
 	e := newEngine(b, nil, Options{})
 	ev := createEvent("Frostwind")
 	ctx := context.Background()
 	for b.Loop() {
-		if _, err := e.Call(ctx, ev); err != nil {
-			b.Fatal(err)
+		if res := e.Invoke(ctx, ev); res.Err != nil {
+			b.Fatal(res.Err)
+		}
+	}
+}
+
+func BenchmarkFirstTalk(b *testing.B) {
+	e := newEngine(b, map[string]string{"npc.lua": `
+local s = script.new("Bench")
+s:on_first_talk(30733, function(npc, player)
+  if player:level() < 20 then
+    return "welcome.htm", { name = player:name() }
+  end
+end)`}, Options{})
+	p, n := hero(), guardNpc()
+	ctx := context.Background()
+	for b.Loop() {
+		if reply, ok := e.FirstTalk(ctx, 30733, p, n); !ok || reply.Err != nil {
+			b.Fatal(reply.Err)
 		}
 	}
 }

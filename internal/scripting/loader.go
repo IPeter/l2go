@@ -37,29 +37,27 @@ func kindOf(path string) fileKind {
 	return kindScript
 }
 
-// handler is a function registered with events.on_<name>.
-type handler struct {
-	fn   *lua.LFunction
-	file string // where the function is defined
-	line int
-}
-
-func (h handler) where() string { return fmt.Sprintf("%s:%d", h.file, h.line) }
-
 // vm is one Lua state with the scripts loaded into it. Only one goroutine
 // may use it at a time.
 type vm struct {
 	L      *lua.LState
 	dir    string
 	logger *slog.Logger
+	output Output // nil: npc:say only logs
 
 	protos map[string]*lua.FunctionProto // compiled files by slash path
 	broken map[string]bool               // files that did not compile
 	loaded map[string]lua.LValue         // results of files that ran
 
-	handlers map[string][]handler // by event name
-	loading  bool                 // scripts are loading: handlers may register
-	event    *eventRun            // the event being handled, or nil
+	handlers  map[string][]handler   // events.on_<name> handlers by event name
+	scripts   map[string]*npcScript  // script.new objects by name
+	firstTalk map[int]firstTalkOwner // by NPC template ID
+	talkers   map[int][]*npcScript   // scripts with on_talk, by NPC template ID, in load order
+	loading   bool                   // scripts are loading: handlers may register
+	running   []string               // files running while loading, innermost last
+	event     *eventRun              // the event being handled, or nil
+	depth     int                    // runs in progress (nested runs count too)
+	refs      []*lua.LUserData       // Player and Npc values handed out in this run
 
 	files int // .lua files compiled
 }
@@ -69,7 +67,24 @@ func (v *vm) display(path string) string {
 	return filepath.Join(v.dir, filepath.FromSlash(path))
 }
 
-func (v *vm) close() { v.L.Close() }
+// currentFile returns the slash path of the innermost file whose top level
+// is running, while the scripts load. A lib/ helper that calls script.new
+// for its caller is not a file running at the top level, so the caller's
+// file counts.
+func (v *vm) currentFile() string {
+	if n := len(v.running); n > 0 {
+		return v.running[n-1]
+	}
+	return ""
+}
+
+// close closes the Lua state. Closing twice does nothing.
+func (v *vm) close() {
+	if v.L != nil {
+		v.L.Close()
+		v.L = nil
+	}
+}
 
 // LoadError lists every script that failed to load.
 type LoadError struct {
@@ -104,12 +119,16 @@ func load(ctx context.Context, opts Options) (*vm, error) {
 		return nil, err
 	}
 	v := &vm{
-		dir:      opts.Dir,
-		logger:   opts.Logger,
-		protos:   make(map[string]*lua.FunctionProto),
-		broken:   make(map[string]bool),
-		loaded:   make(map[string]lua.LValue),
-		handlers: make(map[string][]handler),
+		dir:       opts.Dir,
+		logger:    opts.Logger,
+		output:    opts.Output,
+		protos:    make(map[string]*lua.FunctionProto),
+		broken:    make(map[string]bool),
+		loaded:    make(map[string]lua.LValue),
+		handlers:  make(map[string][]handler),
+		scripts:   make(map[string]*npcScript),
+		firstTalk: make(map[int]firstTalkOwner),
+		talkers:   make(map[int][]*npcScript),
 	}
 	v.L = v.newState()
 
@@ -246,7 +265,8 @@ func (v *vm) runScript(ctx context.Context, path string, timeout time.Duration) 
 
 // Check loads every script in opts.Dir into a sandbox, as New does, then
 // discards it. It returns the number of .lua files checked. On failure the
-// error is a *LoadError listing every problem with file and line.
+// error is a *LoadError listing every problem with file and line,
+// including NPCs whose first talk two scripts claim.
 func Check(ctx context.Context, opts Options) (int, error) {
 	v, err := load(ctx, opts.withDefaults())
 	if err != nil {

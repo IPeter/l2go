@@ -1,0 +1,133 @@
+# Mobius Interlude reference stack: the oracle for cmd/refdiff. See README.md.
+#
+#   make reference-up      start; the first run also compiles Mobius (minutes)
+#   make reference-logs    follow the logs
+#   make reference-down    stop; the database and the build stay in volumes
+#   make reference-build   rebuild the image and recompile Mobius
+#
+# Its own compose project, l2go-reference (the Makefile also passes it with -p,
+# which beats COMPOSE_PROJECT_NAME), so its containers, network and volumes
+# never touch the l2go stack. Only 127.0.0.1 ports are published: login 12106,
+# game 17777 (the server list announces 127.0.0.1:17777). The login <-> game
+# link (9014) and MariaDB stay on the compose network.
+#
+# MOBIUS_DIR: the Mobius CT_0 Interlude checkout, mounted read-only, never
+# modified. Default: L2J_Mobius/L2J_Mobius_CT_0_Interlude at the repo root. A
+# relative path resolves from this folder, so prefer an absolute one.
+
+name: l2go-reference
+
+x-mobius: &mobius
+  build: ./mobius
+  image: l2go-reference-mobius:dev
+  init: true
+  restart: on-failure
+
+services:
+  # One database for both servers, as Mobius expects (both Database.ini URLs
+  # name l2jmobiusinterlude). Filled on its first start by
+  # mariadb/initdb/10-mobius-sql.sh from Mobius's dist/db_installer/sql.
+  mariadb:
+    image: mariadb:11
+    restart: on-failure
+    # The collation of Mobius's tables, also for connections.
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MARIADB_ROOT_PASSWORD: mobius
+      MARIADB_DATABASE: l2jmobiusinterlude
+      MARIADB_USER: l2jmobius
+      MARIADB_PASSWORD: l2jmobius
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./mariadb/initdb:/docker-entrypoint-initdb.d:ro
+      - type: bind
+        source: ${MOBIUS_DIR:-../../L2J_Mobius/L2J_Mobius_CT_0_Interlude}/dist/db_installer/sql
+        target: /mobius-sql
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 2m
+
+  # One-shot: compiles Mobius with its build.xml (Ant, target jar) and lays the
+  # server out in the mobius-server volume (mobius/build.sh). It does nothing
+  # when a build is already there; make reference-build forces a new one.
+  mobius-build:
+    <<: *mobius
+    restart: "no"
+    command: ["/opt/l2go-reference/build.sh"]
+    environment:
+      MOBIUS_SOURCE: ${MOBIUS_DIR:-../../L2J_Mobius/L2J_Mobius_CT_0_Interlude}
+    volumes:
+      - type: bind
+        source: ${MOBIUS_DIR:-../../L2J_Mobius/L2J_Mobius_CT_0_Interlude}
+        target: /mobius
+        read_only: true
+        bind:
+          create_host_path: false
+      - mobius-server:/srv/mobius
+
+  # The servers run from the volume with Mobius's start command (mobius/start.sh),
+  # after applying config/<server>/ over Mobius's default config.
+  mobius-login:
+    <<: *mobius
+    command: ["/opt/l2go-reference/start.sh", "login"]
+    environment:
+      # Replaces Mobius's login/java.cfg when set.
+      MOBIUS_JAVA_OPTS: ${MOBIUS_LOGIN_JAVA_OPTS:-}
+    volumes:
+      - mobius-server:/srv/mobius
+      - ./config/login:/opt/l2go-reference/overrides:ro
+    ports:
+      - "127.0.0.1:12106:2106"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      mobius-build:
+        condition: service_completed_successfully
+    healthcheck:
+      # Listening on 2106 (0x083A). Read from /proc: a probe connection would
+      # go through Mobius's client handling.
+      test: ["CMD-SHELL", "grep -qsi ':083A [0-9a-f:]* 0A ' /proc/net/tcp /proc/net/tcp6"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 2m
+
+  mobius-game:
+    <<: *mobius
+    command: ["/opt/l2go-reference/start.sh", "game"]
+    # Mobius saves the world in its shutdown hook.
+    stop_grace_period: 1m
+    environment:
+      # Replaces Mobius's game/java.cfg (-Xms2g -Xmx4g ...) when set.
+      MOBIUS_JAVA_OPTS: ${MOBIUS_GAME_JAVA_OPTS:-}
+    volumes:
+      - mobius-server:/srv/mobius
+      - ./config/game:/opt/l2go-reference/overrides:ro
+    ports:
+      - "127.0.0.1:17777:17777"
+    # The game server registers with mobius-login and retries every 5 s until
+    # it is up.
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      mobius-build:
+        condition: service_completed_successfully
+      mobius-login:
+        condition: service_started
+    healthcheck:
+      # Listening on 17777 (0x4571): Mobius opens the port when loading is done.
+      test: ["CMD-SHELL", "grep -qsi ':4571 [0-9a-f:]* 0A ' /proc/net/tcp /proc/net/tcp6"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10m
+
+volumes:
+  mariadb-data:
+  mobius-server:

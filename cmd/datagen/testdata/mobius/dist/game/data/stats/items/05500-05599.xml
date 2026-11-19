@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests. -->
 <list>
 	<item id="5588" type="EtcItem" name="Tutorial Guide">
 		<!-- A booklet containing general information for the new player. -->
+		<set name="icon" val="icon.etc_lottery_card_i00" />
 		<set name="default_action" val="SHOW_HTML" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="PAPER" />
+		<set name="is_tradable" val="false" />
+		<set name="is_dropable" val="false" />
+		<set name="is_sellable" val="false" />
+		<set name="is_depositable" val="false" />
 		<set name="handler" val="Book" />
 	</item>
 </list>

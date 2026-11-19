@@ -1,454 +1,234 @@
 // Command datagen converts the parts of the L2J Mobius Interlude datapack
-// that L2Go needs into the JSON files of the data/ folder. The JSON schema
-// is defined by internal/data.
+// that L2Go needs into the files of the data/ folder, and generates the Go
+// enums of internal/data from the Mobius Java sources.
 //
 // Usage:
 //
-//	go run ./cmd/datagen -mobius L2J_Mobius/L2J_Mobius_CT_0_Interlude -out data
+//	go run ./cmd/datagen [-mobius dir] [-out dir] [domain ...]
+//	go run ./cmd/datagen -enums [-mobius dir] [-out dir] [domain ...]
 //
-// It reads:
+// The first form writes data files (default folder: data). The second
+// writes Go source files (default folder: internal/data, whose go:generate
+// line runs it). Without domain names every domain of the mode runs; -list
+// prints them.
 //
-//   - dist/game/data/stats/players/templates/StartingClass/*.xml: base
-//     stats, creation points and level 1 HP/MP/CP of the starting classes;
-//   - dist/game/data/stats/players/classList.xml: class names;
-//   - dist/game/data/stats/players/initialEquipment.xml;
-//   - dist/game/data/stats/items/*.xml (not custom/): the items used by the
-//     initial equipment;
-//   - java/.../enums/player/PlayerClass.java and .../creature/Race.java:
-//     the race of each class and the race IDs, which Mobius keeps in code,
-//     not in its XML data.
+// # Domains
 //
-// The output is sorted by ID and does not depend on file order or time, so
-// running it again on the same input gives the same files.
+// Each part of the data lives in its own file and registers itself from
+// init:
+//
+//	func init() { registerDomain("players", genPlayers) }
+//	func init() { registerEnums("items", genItemEnums) }
+//
+// A domain reads the Mobius project through options.src and adds its files
+// to options.out (see output). A run writes all of its files or none: the
+// domains fill an in-memory output, the data files are then loaded with
+// internal/data (the domains of the same name, see data.LoadDomains), and
+// only then written. A domain fails on anything it does not expect in the
+// Mobius data, so a datapack change is noticed instead of silently dropped.
+//
+// The output is sorted and does not depend on file order or time, so
+// running datagen again on the same input gives the same files.
 package main
 
 import (
-	"bytes"
-	"cmp"
-	"encoding/json"
-	"encoding/xml"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/fs"
-	"maps"
 	"os"
-	"path"
-	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
+	"testing/fstest"
 
 	"github.com/IPeter/l2go/internal/data"
 )
 
-// Paths inside the Mobius Interlude project folder.
+// Default output folders, relative to the repository root.
 const (
-	statsDir         = "dist/game/data/stats"
-	classListFile    = statsDir + "/players/classList.xml"
-	startingClassDir = statsDir + "/players/templates/StartingClass"
-	equipmentFile    = statsDir + "/players/initialEquipment.xml"
-	itemsDir         = statsDir + "/items"
-	playerClassFile  = "java/org/l2jmobius/gameserver/entity/actor/enums/player/PlayerClass.java"
-	raceFile         = "java/org/l2jmobius/gameserver/entity/actor/enums/creature/Race.java"
+	defaultDataOut  = "data"
+	defaultEnumsOut = "internal/data"
 )
+
+// options is what a domain works with.
+type options struct {
+	// src is the Mobius Interlude project folder.
+	src fs.FS
+	// out collects the generated files.
+	out *output
+	// log receives warnings about the Mobius data.
+	log io.Writer
+}
+
+// warnf reports something in the Mobius data that the domain worked
+// around, such as a known inconsistency.
+func (o options) warnf(format string, args ...any) {
+	fmt.Fprintf(o.log, "warning: "+format+"\n", args...)
+}
+
+// domain is one registered generator.
+type domain struct {
+	name string
+	// enums is set for generators of Go source files (-enums mode).
+	enums bool
+	run   func(o options) error
+}
+
+// registry holds the domains registered by init functions.
+var registry []domain
+
+// registerDomain registers a generator of data files. Call it from init.
+// The name is also the internal/data domain that loads and checks the
+// files, if there is one.
+func registerDomain(name string, run func(o options) error) {
+	register(domain{name: name, run: run})
+}
+
+// registerEnums registers a generator of Go source files for the -enums
+// mode. Call it from init.
+func registerEnums(name string, run func(o options) error) {
+	register(domain{name: name, enums: true, run: run})
+}
+
+func register(d domain) {
+	if d.name == "" || d.run == nil {
+		panic("datagen: domain without a name or a run function")
+	}
+	for _, r := range registry {
+		if r.name == d.name && r.enums == d.enums {
+			panic("datagen: domain " + d.name + " is registered twice")
+		}
+	}
+	registry = append(registry, d)
+}
+
+// domains returns the registered domains of a mode, sorted by name.
+func domains(enums bool) []domain {
+	var ds []domain
+	for _, d := range registry {
+		if d.enums == enums {
+			ds = append(ds, d)
+		}
+	}
+	slices.SortFunc(ds, func(a, b domain) int { return strings.Compare(a.name, b.name) })
+	return ds
+}
+
+// selectDomains returns the named domains of a mode, or all of them if
+// names is empty.
+func selectDomains(enums bool, names []string) ([]domain, error) {
+	all := domains(enums)
+	if len(names) == 0 {
+		return all, nil
+	}
+	var picked []domain
+	for _, name := range names {
+		i := slices.IndexFunc(all, func(d domain) bool { return d.name == name })
+		if i < 0 {
+			return nil, fmt.Errorf("unknown domain %q (have: %s)", name, domainNames(all))
+		}
+		if !slices.ContainsFunc(picked, func(d domain) bool { return d.name == name }) {
+			picked = append(picked, all[i])
+		}
+	}
+	slices.SortFunc(picked, func(a, b domain) int { return strings.Compare(a.name, b.name) })
+	return picked, nil
+}
+
+func domainNames(ds []domain) string {
+	names := make([]string, len(ds))
+	for i, d := range ds {
+		names[i] = d.name
+	}
+	return strings.Join(names, ", ")
+}
 
 func main() {
 	mobius := flag.String("mobius", "L2J_Mobius/L2J_Mobius_CT_0_Interlude", "L2J Mobius Interlude project folder")
-	out := flag.String("out", "data", "output data folder")
+	out := flag.String("out", "", "output folder (default "+defaultDataOut+", or "+defaultEnumsOut+" with -enums)")
+	enums := flag.Bool("enums", false, "generate the Go enum files instead of the data files")
+	list := flag.Bool("list", false, "print the domains of the mode and exit")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: datagen [-enums] [-mobius dir] [-out dir] [domain ...]\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
-	if err := run(*mobius, *out, os.Stdout); err != nil {
+
+	if *list {
+		for _, d := range domains(*enums) {
+			fmt.Println(d.name)
+		}
+		return
+	}
+	dir := *out
+	if dir == "" {
+		dir = defaultDataOut
+		if *enums {
+			dir = defaultEnumsOut
+		}
+	}
+	if err := run(*mobius, dir, *enums, flag.Args(), os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "datagen:", err)
 		os.Exit(1)
 	}
 }
 
-// run generates the data files from mobiusDir into outDir and reports each
-// file it writes to log.
-func run(mobiusDir, outDir string, log io.Writer) error {
-	files, err := generate(os.DirFS(mobiusDir))
+// run generates the selected domains from mobiusDir into outDir and reports
+// each file it writes to log.
+func run(mobiusDir, outDir string, enums bool, names []string, log io.Writer) error {
+	files, err := generate(os.DirFS(mobiusDir), enums, names, log)
 	if err != nil {
 		return err
 	}
-	for _, name := range slices.Sorted(maps.Keys(files)) {
-		p := filepath.Join(outDir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // data folder is meant to be readable
-			return err
-		}
-		if err := os.WriteFile(p, files[name], 0o644); err != nil { //nolint:gosec // generated data files are public
-			return err
-		}
-		fmt.Fprintf(log, "wrote %s\n", p)
-	}
-	return nil
+	return writeFiles(outDir, files, log)
 }
 
-// generate reads the Mobius project in fsys and returns the output files,
-// keyed by their path in the data folder. The data is checked with
-// data.New before it is encoded.
-func generate(fsys fs.FS) (map[string][]byte, error) {
-	classes, err := readClassList(fsys)
+// generate runs the selected domains of a mode (all if names is empty) on
+// the Mobius project in src and returns their files, keyed by
+// slash-separated path. Data files are loaded with internal/data before
+// they are returned, so a run never writes data the server refuses.
+func generate(src fs.FS, enums bool, names []string, log io.Writer) (map[string][]byte, error) {
+	selected, err := selectDomains(enums, names)
 	if err != nil {
 		return nil, err
 	}
-	races, err := readRaces(fsys)
-	if err != nil {
-		return nil, err
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("no domains to run")
 	}
-	templates, err := readTemplates(fsys, classes, races)
-	if err != nil {
-		return nil, err
-	}
-	equipment, err := readEquipment(fsys)
-	if err != nil {
-		return nil, err
-	}
-	items, err := readItems(fsys, equipment)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := data.New(templates, equipment, items); err != nil {
-		return nil, err
-	}
-
-	files := make(map[string][]byte, 3)
-	for name, v := range map[string]any{
-		data.TemplatesFile: templates,
-		data.EquipmentFile: equipment,
-		data.ItemsFile:     items,
-	} {
-		b, err := encodeJSON(v)
-		if err != nil {
-			return nil, fmt.Errorf("encode %s: %w", name, err)
-		}
-		files[name] = b
-	}
-	return files, nil
-}
-
-// encodeJSON returns v as indented JSON with a final newline. HTML
-// characters are not escaped, so names stay readable.
-func encodeJSON(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func readXML(fsys fs.FS, name string, v any) error {
-	b, err := fs.ReadFile(fsys, name)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", name, err)
-	}
-	if err := xml.Unmarshal(b, v); err != nil {
-		return fmt.Errorf("parse %s: %w", name, err)
-	}
-	return nil
-}
-
-// classInfo is one class from classList.xml.
-type classInfo struct {
-	name      string
-	hasParent bool
-}
-
-func readClassList(fsys fs.FS) (map[int]classInfo, error) {
-	var doc struct {
-		Classes []struct {
-			ID     *int   `xml:"classId,attr"`
-			Name   string `xml:"name,attr"`
-			Parent *int   `xml:"parentClassId,attr"`
-		} `xml:"class"`
-	}
-	if err := readXML(fsys, classListFile, &doc); err != nil {
-		return nil, err
-	}
-	classes := make(map[int]classInfo, len(doc.Classes))
-	for _, c := range doc.Classes {
-		if c.ID == nil {
-			return nil, fmt.Errorf("%s: class %q has no classId", classListFile, c.Name)
-		}
-		if _, dup := classes[*c.ID]; dup {
-			return nil, fmt.Errorf("%s: duplicate class %d", classListFile, *c.ID)
-		}
-		classes[*c.ID] = classInfo{name: c.Name, hasParent: c.Parent != nil}
-	}
-	return classes, nil
-}
-
-// race is a race from the Mobius Race enum.
-type race struct {
-	id   int // enum ordinal, the ID the client uses
-	name string
-}
-
-var (
-	// playerClassRe matches an enum constant of PlayerClass, such as
-	// FIGHTER(0, false, Race.HUMAN, null) or
-	// WARLOCK(14, true, true, Race.HUMAN, WIZARD).
-	playerClassRe = regexp.MustCompile(`(?m)^\s*[A-Z][A-Z0-9_]*\(\s*(\d+)\s*,[^)]*?\bRace\.([A-Z][A-Z0-9_]*)`)
-	commentRe     = regexp.MustCompile(`(?s)/\*.*?\*/|//[^\n]*`)
-	identRe       = regexp.MustCompile(`^[A-Z][A-Z0-9_]*`)
-)
-
-// readRaces returns the race of each class ID, read from PlayerClass.java,
-// with the race IDs taken from the order of the Race enum in Race.java.
-func readRaces(fsys fs.FS) (map[int]race, error) {
-	ordinals, err := readRaceEnum(fsys)
-	if err != nil {
-		return nil, err
-	}
-	src, err := fs.ReadFile(fsys, playerClassFile)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", playerClassFile, err)
-	}
-	races := make(map[int]race)
-	for _, m := range playerClassRe.FindAllStringSubmatch(string(src), -1) {
-		var id int
-		if _, err := fmt.Sscan(m[1], &id); err != nil {
-			return nil, fmt.Errorf("%s: class ID %q: %w", playerClassFile, m[1], err)
-		}
-		ord, ok := ordinals[m[2]]
-		if !ok {
-			return nil, fmt.Errorf("%s: class %d uses Race.%s, which %s does not define", playerClassFile, id, m[2], raceFile)
-		}
-		races[id] = race{id: ord, name: raceName(m[2])}
-	}
-	if len(races) == 0 {
-		return nil, fmt.Errorf("%s: no classes found", playerClassFile)
-	}
-	return races, nil
-}
-
-// readRaceEnum returns the ordinal of each constant of the Race enum.
-func readRaceEnum(fsys fs.FS) (map[string]int, error) {
-	src, err := fs.ReadFile(fsys, raceFile)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", raceFile, err)
-	}
-	text := commentRe.ReplaceAllString(string(src), "")
-	_, body, ok := strings.Cut(text, "enum Race")
-	if ok {
-		_, body, ok = strings.Cut(body, "{")
-	}
-	if !ok {
-		return nil, fmt.Errorf("%s: enum Race not found", raceFile)
-	}
-	if end := strings.IndexAny(body, ";}"); end >= 0 {
-		body = body[:end]
-	}
-	ordinals := make(map[string]int)
-	for i, part := range strings.Split(body, ",") {
-		name := identRe.FindString(strings.TrimSpace(part))
-		if name == "" {
-			if strings.TrimSpace(part) == "" {
-				continue // trailing comma
-			}
-			return nil, fmt.Errorf("%s: cannot read enum constant %q", raceFile, strings.TrimSpace(part))
-		}
-		ordinals[name] = i
-	}
-	if len(ordinals) == 0 {
-		return nil, fmt.Errorf("%s: enum Race has no constants", raceFile)
-	}
-	return ordinals, nil
-}
-
-// raceName turns an enum constant such as DARK_ELF into "Dark Elf".
-func raceName(constant string) string {
-	words := strings.Split(strings.ToLower(constant), "_")
-	for i, w := range words {
-		if w != "" {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
+	out := newOutput()
+	o := options{src: src, out: out, log: log}
+	for _, d := range selected {
+		if err := d.run(o); err != nil {
+			return nil, fmt.Errorf("%s: %w", d.name, err)
 		}
 	}
-	return strings.Join(words, " ")
-}
-
-type xmlTemplate struct {
-	ClassID *int `xml:"classId"`
-	Static  struct {
-		INT    int `xml:"baseINT"`
-		STR    int `xml:"baseSTR"`
-		CON    int `xml:"baseCON"`
-		MEN    int `xml:"baseMEN"`
-		DEX    int `xml:"baseDEX"`
-		WIT    int `xml:"baseWIT"`
-		Points []struct {
-			X int `xml:"x,attr"`
-			Y int `xml:"y,attr"`
-			Z int `xml:"z,attr"`
-		} `xml:"creationPoints>node"`
-	} `xml:"staticData"`
-	Levels []struct {
-		Level int     `xml:"val,attr"`
-		HP    float64 `xml:"hp"`
-		MP    float64 `xml:"mp"`
-		CP    float64 `xml:"cp"`
-	} `xml:"lvlUpgainData>level"`
-}
-
-func readTemplates(fsys fs.FS, classes map[int]classInfo, races map[int]race) ([]data.Template, error) {
-	names, err := fs.Glob(fsys, startingClassDir+"/*.xml")
-	if err != nil {
-		return nil, err
-	}
-	if len(names) == 0 {
-		return nil, fmt.Errorf("%s: no templates found", startingClassDir)
-	}
-	var templates []data.Template
-	for _, name := range names {
-		var x xmlTemplate
-		if err := readXML(fsys, name, &x); err != nil {
+	if !enums {
+		if err := check(out.files, selected); err != nil {
 			return nil, err
 		}
-		if x.ClassID == nil {
-			return nil, fmt.Errorf("%s: no classId", name)
-		}
-		id := *x.ClassID
-		class, ok := classes[id]
-		if !ok {
-			return nil, fmt.Errorf("%s: class %d is not in %s", name, id, classListFile)
-		}
-		if class.hasParent {
-			return nil, fmt.Errorf("%s: class %d (%s) has a parent class, so it is not a starting class", name, id, class.name)
-		}
-		r, ok := races[id]
-		if !ok {
-			return nil, fmt.Errorf("%s: class %d has no race in %s", name, id, playerClassFile)
-		}
-		t := data.Template{
-			ClassID:   id,
-			ClassName: class.name,
-			Race:      r.id,
-			RaceName:  r.name,
-			Stats: data.BaseStats{
-				STR: x.Static.STR, CON: x.Static.CON, DEX: x.Static.DEX,
-				INT: x.Static.INT, WIT: x.Static.WIT, MEN: x.Static.MEN,
-			},
-			CreationPoints: make([]data.Location, 0, len(x.Static.Points)),
-		}
-		for _, p := range x.Static.Points {
-			t.CreationPoints = append(t.CreationPoints, data.Location{X: p.X, Y: p.Y, Z: p.Z})
-		}
-		found := false
-		for _, l := range x.Levels {
-			if l.Level == 1 {
-				t.Level1 = data.Vitals{HP: l.HP, MP: l.MP, CP: l.CP}
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("%s: class %d has no level 1 data", name, id)
-		}
-		templates = append(templates, t)
 	}
-	slices.SortFunc(templates, func(a, b data.Template) int { return cmp.Compare(a.ClassID, b.ClassID) })
-	return templates, nil
+	return out.files, nil
 }
 
-func readEquipment(fsys fs.FS) ([]data.Equipment, error) {
-	var doc struct {
-		Lists []struct {
-			ClassID *int `xml:"classId,attr"`
-			Items   []struct {
-				ID       *int   `xml:"id,attr"`
-				Count    *int64 `xml:"count,attr"`
-				Equipped bool   `xml:"equipped,attr"`
-			} `xml:"item"`
-		} `xml:"equipment"`
-	}
-	if err := readXML(fsys, equipmentFile, &doc); err != nil {
-		return nil, err
-	}
-	var equipment []data.Equipment
-	for _, l := range doc.Lists {
-		if l.ClassID == nil {
-			return nil, fmt.Errorf("%s: equipment without classId", equipmentFile)
+// check loads the generated data files with the internal/data domains of
+// the same names, which also checks the references between them.
+func check(files map[string][]byte, selected []domain) error {
+	known := data.DomainNames()
+	var names []string
+	for _, d := range selected {
+		if slices.Contains(known, d.name) {
+			names = append(names, d.name)
 		}
-		e := data.Equipment{ClassID: *l.ClassID, Items: make([]data.EquipmentItem, 0, len(l.Items))}
-		for _, it := range l.Items {
-			if it.ID == nil || it.Count == nil {
-				return nil, fmt.Errorf("%s: class %d: item without id or count", equipmentFile, e.ClassID)
-			}
-			e.Items = append(e.Items, data.EquipmentItem{ItemID: *it.ID, Count: *it.Count, Equipped: it.Equipped})
-		}
-		slices.SortStableFunc(e.Items, func(a, b data.EquipmentItem) int { return cmp.Compare(a.ItemID, b.ItemID) })
-		equipment = append(equipment, e)
-	}
-	slices.SortStableFunc(equipment, func(a, b data.Equipment) int { return cmp.Compare(a.ClassID, b.ClassID) })
-	return equipment, nil
-}
-
-type xmlItems struct {
-	Items []struct {
-		ID   int    `xml:"id,attr"`
-		Type string `xml:"type,attr"`
-		Name string `xml:"name,attr"`
-		Sets []struct {
-			Name string `xml:"name,attr"`
-			Val  string `xml:"val,attr"`
-		} `xml:"set"`
-	} `xml:"item"`
-}
-
-// readItems returns the items used by equipment, read from the item files
-// directly in the items folder (custom items are left out).
-func readItems(fsys fs.FS, equipment []data.Equipment) ([]data.Item, error) {
-	wanted := make(map[int]int) // item ID -> a class that uses it
-	for _, e := range equipment {
-		for _, it := range e.Items {
-			if _, ok := wanted[it.ItemID]; !ok {
-				wanted[it.ItemID] = e.ClassID
-			}
-		}
-	}
-	names, err := fs.Glob(fsys, itemsDir+"/*.xml")
-	if err != nil {
-		return nil, err
 	}
 	if len(names) == 0 {
-		return nil, fmt.Errorf("%s: no item files found", itemsDir)
+		return nil
 	}
-	found := make(map[int]string) // item ID -> file
-	var items []data.Item
-	for _, name := range names {
-		var x xmlItems
-		if err := readXML(fsys, name, &x); err != nil {
-			return nil, err
-		}
-		for _, it := range x.Items {
-			if _, ok := wanted[it.ID]; !ok {
-				continue
-			}
-			if prev, dup := found[it.ID]; dup {
-				return nil, fmt.Errorf("item %d is defined in both %s and %s", it.ID, prev, name)
-			}
-			found[it.ID] = name
-			item := data.Item{ID: it.ID, Name: it.Name, Type: it.Type}
-			for _, s := range it.Sets {
-				if s.Name == "bodypart" {
-					item.BodyPart = s.Val
-				}
-			}
-			items = append(items, item)
-		}
+	fsys := make(fstest.MapFS, len(files))
+	for name, b := range files {
+		fsys[name] = &fstest.MapFile{Data: b, Mode: 0o644}
 	}
-	var missing []error
-	for _, id := range slices.Sorted(maps.Keys(wanted)) {
-		if _, ok := found[id]; !ok {
-			missing = append(missing, fmt.Errorf("item %d (initial equipment of class %d) not found in %s", id, wanted[id], path.Join(itemsDir, "*.xml")))
-		}
+	if _, err := data.LoadDomains(fsys, names...); err != nil {
+		return fmt.Errorf("the generated data does not load: %w", err)
 	}
-	if err := errors.Join(missing...); err != nil {
-		return nil, err
-	}
-	slices.SortFunc(items, func(a, b data.Item) int { return cmp.Compare(a.ID, b.ID) })
-	return items, nil
+	return nil
 }

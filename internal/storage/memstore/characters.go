@@ -118,6 +118,57 @@ func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character
 	return cloneCharacter(c), nil
 }
 
+// Update implements storage.CharacterStore.
+func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old, ok := s.byID[c.ObjectID]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	stored := cloneCharacter(*c)
+	stored.Account, stored.Name, stored.Race, stored.CreatedAt = old.Account, old.Name, old.Race, old.CreatedAt
+	stored.DeleteTime = normalizeTime(stored.DeleteTime)
+	stored.LastAccess = normalizeTime(stored.LastAccess)
+	s.byID[c.ObjectID] = stored
+	return nil
+}
+
+// Delete implements storage.CharacterStore.
+func (s *Characters) Delete(ctx context.Context, objectID int32) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.byID[objectID]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	delete(s.byID, objectID)
+	delete(s.byName, storage.NameKey(c.Name))
+	return nil
+}
+
+// SetDeleteTime implements storage.CharacterStore.
+func (s *Characters) SetDeleteTime(ctx context.Context, objectID int32, t time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.byID[objectID]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	c.DeleteTime = normalizeTime(t)
+	s.byID[objectID] = c
+	return nil
+}
+
 // cloneCharacter returns a copy of c that shares no memory with it. A
 // character without items gets a nil Items slice, as from MongoDB.
 func cloneCharacter(c storage.Character) storage.Character {

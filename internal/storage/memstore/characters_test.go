@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/IPeter/l2go/internal/storage"
 	"github.com/IPeter/l2go/internal/storage/memstore"
@@ -61,6 +62,40 @@ func TestCharactersCanceledContext(t *testing.T) {
 	}
 	if _, err := s.Get(ctx, 1); !errors.Is(err, context.Canceled) {
 		t.Errorf("Get error = %v, want context.Canceled", err)
+	}
+	if err := s.Update(ctx, &storage.Character{ObjectID: 1}); !errors.Is(err, context.Canceled) {
+		t.Errorf("Update error = %v, want context.Canceled", err)
+	}
+	if err := s.Delete(ctx, 1); !errors.Is(err, context.Canceled) {
+		t.Errorf("Delete error = %v, want context.Canceled", err)
+	}
+	if err := s.SetDeleteTime(ctx, 1, time.Now()); !errors.Is(err, context.Canceled) {
+		t.Errorf("SetDeleteTime error = %v, want context.Canceled", err)
+	}
+}
+
+func TestCharacterDeleteExpired(t *testing.T) {
+	now := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name     string
+		at       time.Time
+		deleting bool
+		expired  bool
+	}{
+		{"not deleting", time.Time{}, false, false},
+		{"in the future", now.Add(time.Millisecond), true, false},
+		{"exactly now", now, true, false}, // Mobius: now > deletetime
+		{"just passed", now.Add(-time.Millisecond), true, true},
+		{"in the past", now.Add(-time.Hour), true, true},
+	}
+	for _, tt := range tests {
+		c := storage.Character{DeleteTime: tt.at}
+		if got := c.Deleting(); got != tt.deleting {
+			t.Errorf("%s: Deleting() = %v, want %v", tt.name, got, tt.deleting)
+		}
+		if got := c.DeleteExpired(now); got != tt.expired {
+			t.Errorf("%s: DeleteExpired() = %v, want %v", tt.name, got, tt.expired)
+		}
 	}
 }
 

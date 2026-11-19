@@ -11,12 +11,17 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// watch starts e.Watch until the test ends.
-func watch(t *testing.T, e *Engine) {
+// watch runs e.Watch until the test ends. Prepared scripts are posted to
+// loop for the Swap, as the server posts them to the world loop.
+func watch(t *testing.T, e *Engine, loop *testLoop) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- e.Watch(ctx, 20*time.Millisecond) }()
+	go func() {
+		done <- e.Watch(ctx, 20*time.Millisecond, func(p *Prepared) {
+			loop.Post(func() { e.Swap(p) })
+		})
+	}()
 	t.Cleanup(func() {
 		cancel()
 		if err := <-done; err != nil {
@@ -25,30 +30,40 @@ func watch(t *testing.T, e *Engine) {
 	})
 }
 
+// loopCall fires a character_create event for name on loop.
+func loopCall(t testing.TB, loop *testLoop, e *Engine, name string) Result {
+	t.Helper()
+	var res Result
+	loop.Do(func() { res = call(t, e, name) })
+	return res
+}
+
 func TestWatchReloadsOnChange(t *testing.T) {
 	logs := &logBuffer{}
 	dir := writeScripts(t, map[string]string{"events/names.lua": rejectName("Old", ReasonIncorrectName)})
 	e := newEngine(t, nil, Options{Dir: dir, Logger: logs.logger()})
-	watch(t, e)
+	loop := newTestLoop(t)
+	watch(t, e, loop)
 	waitFor(t, "the watcher to start", func() bool {
 		_, ok := logs.find(t, "reloading scripts on change")
 		return ok
 	})
 
 	writeScript(t, dir, "events/names.lua", rejectName("New", ReasonIncorrectName))
-	waitFor(t, "the change to load", func() bool { return call(t, e, "New").Rejected })
-	wantAccepted(t, call(t, e, "Old"))
+	waitFor(t, "the change to load", func() bool { return loopCall(t, loop, e, "New").Rejected })
+	wantAccepted(t, loopCall(t, loop, e, "Old"))
 
 	// A new folder is watched too.
 	writeScript(t, dir, "quests/q1.lua", rejectName("Quest", ReasonNameExists))
-	waitFor(t, "the new folder to load", func() bool { return call(t, e, "Quest").Rejected })
+	waitFor(t, "the new folder to load", func() bool { return loopCall(t, loop, e, "Quest").Rejected })
 }
 
 func TestWatchKeepsOldOnBrokenChange(t *testing.T) {
 	logs := &logBuffer{}
 	dir := writeScripts(t, map[string]string{"events/names.lua": rejectName("Old", ReasonIncorrectName)})
 	e := newEngine(t, nil, Options{Dir: dir, Logger: logs.logger()})
-	watch(t, e)
+	loop := newTestLoop(t)
+	watch(t, e, loop)
 	waitFor(t, "the watcher to start", func() bool {
 		_, ok := logs.find(t, "reloading scripts on change")
 		return ok
@@ -60,7 +75,7 @@ func TestWatchKeepsOldOnBrokenChange(t *testing.T) {
 		msg, _ := rec["err"].(string)
 		return ok && strings.Contains(msg, "names.lua")
 	})
-	wantRejected(t, call(t, e, "Old"), ReasonIncorrectName)
+	wantRejected(t, loopCall(t, loop, e, "Old"), ReasonIncorrectName)
 }
 
 func TestWatchMissingFolder(t *testing.T) {
@@ -70,8 +85,15 @@ func TestWatchMissingFolder(t *testing.T) {
 	if err := os.RemoveAll(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Watch(t.Context(), time.Millisecond); err == nil {
+	if err := e.Watch(t.Context(), time.Millisecond, func(*Prepared) {}); err == nil {
 		t.Error("Watch succeeded on a missing folder")
+	}
+}
+
+func TestWatchNeedsSwap(t *testing.T) {
+	e := newEngine(t, nil, Options{})
+	if err := e.Watch(t.Context(), time.Millisecond, nil); err == nil {
+		t.Error("Watch succeeded without a swap function")
 	}
 }
 
@@ -86,6 +108,7 @@ func TestRelevant(t *testing.T) {
 		{fsnotify.Event{Name: "scripts/quests", Op: fsnotify.Create}, true},
 		{fsnotify.Event{Name: "scripts/a.lua", Op: fsnotify.Chmod}, false},
 		{fsnotify.Event{Name: "scripts/README.md", Op: fsnotify.Write}, false},
+		{fsnotify.Event{Name: "scripts/npcs/guard/welcome.htm", Op: fsnotify.Write}, false},
 		{fsnotify.Event{Name: "scripts/.a.lua.swp", Op: fsnotify.Write}, false},
 	}
 	for _, tt := range tests {

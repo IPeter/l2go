@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests. -->
+<list>
+	<experience level="1" val="10.0" />
+	<experience level="2" val="9.875" />
+	<experience level="3" val="9.75" />
+</list>

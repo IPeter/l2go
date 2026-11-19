@@ -1,0 +1,9 @@
+{
+  "front": 0,
+  "side": 5,
+  "back": 10,
+  "high": 3,
+  "low": -3,
+  "dark": -10,
+  "rain": -3
+}

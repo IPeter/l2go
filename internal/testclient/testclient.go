@@ -1,5 +1,6 @@
 // Package testclient is a fake Interlude (protocol 746) client for
-// end-to-end tests of the login and game servers.
+// end-to-end tests of the login and game servers, for the load-test bots
+// and for the reference diff against Mobius.
 //
 // It is written from the L2J Mobius Interlude sources (the writeImpl and
 // readImpl methods of each packet), not from the L2Go servers, so a test
@@ -10,20 +11,31 @@
 // AuthGameGuard, Login, ServerList and ServerLogin follow the client's
 // order. LoginAndSelect runs the whole sequence and returns the session
 // keys. Game side: DialGame sends ProtocolVersion and reads KeyPacket, then
-// AuthLogin, NewCharacter and CreateCharacter send their requests and parse
-// the replies. Ping checks the version -2 ping.
+// AuthLogin, NewCharacter, CreateCharacter, DeleteCharacter,
+// RestoreCharacter and SelectCharacter send their requests and parse the
+// replies. Ping checks the version -2 ping.
 //
-// Every call is synchronous and takes a context. Its deadline becomes the
-// connection deadline, and cancelling it aborts a blocked read or write.
-// After an aborted call the connection may be out of step and should be
-// closed.
+// In the world the server sends packets at any time. EnterWorld starts a
+// background reader that decodes every server packet as it arrives (see
+// DecodeServerPacket), keeps the World model up to date and queues the
+// packets for Next, WaitFor, Drain and the generic Await and Expect. The
+// in-world methods send their request and, where the server answers, wait
+// for the answer and skip the packets before it. A Recorder given to
+// DialGame keeps the whole decoded stream in both directions.
+//
+// Every call takes a context. Before the reader runs, its deadline becomes
+// the connection deadline and cancelling it aborts a blocked read or write;
+// after an aborted read the connection may be out of step and should be
+// closed. Once the reader runs, a wait that ends with its context leaves
+// the connection in step.
 //
 // Parsing is strict. Each server packet must have exactly the fields Mobius
-// writes: game packets may not carry extra bytes, and login packets must
-// have Mobius's padding size with only zeros after the body. A packet the
-// call does not expect gives an *UnexpectedPacketError with its opcode, and
-// a malformed one an error that wraps ErrMalformed. SendRaw, ReadRaw and
-// ReadPacket are there for negative tests.
+// writes: game packets may not carry extra bytes, Java booleans must be 0
+// or 1, and login packets must have Mobius's padding size with only zeros
+// after the body. A packet a call does not expect gives an
+// *UnexpectedPacketError with its opcode, and a malformed one an error that
+// wraps ErrMalformed. Packets the client does not parse come as Unknown.
+// SendRaw, ReadRaw and ReadPacket are there for negative tests.
 package testclient
 
 import (
@@ -121,23 +133,31 @@ var pastDeadline = time.Unix(1, 0)
 // run calls fn with the connection deadline taken from ctx. Cancelling ctx
 // while fn runs aborts its I/O. A failure caused by ctx wraps ctx.Err().
 func run(ctx context.Context, conn net.Conn, fn func() error) error {
+	return runWith(ctx, conn.SetDeadline, fn)
+}
+
+// runWith is run with the deadline set through setDeadline, which is the
+// connection's SetDeadline, SetReadDeadline or SetWriteDeadline. The game
+// connection sets the read and write deadlines apart, so that a write does
+// not disturb the background reader.
+func runWith(ctx context.Context, setDeadline func(time.Time) error, fn func() error) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("testclient: %w", err)
 	}
 	deadline, hasDeadline := ctx.Deadline()
-	if err := conn.SetDeadline(deadline); err != nil {
+	if err := setDeadline(deadline); err != nil {
 		return fmt.Errorf("testclient: set deadline: %w", err)
 	}
 	fired := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
-		_ = conn.SetDeadline(pastDeadline)
+		_ = setDeadline(pastDeadline)
 		close(fired)
 	})
 	err := fn()
 	if !stop() {
 		<-fired
 	}
-	_ = conn.SetDeadline(time.Time{})
+	_ = setDeadline(time.Time{})
 	if err == nil {
 		return nil
 	}

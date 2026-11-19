@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests:
+     a made-up shadow item with its mana (duration, in minutes). -->
+<list>
+	<item id="8899" type="Weapon" name="Shadow Item: Sample Sword">
+		<set name="default_action" val="EQUIP" />
+		<set name="weapon_type" val="SWORD" />
+		<set name="bodypart" val="lrhand" />
+		<set name="crystal_type" val="D" />
+		<set name="material" val="FINE_STEEL" />
+		<set name="weight" val="730" />
+		<set name="is_tradable" val="false" />
+		<set name="duration" val="90" />
+		<set name="reuse_delay" val="300" />
+		<stats>
+			<stat type="pAtk">78</stat>
+		</stats>
+	</item>
+</list>

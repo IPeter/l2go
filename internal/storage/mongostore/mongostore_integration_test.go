@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/IPeter/l2go/internal/storage"
 	"github.com/IPeter/l2go/internal/storage/mongostore"
@@ -153,6 +154,65 @@ func firstRun(t *testing.T, name string) (storage.Character, int32) {
 		t.Fatalf("Create: %v", err)
 	}
 	return c, ids[2]
+}
+
+// TestCharacterChangesSurviveReopen saves a character's state, marks one
+// character for deletion and deletes another, then checks all three after a
+// new connection.
+func TestCharacterChangesSurviveReopen(t *testing.T) {
+	_, name := openFresh(t)
+	deleteAt := time.Date(2026, time.November, 26, 12, 0, 0, 0, time.UTC)
+	lastAccess := time.Date(2026, time.November, 19, 18, 30, 0, 0, time.UTC)
+
+	first := open(t, name)
+	chars := first.Characters()
+	for _, c := range []storage.Character{
+		{ObjectID: 1, Account: "alice", Name: "Saved", Level: 1, X: 1, Y: 2, Z: 3},
+		{ObjectID: 2, Account: "alice", Name: "Marked", Level: 1},
+		{ObjectID: 3, Account: "alice", Name: "Gone", Level: 1},
+	} {
+		if err := chars.Create(t.Context(), &c); err != nil {
+			t.Fatalf("Create(%s): %v", c.Name, err)
+		}
+	}
+	saved, err := chars.Get(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	saved.X, saved.Y, saved.Z, saved.Heading = -71338, 258271, -3104, 16384
+	saved.CurHP, saved.LastAccess = 42.5, lastAccess
+	saved.Items = []storage.Item{{ObjectID: 10, ItemID: 57, Count: 1000, Slot: storage.PaperdollNone}}
+	if err := chars.Update(t.Context(), &saved); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if err := chars.SetDeleteTime(t.Context(), 2, deleteAt); err != nil {
+		t.Fatalf("SetDeleteTime: %v", err)
+	}
+	if err := chars.Delete(t.Context(), 3); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	second := open(t, name)
+	list, err := second.Characters().ListByAccount(t.Context(), "alice")
+	if err != nil {
+		t.Fatalf("ListByAccount after reopen: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("ListByAccount after reopen = %+v, want Saved and Marked", list)
+	}
+	got := list[0]
+	if got.X != -71338 || got.Y != 258271 || got.Z != -3104 || got.Heading != 16384 || got.CurHP != 42.5 ||
+		!got.LastAccess.Equal(lastAccess) || len(got.Items) != 1 || got.Items[0].Count != 1000 {
+		t.Errorf("saved character after reopen = %+v", got)
+	}
+	if !list[1].DeleteTime.Equal(deleteAt) {
+		t.Errorf("delete time after reopen = %v, want %v", list[1].DeleteTime, deleteAt)
+	}
+	// The deleted name is free again under the unique index.
+	again := storage.Character{ObjectID: 4, Account: "bob", Name: "GONE"}
+	if err := second.Characters().Create(t.Context(), &again); err != nil {
+		t.Errorf("Create with a deleted name: %v", err)
+	}
 }
 
 func TestOpenTwiceKeepsIndex(t *testing.T) {

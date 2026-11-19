@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference stack: copied into game/config/ by start.sh. With this file Mobius
+     uses it instead of its automatic network setup (which asks checkip.amazonaws.com
+     and lists the container's interfaces). The game server sends these pairs to the
+     login server, which announces 127.0.0.1 to every client: the default address
+     covers 0.0.0.0/0, and the schema needs at least one define. -->
+<gameserver address="127.0.0.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../data/xsd/ipconfig.xsd">
+	<define subnet="127.0.0.0/8" address="127.0.0.1" />
+</gameserver>

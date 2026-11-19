@@ -1,0 +1,222 @@
+[
+  {
+    "classId": 0,
+    "name": "Human Fighter",
+    "race": "HUMAN",
+    "parentId": -1,
+    "baseStats": {
+      "str": 40,
+      "con": 43,
+      "dex": 30,
+      "int": 21,
+      "wit": 11,
+      "men": 25
+    },
+    "pAtk": 4,
+    "mAtk": 6,
+    "pAtkSpd": 300,
+    "mAtkSpd": 333,
+    "critRate": 4,
+    "mCritRate": 5,
+    "attackType": "FIST",
+    "attackRange": 20,
+    "randomDamage": 10,
+    "moveSpeed": {
+      "walk": 80,
+      "run": 115,
+      "slowSwim": 50,
+      "fastSwim": 50
+    },
+    "breath": 100,
+    "safeFall": 250,
+    "pDef": {
+      "chest": 31,
+      "legs": 18,
+      "head": 12,
+      "feet": 7,
+      "gloves": 8,
+      "underwear": 3,
+      "cloak": 1
+    },
+    "mDef": {
+      "rear": 9,
+      "lear": 9,
+      "rfinger": 5,
+      "lfinger": 5,
+      "neck": 13
+    },
+    "collisionMale": {
+      "radius": 9,
+      "height": 23
+    },
+    "collisionFemale": {
+      "radius": 8,
+      "height": 23.5
+    },
+    "creationPoints": [
+      {
+        "x": -71338,
+        "y": 258271,
+        "z": -3104
+      },
+      {
+        "x": -71417,
+        "y": 258270,
+        "z": -3104
+      }
+    ],
+    "levels": {
+      "hp": [80,91.83,103.79],
+      "mp": [30,35.46,40.98],
+      "cp": [32,36.732,41.516],
+      "hpRegen": [2,2.05,2.1],
+      "mpRegen": [0.9,0.9,0.9],
+      "cpRegen": [2,2,2]
+    }
+  },
+  {
+    "classId": 1,
+    "name": "Warrior",
+    "race": "HUMAN",
+    "parentId": 0,
+    "baseStats": {
+      "str": 40,
+      "con": 43,
+      "dex": 30,
+      "int": 21,
+      "wit": 11,
+      "men": 25
+    },
+    "pAtk": 4,
+    "mAtk": 6,
+    "pAtkSpd": 300,
+    "mAtkSpd": 333,
+    "critRate": 4,
+    "mCritRate": 5,
+    "attackType": "FIST",
+    "attackRange": 20,
+    "randomDamage": 10,
+    "moveSpeed": {
+      "walk": 80,
+      "run": 115,
+      "slowSwim": 50,
+      "fastSwim": 50
+    },
+    "breath": 100,
+    "safeFall": 250,
+    "pDef": {
+      "chest": 31,
+      "legs": 18,
+      "head": 12,
+      "feet": 7,
+      "gloves": 8,
+      "underwear": 3,
+      "cloak": 1
+    },
+    "mDef": {
+      "rear": 9,
+      "lear": 9,
+      "rfinger": 5,
+      "lfinger": 5,
+      "neck": 13
+    },
+    "collisionMale": {
+      "radius": 9,
+      "height": 23
+    },
+    "collisionFemale": {
+      "radius": 8,
+      "height": 23.5
+    },
+    "creationPoints": [
+      {
+        "x": -71338,
+        "y": 258271,
+        "z": -3104
+      }
+    ],
+    "levels": {
+      "hp": [80,91.83,103.79],
+      "mp": [30,35.46,40.98],
+      "cp": [64,73.464,83.032],
+      "hpRegen": [2,2.05,2.1],
+      "mpRegen": [0.9,0.9,0.9],
+      "cpRegen": [2,2,2]
+    }
+  },
+  {
+    "classId": 49,
+    "name": "Orc Mystic",
+    "race": "ORC",
+    "parentId": -1,
+    "baseStats": {
+      "str": 27,
+      "con": 31,
+      "dex": 24,
+      "int": 31,
+      "wit": 15,
+      "men": 42
+    },
+    "pAtk": 3,
+    "mAtk": 6,
+    "pAtkSpd": 300,
+    "mAtkSpd": 333,
+    "critRate": 4,
+    "mCritRate": 5,
+    "attackType": "FIST",
+    "attackRange": 20,
+    "randomDamage": 10,
+    "moveSpeed": {
+      "walk": 50,
+      "run": 120,
+      "slowSwim": 50,
+      "fastSwim": 120
+    },
+    "breath": 100,
+    "safeFall": 333,
+    "pDef": {
+      "chest": 15,
+      "legs": 8,
+      "head": 12,
+      "feet": 7,
+      "gloves": 8,
+      "underwear": 3,
+      "cloak": 1
+    },
+    "mDef": {
+      "rear": 9,
+      "lear": 9,
+      "rfinger": 5,
+      "lfinger": 5,
+      "neck": 13
+    },
+    "collisionMale": {
+      "radius": 7,
+      "height": 27.5
+    },
+    "collisionFemale": {
+      "radius": 8,
+      "height": 25.5
+    },
+    "creationPoints": [
+      {
+        "x": -56733,
+        "y": -113459,
+        "z": -690
+      },
+      {
+        "x": -56686,
+        "y": -113470,
+        "z": -690
+      }
+    ],
+    "levels": {
+      "hp": [95,107,119.13],
+      "mp": [40,45,50.04],
+      "cp": [47.5,53.5,59.565],
+      "hpRegen": [2,2.05,2.1],
+      "mpRegen": [0.9,0.9,0.9],
+      "cpRegen": [2,2,2]
+    }
+  }
+]

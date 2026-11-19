@@ -41,36 +41,66 @@ func apiFunctions() []string {
 	return names
 }
 
-// Every function registered in Go is documented in the types file, and
-// the types file documents nothing that does not exist.
+// apiMethods returns "Class:method" for every method of the userdata
+// classes.
+func apiMethods() []string {
+	var names []string
+	for _, typ := range (&vm{}).types() {
+		for m := range typ.methods {
+			names = append(names, typ.name+":"+m)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// declared returns the names the declaration pattern decl captures (two
+// groups, joined with sep), sorted.
+func declared(lines []string, decl *regexp.Regexp, sep string) []string {
+	var names []string
+	for _, line := range lines {
+		if m := decl.FindStringSubmatch(line); m != nil {
+			names = append(names, m[1]+sep+m[2])
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+func sameNames(t *testing.T, what string, api, documented []string) {
+	t.Helper()
+	for _, f := range api {
+		if !slices.Contains(documented, f) {
+			t.Errorf("%s %s is registered in Go but missing from %s", what, f, typesFile)
+		}
+	}
+	for _, f := range documented {
+		if !slices.Contains(api, f) {
+			t.Errorf("%s %s is in %s but not registered in Go", what, f, typesFile)
+		}
+	}
+}
+
+// Every function and method registered in Go is documented in the types
+// file, and the types file documents nothing that does not exist.
 func TestTypesFileListsAPI(t *testing.T) {
 	lines := readTypesFile(t)
 	if len(lines) == 0 || lines[0] != "---@meta" {
 		t.Errorf("%s must start with ---@meta", typesFile)
 	}
-	decl := regexp.MustCompile(`^function ([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(`)
-	var documented []string
-	for _, line := range lines {
-		if m := decl.FindStringSubmatch(line); m != nil {
-			documented = append(documented, m[1]+"."+m[2])
-		}
-	}
-	slices.Sort(documented)
+	funcDecl := regexp.MustCompile(`^function ([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\(`)
+	methodDecl := regexp.MustCompile(`^function ([A-Za-z_][A-Za-z0-9_]*):([A-Za-z_][A-Za-z0-9_]*)\(`)
+	sameNames(t, "function", apiFunctions(), declared(lines, funcDecl, "."))
+	sameNames(t, "method", apiMethods(), declared(lines, methodDecl, ":"))
 
-	api := apiFunctions()
-	for _, f := range api {
-		if !slices.Contains(documented, f) {
-			t.Errorf("%s is registered in Go but missing from %s", f, typesFile)
-		}
-	}
-	for _, f := range documented {
-		if !slices.Contains(api, f) {
-			t.Errorf("%s is in %s but not registered in Go", f, typesFile)
-		}
-	}
 	for _, m := range (&vm{}).modules() {
 		if !slices.Contains(lines, m.name+" = {}") {
 			t.Errorf("%s does not declare the %s table", typesFile, m.name)
+		}
+	}
+	for _, typ := range (&vm{}).types() {
+		if !slices.Contains(lines, "---@class "+typ.name) {
+			t.Errorf("%s does not declare the class %s", typesFile, typ.name)
 		}
 	}
 }
@@ -103,14 +133,29 @@ func block(lines []string, header string) ([]string, bool) {
 	return out, true
 }
 
+// aliasValues returns the quoted values of an ---@alias block.
+func aliasValues(lines []string) []string {
+	value := regexp.MustCompile(`^---\| "([a-z_]+)"`)
+	var out []string
+	for _, line := range lines {
+		if m := value.FindStringSubmatch(line); m != nil {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
 // The event table fields and the reject reasons of every event are
 // documented.
 func TestTypesFileDescribesEvents(t *testing.T) {
 	lines := readTypesFile(t)
 	field := regexp.MustCompile(`^---@field ([a-z_]+) `)
-	reason := regexp.MustCompile(`^---\| "([a-z_]+)"`)
 
-	samples := map[string]Event{EventCharacterCreate: CharacterCreate{}.Event()}
+	// Samples with every optional field set.
+	samples := map[string]Event{
+		EventCharacterCreate: CharacterCreate{}.Event(),
+		EventChat:            ChatMessage{Player: hero(), Type: 2, Text: "hi", Target: "Friend"}.Event(),
+	}
 	for _, spec := range eventSpecs {
 		name := luaName(spec.name)
 
@@ -147,15 +192,21 @@ func TestTypesFileDescribesEvents(t *testing.T) {
 		if !ok {
 			t.Errorf("%s has no ---@alias %sReason", typesFile, name)
 		}
-		var reasons []string
-		for _, line := range alias {
-			if m := reason.FindStringSubmatch(line); m != nil {
-				reasons = append(reasons, m[1])
-			}
-		}
-		if !slices.Equal(reasons, spec.reasons) {
+		if reasons := aliasValues(alias); !slices.Equal(reasons, spec.reasons) {
 			t.Errorf("%sReason = %v, want %v", name, reasons, spec.reasons)
 		}
+	}
+}
+
+// The ChatType alias lists every chat type name, in ID order.
+func TestTypesFileListsChatTypes(t *testing.T) {
+	alias, ok := block(readTypesFile(t), "---@alias ChatType")
+	if !ok {
+		t.Fatalf("%s has no ---@alias ChatType", typesFile)
+	}
+	want := append(slices.Clone(chatTypes), chatTypeUnknown)
+	if got := aliasValues(alias); !slices.Equal(got, want) {
+		t.Errorf("ChatType = %v, want %v", got, want)
 	}
 }
 
@@ -171,6 +222,9 @@ func TestReasons(t *testing.T) {
 	r[0] = "changed"
 	if Reasons(EventCharacterCreate)[0] != ReasonCreationFailed {
 		t.Error("Reasons returns the internal slice")
+	}
+	if Reasons(EventChat) != nil {
+		t.Error("chat events have reject reasons")
 	}
 	if Reasons("no_such_event") != nil {
 		t.Error("Reasons of an unknown event is not nil")

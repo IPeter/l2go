@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TODO: Remove "castle" attributes from here, it should be loaded from TaxZones -->
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/MapRegion.xsd">
+	<!-- Rune Town, with fewer respawn points and cells. Cell 19_16 is also in orc_town. -->
+	<region name="rune_town" town="Rune Town" castle="8" locId="1537" bbs="14">
+		<respawnPoint X="38096" Y="-46976" Z="899" />
+		<respawnPoint X="42640" Y="-54496" Z="-2310" isChaotic="true" />
+		<map X="21" Y="15" />
+		<map X="20" Y="16" />
+		<!-- <map X="20" Y="17" />NOTE: Commented due possible retail typo interfering with Primeval Isle mapregion -->
+		<map X="19" Y="16" />
+	</region>
+</list>

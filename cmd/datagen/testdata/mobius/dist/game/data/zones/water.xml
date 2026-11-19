@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/zones.xsd">
+	<!-- Water Zones -->
+	<zone name="11_23_water1" type="WaterZone" shape="Cuboid" minZ="-4779" maxZ="-3779">
+		<node X="-294912" Y="163839" />
+		<node X="-262144" Y="196607" />
+	</zone>
+	<zone name="11_24_water1" type="WaterZone" shape="Cuboid" minZ="-4779" maxZ="-3779">
+		<node X="-294912" Y="196607" />
+		<node X="-262144" Y="229375" />
+	</zone>
+</list>

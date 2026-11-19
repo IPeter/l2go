@@ -1,31 +1,19 @@
 [
-  {
-    "id": 10,
-    "name": "Dagger",
-    "type": "Weapon",
-    "bodyPart": "rhand"
-  },
-  {
-    "id": 425,
-    "name": "Apprentice's Tunic",
-    "type": "Armor",
-    "bodyPart": "chest"
-  },
-  {
-    "id": 2368,
-    "name": "Training Gloves",
-    "type": "Weapon",
-    "bodyPart": "lrhand"
-  },
-  {
-    "id": 2369,
-    "name": "Squire's Sword",
-    "type": "Weapon",
-    "bodyPart": "rhand"
-  },
-  {
-    "id": 5588,
-    "name": "Tutorial Guide",
-    "type": "EtcItem"
-  }
+{"id":1,"name":"Short Sword","type":"Weapon","bodyPart":"rhand","bodyPartMask":128,"type1":0,"type2":0,"material":"STEEL","icon":"icon.weapon_small_sword_i00","defaultAction":"NONE","tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"weapon":{"type":"SWORD","attackRadius":40,"attackAngle":0,"attackWeapon":true}},
+{"id":10,"name":"Dagger","type":"Weapon","bodyPart":"rhand","bodyPartMask":128,"type1":0,"type2":0,"weight":1160,"price":138,"material":"STEEL","icon":"icon.weapon_dagger_i00","defaultAction":"EQUIP","tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"weapon":{"type":"DAGGER","attackRadius":40,"attackAngle":120,"attackWeapon":true},"stats":[{"stat":"pAtk","op":"set","order":0,"value":5},{"stat":"mAtk","op":"set","order":0,"value":5},{"stat":"pAtk","op":"enchant","order":0,"value":0},{"stat":"mAtk","op":"enchant","order":0,"value":0}]},
+{"id":13,"name":"Sample Bow","type":"Weapon","bodyPart":"lrhand","bodyPartMask":16384,"type1":0,"type2":0,"material":"WOOD","defaultAction":"EQUIP","tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"reuseDelay":1500,"weapon":{"type":"BOW","soulShots":1,"mpConsume":1,"reducedSoulShot":7,"reducedSoulShotChance":59,"reducedMpConsume":2,"reducedMpConsumeChance":38,"attackRadius":10,"attackAngle":0,"attackWeapon":false},"stats":[{"stat":"pAtk","op":"set","order":0,"value":23},{"stat":"pAtkRange","op":"set","order":0,"value":500},{"stat":"pAtk","op":"enchant","order":0,"value":0},{"stat":"mAtk","op":"enchant","order":0,"value":0}]},
+{"id":17,"name":"Wooden Arrow","type":"EtcItem","bodyPart":"lhand","bodyPartMask":256,"type1":4,"type2":5,"weight":6,"price":2,"material":"WOOD","icon":"icon.etc_wooden_quiver_i00","defaultAction":"EQUIP","stackable":true,"tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"immediateEffect":true,"etc":{"type":"ARROW"}},
+{"id":20,"name":"Buckler","type":"Armor","bodyPart":"lhand","bodyPartMask":256,"type1":1,"type2":1,"weight":1410,"price":2780,"material":"WOOD","icon":"icon.shield_buckler_i00","defaultAction":"EQUIP","tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"immediateEffect":true,"armor":{"type":"SHIELD"},"stats":[{"stat":"rEvas","op":"add","order":0,"value":-8},{"stat":"rShld","op":"set","order":0,"value":20},{"stat":"sDef","op":"set","order":0,"value":67},{"stat":"sDef","op":"enchant","order":0,"value":0}],"conditions":{"name":"conditions","attrs":{"msgId":"1518"},"children":[{"name":"player","attrs":{"races":"HUMAN,ELF,DARK_ELF,ORC,DWARF"}}]}},
+{"id":57,"name":"Adena","type":"EtcItem","type1":4,"type2":4,"price":1,"material":"GOLD","icon":"icon.etc_adena_i00","defaultAction":"NONE","stackable":true,"tradable":true,"droppable":true,"destroyable":true,"depositable":true,"immediateEffect":true,"etc":{"type":"NONE"}},
+{"id":99,"name":"Sample Quest Letter","type":"EtcItem","type1":4,"type2":3,"material":"PAPER","icon":"icon.etc_letter_red_i00","defaultAction":"NONE","sellable":true,"questItem":true,"immediateEffect":true,"etc":{"type":"NONE"}},
+{"id":425,"name":"Apprentice's Tunic","type":"Armor","bodyPart":"chest","bodyPartMask":1024,"type1":1,"type2":1,"weight":2150,"price":26,"material":"CLOTH","icon":"icon.armor_t01_u_i00","defaultAction":"EQUIP","droppable":true,"destroyable":true,"sellable":true,"depositable":true,"immediateEffect":true,"armor":{"type":"MAGIC"},"stats":[{"stat":"pDef","op":"add","order":0,"value":17},{"stat":"maxMp","op":"add","order":0,"value":19},{"stat":"pDef","op":"enchant","order":0,"value":0}],"skills":[{"id":3500,"level":1,"type":"ON_ENCHANT_4"}]},
+{"id":450,"name":"Sample Earring","type":"Armor","bodyPart":"rear;lear","bodyPartMask":6,"type1":0,"type2":2,"grade":"D","crystalCount":20,"material":"GOLD","defaultAction":"EQUIP","tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"enchantable":true,"armor":{"type":"NONE"},"stats":[{"stat":"mDef","op":"add","order":0,"value":19},{"stat":"mDef","op":"enchant","order":0,"value":0}]},
+{"id":489,"name":"Sample Robe","type":"Armor","bodyPart":"onepiece","bodyPartMask":32768,"type1":1,"type2":1,"material":"CLOTH","defaultAction":"EQUIP","tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"equipReuseDelay":10000,"armor":{"type":"MAGIC"}},
+{"id":1835,"name":"Soulshot: No Grade","type":"EtcItem","type1":4,"type2":5,"weight":4,"price":7,"material":"PAPER","icon":"icon.etc_spirit_bullet_white_i00","defaultAction":"SOULSHOT","stackable":true,"tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"forNpc":true,"immediateEffect":true,"etc":{"type":"SHOT","handler":"SoulShots"},"skills":[{"id":2039,"level":1}]},
+{"id":2368,"name":"Training Gloves","type":"Weapon","bodyPart":"lrhand","bodyPartMask":16384,"type1":0,"type2":0,"weight":1580,"price":138,"material":"CLOTH","icon":"icon.weapon_training_gloves_i00","defaultAction":"EQUIP","destroyable":true,"depositable":true,"immediateEffect":true,"weapon":{"type":"DUALFIST","soulShots":1,"spiritShots":1,"attackRadius":32,"attackAngle":120,"attackWeapon":true},"stats":[{"stat":"pAtk","op":"set","order":0,"value":7},{"stat":"mAtk","op":"set","order":0,"value":5},{"stat":"critRate","op":"set","order":0,"value":4},{"stat":"accCombat","op":"add","order":0,"value":4.75},{"stat":"pAtkSpd","op":"set","order":0,"value":325},{"stat":"randomDamage","op":"add","order":0,"value":5},{"stat":"pAtkRange","op":"set","order":0,"value":40},{"stat":"pAtk","op":"enchant","order":0,"value":0},{"stat":"mAtk","op":"enchant","order":0,"value":0}]},
+{"id":2369,"name":"Squire's Sword","type":"Weapon","bodyPart":"rhand","bodyPartMask":128,"type1":0,"type2":0,"weight":1600,"price":138,"material":"STEEL","icon":"icon.weapon_squires_sword_i00","defaultAction":"EQUIP","destroyable":true,"depositable":true,"immediateEffect":true,"weapon":{"type":"SWORD","soulShots":1,"spiritShots":1,"attackRadius":40,"attackAngle":120,"attackWeapon":true},"stats":[{"stat":"pAtk","op":"set","order":0,"value":6},{"stat":"mAtk","op":"set","order":0,"value":5},{"stat":"critRate","op":"set","order":0,"value":8},{"stat":"pAtkSpd","op":"set","order":0,"value":379},{"stat":"randomDamage","op":"add","order":0,"value":10},{"stat":"pAtkRange","op":"set","order":0,"value":40},{"stat":"pAtk","op":"enchant","order":0,"value":0},{"stat":"mAtk","op":"enchant","order":0,"value":0}]},
+{"id":3948,"name":"Blessed Spiritshot: D-Grade","type":"EtcItem","type1":4,"type2":5,"grade":"D","weight":5,"price":45,"material":"PAPER","icon":"icon.etc_spell_shot_blue_i01","defaultAction":"SPIRITSHOT","stackable":true,"tradable":true,"droppable":true,"destroyable":true,"sellable":true,"depositable":true,"immediateEffect":true,"etc":{"type":"SHOT","handler":"BlessedSpiritShot","blessed":true},"skills":[{"id":2160,"level":1}]},
+{"id":5588,"name":"Tutorial Guide","type":"EtcItem","type1":4,"type2":5,"material":"PAPER","icon":"icon.etc_lottery_card_i00","defaultAction":"SHOW_HTML","destroyable":true,"immediateEffect":true,"etc":{"type":"NONE","handler":"Book"}},
+{"id":6611,"name":"Infinity Blade","type":"Weapon","bodyPart":"rhand","bodyPartMask":128,"type1":0,"type2":0,"grade":"S","weight":1300,"material":"ADAMANTAITE","icon":"icon.weapon_the_sword_of_hero_i00","defaultAction":"EQUIP","olyRestricted":true,"immediateEffect":true,"hero":true,"weapon":{"type":"SWORD","soulShots":1,"spiritShots":1,"attackRadius":40,"attackAngle":120,"attackWeapon":true},"stats":[{"stat":"pAtk","op":"set","order":0,"value":379},{"stat":"mAtk","op":"set","order":0,"value":169},{"stat":"critRate","op":"set","order":0,"value":8},{"stat":"pAtkSpd","op":"set","order":0,"value":379},{"stat":"randomDamage","op":"add","order":0,"value":10},{"stat":"pAtkRange","op":"set","order":0,"value":40},{"stat":"pAtk","op":"enchant","order":0,"value":0},{"stat":"mAtk","op":"enchant","order":0,"value":0}],"skills":[{"id":3578,"level":1},{"id":3579,"level":1,"type":"ON_CRITICAL_SKILL","chance":10}],"conditions":{"name":"conditions","attrs":{"addName":"1","msgId":"113"},"children":[{"name":"and","children":[{"name":"player","attrs":{"isHero":"true"}},{"name":"player","attrs":{"level":"1"}}]}]}},
+{"id":8899,"name":"Shadow Item: Sample Sword","type":"Weapon","bodyPart":"lrhand","bodyPartMask":16384,"type1":0,"type2":0,"grade":"D","weight":730,"material":"FINE_STEEL","defaultAction":"EQUIP","droppable":true,"destroyable":true,"sellable":true,"depositable":true,"duration":90,"reuseDelay":300,"weapon":{"type":"SWORD","attackRadius":40,"attackAngle":0,"attackWeapon":true},"stats":[{"stat":"pAtk","op":"set","order":0,"value":78},{"stat":"pAtk","op":"enchant","order":0,"value":0},{"stat":"mAtk","op":"enchant","order":0,"value":0}]}
 ]

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/npcs.xsd">
+	<!-- Bearded Keltir, with its drop list cut short. -->
+	<npc id="20481" level="1" type="Monster" name="Bearded Keltir">
+		<parameters>
+			<param name="MoveAroundSocial" value="0" />
+			<param name="MoveAroundSocial1" value="0" />
+			<param name="MoveAroundSocial2" value="0" />
+		</parameters>
+		<race>ANIMAL</race>
+		<sex>MALE</sex>
+		<acquire exp="35" sp="2" />
+		<stats str="40" int="21" dex="30" wit="20" con="43" men="10">
+			<vitals hp="39.74519" hpRegen="2" mp="40" mpRegen="0.9" />
+			<attack physical="8.47458" magical="5.78704" random="30" critical="4" accuracy="4.75" attackSpeed="253" type="SWORD" range="40" distance="80" width="120" />
+			<defence physical="44.44444" magical="29.5916164000214" />
+			<speed>
+				<walk ground="23" />
+				<run ground="110" />
+			</speed>
+			<hitTime>370</hitTime>
+		</stats>
+		<status undying="false" canBeSown="true" />
+		<skillList>
+			<skill id="4416" level="4" /> <!-- Animals -->
+		</skillList>
+		<exCrtEffect>false</exCrtEffect>
+		<ai aggroRange="1000" clanHelpRange="300" isAggressive="false" />
+		<dropLists>
+			<drop>
+				<group chance="70">
+					<item id="57" min="8" max="12" chance="100" /> <!-- Adena -->
+				</group>
+				<group chance="2.9087">
+					<item id="426" min="1" max="1" chance="38.4949" /> <!-- Tunic -->
+					<item id="462" min="1" max="1" chance="61.5051" /> <!-- Stockings -->
+				</group>
+			</drop>
+			<spoil>
+				<item id="1786" min="1" max="1" chance="1.2736" /> <!-- Recipe: Broad Sword -->
+				<item id="1868" min="1" max="1" chance="3.1839" /> <!-- Thread -->
+			</spoil>
+		</dropLists>
+		<collision>
+			<radius normal="11" />
+			<height normal="27" />
+		</collision>
+	</npc>
+</list>

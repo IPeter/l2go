@@ -11,14 +11,18 @@ import (
 const maxTableDepth = 4
 
 // toLua converts a Go value to a Lua value: nil, bool, string, numbers,
-// []any and map[string]any (as tables). Anything else becomes its fmt
-// string.
-func toLua(L *lua.LState, v any) lua.LValue {
-	switch x := v.(type) {
+// []any and map[string]any (as tables), and refs marked with playerArg or
+// npcArg (as Player and Npc values). Anything else becomes its fmt string.
+func (v *vm) toLua(L *lua.LState, val any) lua.LValue {
+	switch x := val.(type) {
 	case nil:
 		return lua.LNil
 	case lua.LValue:
 		return x
+	case playerArg:
+		return v.newPlayer(L, x.ref)
+	case npcArg:
+		return v.newNpc(L, x.ref)
 	case bool:
 		return lua.LBool(x)
 	case string:
@@ -50,13 +54,13 @@ func toLua(L *lua.LState, v any) lua.LValue {
 	case []any:
 		t := L.CreateTable(len(x), 0)
 		for i, e := range x {
-			t.RawSetInt(i+1, toLua(L, e))
+			t.RawSetInt(i+1, v.toLua(L, e))
 		}
 		return t
 	case map[string]any:
 		t := L.CreateTable(0, len(x))
 		for k, e := range x {
-			t.RawSetString(k, toLua(L, e))
+			t.RawSetString(k, v.toLua(L, e))
 		}
 		return t
 	default:

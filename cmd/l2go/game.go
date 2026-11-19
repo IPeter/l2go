@@ -13,12 +13,20 @@ import (
 
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
+	"github.com/IPeter/l2go/internal/game"
 	"github.com/IPeter/l2go/internal/gameserver"
 	"github.com/IPeter/l2go/internal/link"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/storage/mongostore"
 )
 
+// runGame runs one game server: the world loop, the client listener and
+// the link to the login server.
+//
+// Shutting down goes in this order: the listener and every connection
+// close (each player in the world is reported to the game) and the script
+// reloaders stop, then the world loop saves every player and stops, then
+// the login link stops and the scripts engine closes.
 func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.Logger) error {
 	gs, ok := cfg.GameServerByID(opts.serverID)
 	if !ok {
@@ -32,15 +40,28 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	}
 	logger.Info("game data loaded", "dir", gs.DataDir,
 		"templates", len(gameData.Templates), "items", len(gameData.Items))
+	worldData, err := data.LoadWorld(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	logger.Info("world data loaded", "dir", gs.DataDir, "npcs", len(worldData.Npcs),
+		"spawns", len(worldData.Spawns), "zones", len(worldData.Zones))
 
+	// The scripts run on the world loop. Their output (npc:say and the
+	// like) reaches the players through the game's adapter.
+	out := game.NewScriptOutput()
 	engine, err := scripting.New(ctx, scripting.Options{
 		Dir:     gs.Scripts.Dir,
 		Timeout: time.Duration(gs.Scripts.EventTimeout),
 		Logger:  gsLogger,
+		Output:  out,
 	})
 	if err != nil {
 		return err
 	}
+	// Every return after the world loop starts waits for it to stop first,
+	// so the engine closes only when the loop no longer calls it.
+	defer engine.Close()
 
 	db := gs.Database
 	store, err := mongostore.Open(ctx, db.MongoURI(), db.Name)
@@ -54,6 +75,21 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	}()
 	logger.Info("connected to the database", "name", db.Name)
 
+	world, err := game.New(game.Options{
+		Config:       cfg,
+		ServerID:     gs.ID,
+		Data:         gameData,
+		World:        worldData,
+		Characters:   store.Characters(),
+		IDs:          store.IDs(),
+		Scripts:      engine,
+		ScriptOutput: out,
+		Logger:       gsLogger,
+	})
+	if err != nil {
+		return err
+	}
+
 	loginLink := link.NewClient(link.ClientConfig{
 		Addr:       cfg.LoginServer.GameServerAddr(),
 		ServerID:   gs.ID,
@@ -66,46 +102,70 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		IDs:        store.IDs(),
 		Data:       gameData,
 		Login:      loginLink,
-		Scripts:    engine,
+		Game:       world,
 	}, logger)
 	if err != nil {
 		return err
 	}
 
-	// The scripts engine and the login link outlive the server, so
-	// connections that are closing still get answers from them. A link
-	// error that retrying cannot fix (wrong secret, unknown server ID) stops
-	// the server.
+	// srvCtx ends the listener: on a signal, when the world loop stops, or
+	// on a link error that retrying cannot fix (wrong secret, unknown
+	// server ID). The loop and the link have their own contexts, ended in
+	// order below, so they outlive the connections.
 	srvCtx, stopServer := context.WithCancel(ctx)
 	defer stopServer()
-	bgCtx, stopBackground := context.WithCancel(context.WithoutCancel(ctx))
-	var wg sync.WaitGroup
-	wg.Go(func() { _ = engine.Run(bgCtx) })
-	wg.Go(func() { reloadOnSIGHUP(bgCtx, engine, logger) })
-	if opts.devReload || gs.Scripts.DevReload {
-		wg.Go(func() {
-			if err := engine.Watch(bgCtx, scripting.DefaultDebounce); err != nil {
-				logger.Error("dev reload is off", "err", err)
-			}
-		})
-	}
+	loopCtx, stopLoop := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopLoop()
+	linkCtx, stopLink := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopLink()
+	reloadCtx, stopReload := context.WithCancel(ctx)
+	defer stopReload()
+
+	var loopErr error
+	loopDone := make(chan struct{})
+	go func() {
+		defer close(loopDone)
+		if err := world.Run(loopCtx); err != nil {
+			loopErr = fmt.Errorf("world loop: %w", err)
+		}
+		stopServer() // without the loop there is no game
+	}()
+
 	var linkErr error
-	wg.Go(func() {
-		if err := loginLink.Run(bgCtx); err != nil {
+	var linkWG sync.WaitGroup
+	linkWG.Go(func() {
+		if err := loginLink.Run(linkCtx); err != nil {
 			linkErr = fmt.Errorf("login server link: %w", err)
 			stopServer()
 		}
 	})
 
+	// Reloading prepares the scripts off the loop; SwapScripts puts them in
+	// place on the loop.
+	var reloadWG sync.WaitGroup
+	reloadWG.Go(func() { reloadOnSIGHUP(reloadCtx, engine, world.SwapScripts, logger) })
+	if opts.devReload || gs.Scripts.DevReload {
+		reloadWG.Go(func() {
+			if err := engine.Watch(reloadCtx, scripting.DefaultDebounce, world.SwapScripts); err != nil {
+				logger.Error("dev reload is off", "err", err)
+			}
+		})
+	}
+
 	err = srv.Run(srvCtx)
-	stopBackground()
-	wg.Wait()
-	return errors.Join(linkErr, err)
+	stopReload()
+	reloadWG.Wait()
+	stopLoop()
+	<-loopDone
+	stopLink()
+	linkWG.Wait()
+	return errors.Join(linkErr, loopErr, err)
 }
 
-// reloadOnSIGHUP reloads the scripts on every SIGHUP until ctx is done
-// (docker compose kill -s HUP game). A failed reload keeps the old scripts.
-func reloadOnSIGHUP(ctx context.Context, engine *scripting.Engine, logger *slog.Logger) {
+// reloadOnSIGHUP prepares the scripts again on every SIGHUP until ctx is
+// done (docker compose kill -s HUP game) and hands them to swap, which puts
+// them in place on the world loop. A failed load keeps the old scripts.
+func reloadOnSIGHUP(ctx context.Context, engine *scripting.Engine, swap func(*scripting.Prepared), logger *slog.Logger) {
 	hup := make(chan os.Signal, 1)
 	signal.Notify(hup, syscall.SIGHUP)
 	defer signal.Stop(hup)
@@ -115,9 +175,14 @@ func reloadOnSIGHUP(ctx context.Context, engine *scripting.Engine, logger *slog.
 			return
 		case <-hup:
 			logger.Info("SIGHUP: reloading scripts")
-			if err := engine.Reload(ctx); err != nil && ctx.Err() == nil {
-				logger.Error("script reload failed, keeping the old scripts", "err", err)
+			p, err := engine.Prepare(ctx)
+			if err != nil {
+				if ctx.Err() == nil {
+					logger.Error("script reload failed, keeping the old scripts", "err", err)
+				}
+				continue
 			}
+			swap(p)
 		}
 	}
 }

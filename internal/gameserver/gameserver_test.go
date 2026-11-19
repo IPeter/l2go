@@ -16,7 +16,9 @@ import (
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
 	"github.com/IPeter/l2go/internal/link"
 	"github.com/IPeter/l2go/internal/packets"
+	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/session"
+	"github.com/IPeter/l2go/internal/storage"
 	"github.com/IPeter/l2go/internal/storage/memstore"
 	"github.com/IPeter/l2go/internal/testclient"
 )
@@ -66,12 +68,16 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 // envOptions change the test environment.
 type envOptions struct {
-	scripts Scripts
+	// scripts is the engine the fake game runs on its loop; nil means none.
+	scripts *scripting.Engine
 	// login replaces the real link to a link.Server.
 	login LoginLink
 	// chars and ids are shared with an earlier environment (a restart).
 	chars *memstore.Characters
 	ids   *memstore.IDs
+	// wrapStore wraps the character store the server uses, for example to
+	// make it fail.
+	wrapStore func(storage.CharacterStore) storage.CharacterStore
 	// configure changes the game server config.
 	configure func(*config.GameServer)
 	// server changes the server before it starts serving.
@@ -79,10 +85,11 @@ type envOptions struct {
 }
 
 // env is a running game server with an in-memory store, the real game
-// data, and a real login link to a link.Server whose session store issues
-// the keys.
+// data, a fake game (see fakeGame), and a real login link to a link.Server
+// whose session store issues the keys.
 type env struct {
 	srv      *Server
+	game     *fakeGame
 	addr     string
 	sessions *session.Store
 	linkSrv  *link.Server // nil when envOptions.login is set
@@ -100,8 +107,19 @@ func newEnv(t *testing.T, opts envOptions) *env {
 	if e.ids == nil {
 		e.ids = memstore.NewIDs()
 	}
+	store := storage.CharacterStore(e.chars)
+	if opts.wrapStore != nil {
+		store = opts.wrapStore(store)
+	}
+	e.game = newFakeGame(store, opts.scripts)
+	// Runs after the server stopped (cleanups run last-in first-out).
+	t.Cleanup(func() {
+		e.game.wait()
+		e.game.checkLoopUse(t)
+	})
 
-	// The link outlives the game server: this cleanup runs last.
+	// The link outlives the game server: this cleanup runs after the server
+	// stopped.
 	bgCtx, stopBackground := context.WithCancel(context.Background())
 	var bg sync.WaitGroup
 	t.Cleanup(func() {
@@ -134,11 +152,11 @@ func newEnv(t *testing.T, opts envOptions) *env {
 		opts.configure(gs)
 	}
 	s, err := New(cfg, 1, Deps{
-		Characters: e.chars,
+		Characters: store,
 		IDs:        e.ids,
 		Data:       loadData(t),
 		Login:      login,
-		Scripts:    opts.scripts,
+		Game:       e.game,
 	}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -234,11 +252,13 @@ func wantLoginFail(t *testing.T, c *testclient.GameConn, err error) {
 
 func TestNewChecksArguments(t *testing.T) {
 	d := loadData(t)
+	chars := memstore.NewCharacters()
 	full := Deps{
-		Characters: memstore.NewCharacters(),
+		Characters: chars,
 		IDs:        memstore.NewIDs(),
 		Data:       d,
 		Login:      link.NewClient(link.ClientConfig{}, nil),
+		Game:       newFakeGame(chars, nil),
 	}
 	logger := slog.New(slog.DiscardHandler)
 	if _, err := New(config.Default(), 1, full, logger); err != nil {
@@ -252,6 +272,7 @@ func TestNewChecksArguments(t *testing.T) {
 		"no IDs":        func(d *Deps) { d.IDs = nil },
 		"no data":       func(d *Deps) { d.Data = nil },
 		"no login":      func(d *Deps) { d.Login = nil },
+		"no game":       func(d *Deps) { d.Game = nil },
 	} {
 		deps := full
 		change(&deps)
@@ -495,52 +516,72 @@ func TestAuthLoginMalformedClosesConnection(t *testing.T) {
 	}
 }
 
-// Character packets before AuthLogin are ignored, as in Mobius: no answer,
-// and the connection stays open.
-func TestPacketsBeforeAuthLoginAreIgnored(t *testing.T) {
+// rawPacket is a client packet sent with SendRaw.
+type rawPacket struct {
+	op   byte
+	body []byte
+}
+
+// sendAll sends packets with SendRaw.
+func sendAll(t *testing.T, c *testclient.GameConn, ps []rawPacket) {
+	t.Helper()
+	for _, p := range ps {
+		if err := c.SendRaw(testCtx(t), p.op, p.body); err != nil {
+			t.Fatalf("sending 0x%02x: %v", p.op, err)
+		}
+	}
+}
+
+// worldPackets are in-world packets, valid only in the world.
+var worldPackets = []rawPacket{
+	{clientpackets.OpEnterWorld, enterWorldBody()},
+	{clientpackets.OpRequestRestart, nil},
+	{clientpackets.OpMoveToLocation, make([]byte, 28)},
+	{clientpackets.OpEx, []byte{0x08, 0x00}}, // RequestManorList
+	{clientpackets.OpSay2, []byte{'h', 0, 0, 0, 0, 0, 0, 0}},
+	{0x7f, nil}, // unknown
+}
+
+// Packets before AuthLogin other than AuthLogin are dropped, as in Mobius:
+// no answer, nothing reaches the game, and the connection stays open.
+func TestPacketsBeforeAuthLoginAreDropped(t *testing.T) {
 	e := newEnv(t, envOptions{})
 	ctx := testCtx(t)
 	c := e.dial(t)
-	for _, op := range []byte{
-		clientpackets.OpNewCharacter,
-		clientpackets.OpCharacterCreate,
-		clientpackets.OpCharacterSelect,
-		0x7f, // unknown
-	} {
-		if err := c.SendRaw(ctx, op, []byte{1, 2, 3}); err != nil {
-			t.Fatal(err)
-		}
-	}
+	sendAll(t, c, []rawPacket{
+		{clientpackets.OpNewCharacter, nil},
+		{clientpackets.OpCharacterCreate, []byte{1, 2, 3}},
+		{clientpackets.OpCharacterSelect, make([]byte, 18)},
+		{clientpackets.OpCharacterDelete, make([]byte, 4)},
+		{clientpackets.OpCharacterRestore, make([]byte, 4)},
+		{clientpackets.OpLogout, nil}, // only on the character screen and in the world
+	})
+	sendAll(t, c, worldPackets)
 	// AuthLogin's answer is the next packet: nothing answered the others.
 	if _, err := c.AuthLogin(ctx, "player1", e.issue(t, "player1")); err != nil {
 		t.Fatalf("AuthLogin: %v", err)
 	}
+	if m := e.game.methods(); len(m) != 0 {
+		t.Errorf("the game got %v", m)
+	}
 }
 
-// After AuthLogin, packets that are not supported yet, unknown packets and
-// a second AuthLogin are ignored.
-func TestUnsupportedPacketsAreIgnored(t *testing.T) {
+// On the character screen, the world's packets, a second AuthLogin and
+// ProtocolVersion are dropped.
+func TestPacketsOnTheCharacterScreenAreDropped(t *testing.T) {
 	e := newEnv(t, envOptions{})
 	ctx := testCtx(t)
 	c, _ := e.login(t, "player1")
-	for _, raw := range []struct {
-		op   byte
-		body []byte
-	}{
-		{clientpackets.OpCharacterDelete, []byte{0, 0, 0, 0}},
-		{clientpackets.OpCharacterSelect, []byte{0, 0, 0, 0}},
-		{clientpackets.OpCharacterRestore, []byte{0, 0, 0, 0}},
+	sendAll(t, c, []rawPacket{
 		{clientpackets.OpProtocolVersion, []byte{0xea, 0x02, 0, 0}},
 		{clientpackets.OpAuthLogin, authLoginBody("player1", session.Keys{})},
-		{0xd0, []byte{0x01, 0x00}}, // extended packet
-		{0x7f, nil},
-	} {
-		if err := c.SendRaw(ctx, raw.op, raw.body); err != nil {
-			t.Fatal(err)
-		}
-	}
+	})
+	sendAll(t, c, worldPackets)
 	if _, err := c.NewCharacter(ctx); err != nil {
-		t.Fatalf("NewCharacter after ignored packets: %v", err)
+		t.Fatalf("NewCharacter after dropped packets: %v", err)
+	}
+	if m := e.game.methods(); len(m) != 0 {
+		t.Errorf("the game got %v", m)
 	}
 	if e.srv.Players() != 1 {
 		t.Errorf("%d players, want 1", e.srv.Players())
@@ -646,11 +687,13 @@ func TestRunListenError(t *testing.T) {
 	defer ln.Close()
 	cfg := config.Default()
 	cfg.GameServers[0].Port = ln.Addr().(*net.TCPAddr).Port
+	chars := memstore.NewCharacters()
 	s, err := New(cfg, 1, Deps{
-		Characters: memstore.NewCharacters(),
+		Characters: chars,
 		IDs:        memstore.NewIDs(),
 		Data:       loadData(t),
 		Login:      blockingLink{},
+		Game:       newFakeGame(chars, nil),
 	}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)

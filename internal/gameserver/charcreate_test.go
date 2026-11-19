@@ -550,8 +550,14 @@ events.on_character_create(function(ev)
   if ev.name == "Third" then return events.reject("creation_not_allowed") end
 end)
 `)
-	if err := h.Engine().Reload(context.Background()); err != nil {
-		t.Fatalf("Reload: %v", err)
+	// As the server reloads: prepare off the loop, swap on the loop.
+	ctx := testCtx(t)
+	p, err := h.Engine().Prepare(ctx)
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	if err := e.game.OnLoop(ctx, func() { h.Engine().Swap(p) }); err != nil {
+		t.Fatalf("swapping on the loop: %v", err)
 	}
 	wantCreated(t, c, humanFighter("First"))
 	wantRefused(t, c, humanFighter("Third"), testclient.CreateFailNotAllowed)
@@ -576,23 +582,51 @@ func TestCharacterCreateWithoutScripts(t *testing.T) {
 	wantCreated(t, c, humanFighter("Announcer"))
 }
 
-// If the scripts engine is not running, creation fails safely.
+// If the scripts engine is closed, creation fails safely.
 func TestCharacterCreateEngineStopped(t *testing.T) {
 	dir := scripttest.WriteScripts(t, map[string]string{"a.lua": ""})
 	eng, err := scripting.New(context.Background(), scripting.Options{Dir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := eng.Run(ctx); err != nil {
-		t.Fatal(err)
-	}
+	eng.Close()
 
 	e := newEnv(t, envOptions{scripts: eng})
 	c, _ := e.login(t, "player1")
 	wantRefused(t, c, humanFighter("Anyone"), testclient.CreateFailCreationFailed)
 	if n, _ := e.chars.CountByAccount(testCtx(t), "player1"); n != 0 {
 		t.Errorf("%d characters saved, want 0", n)
+	}
+}
+
+// If the world loop does not run the hook, creation fails safely.
+func TestCharacterCreateLoopStopped(t *testing.T) {
+	h := scripttest.LoadSource(t, map[string]string{"events/ok.lua": `
+events.on_character_create(function(ev) end)
+`})
+	e := newEnv(t, envOptions{scripts: h.Engine()})
+	c, _ := e.login(t, "player1")
+	e.game.stopLoop()
+	wantRefused(t, c, humanFighter("Anyone"), testclient.CreateFailCreationFailed)
+	if n, _ := e.chars.CountByAccount(testCtx(t), "player1"); n != 0 {
+		t.Errorf("%d characters saved, want 0", n)
+	}
+}
+
+// The hook runs on the loop once per character that passes the server's
+// own checks; refused requests never reach the loop.
+func TestCharacterCreateHookRunsOnTheLoop(t *testing.T) {
+	h := scripttest.LoadSource(t, map[string]string{"events/ok.lua": `
+events.on_character_create(function(ev) end)
+`})
+	e := newEnv(t, envOptions{scripts: h.Engine()})
+	c, _ := e.login(t, "player1")
+	wantRefused(t, c, humanFighter("Bad Name"), testclient.CreateFailIncorrectName)
+	if n := e.game.onLoopCalls(); n != 0 {
+		t.Errorf("%d OnLoop calls for a refused name, want 0", n)
+	}
+	wantCreated(t, c, humanFighter("Looped"))
+	if n := e.game.onLoopCalls(); n != 1 {
+		t.Errorf("%d OnLoop calls after one creation, want 1", n)
 	}
 }

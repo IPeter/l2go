@@ -1,12 +1,53 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests. -->
 <list>
 	<item id="2368" type="Weapon" name="Training Gloves">
+		<set name="icon" val="icon.weapon_training_gloves_i00" />
+		<set name="default_action" val="EQUIP" />
 		<set name="weapon_type" val="DUALFIST" />
 		<set name="bodypart" val="lrhand" />
+		<set name="damage_range" val="0;0;32;120" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="CLOTH" />
+		<set name="weight" val="1580" />
+		<set name="price" val="138" />
+		<set name="soulshots" val="1" />
+		<set name="spiritshots" val="1" />
+		<set name="is_tradable" val="false" />
+		<set name="is_dropable" val="false" />
+		<set name="is_sellable" val="false" />
+		<stats>
+			<stat type="pAtk">7</stat>
+			<stat type="mAtk">5</stat>
+			<stat type="critRate">4</stat>
+			<stat type="accCombat">4.75</stat>
+			<stat type="pAtkSpd">325</stat>
+			<stat type="randomDamage">5</stat>
+			<stat type="pAtkRange">40</stat>
+		</stats>
 	</item>
 	<item id="2369" type="Weapon" name="Squire's Sword">
+		<set name="icon" val="icon.weapon_squires_sword_i00" />
+		<set name="default_action" val="EQUIP" />
 		<set name="weapon_type" val="SWORD" />
 		<set name="bodypart" val="rhand" />
+		<set name="damage_range" val="0;0;40;120" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="STEEL" />
+		<set name="weight" val="1600" />
+		<set name="price" val="138" />
+		<set name="soulshots" val="1" />
+		<set name="spiritshots" val="1" />
+		<set name="is_tradable" val="false" />
+		<set name="is_dropable" val="false" />
+		<set name="is_sellable" val="false" />
+		<stats>
+			<stat type="pAtk">6</stat>
+			<stat type="mAtk">5</stat>
+			<stat type="critRate">8</stat>
+			<stat type="pAtkSpd">379</stat>
+			<stat type="randomDamage">10</stat>
+			<stat type="pAtkRange">40</stat>
+		</stats>
 	</item>
 </list>

@@ -1,8 +1,8 @@
 package scripttest
 
 import (
-	"context"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"github.com/IPeter/l2go/internal/scripting"
@@ -65,13 +65,82 @@ func TestFireAllowErrors(t *testing.T) {
 	}
 }
 
-func TestReloadThroughHarness(t *testing.T) {
+func TestReload(t *testing.T) {
 	h := LoadSource(t, map[string]string{"a.lua": ""})
 	WriteScript(t, h.Dir(), "a.lua", `events.on_character_create(function() return events.reject("creation_not_allowed") end)`)
-	if err := h.Engine().Reload(context.Background()); err != nil {
+	if err := h.Reload(); err != nil {
 		t.Fatal(err)
 	}
 	if res := h.CharacterCreate(scripting.CharacterCreate{Name: "x"}); res.Reason != scripting.ReasonCreationNotAllowed {
 		t.Errorf("result = %+v after reload", res)
+	}
+
+	WriteScript(t, h.Dir(), "a.lua", `events.on_character_create(`)
+	if err := h.Reload(); err == nil {
+		t.Error("Reload of a broken script succeeded")
+	}
+	if res := h.CharacterCreate(scripting.CharacterCreate{Name: "x"}); res.Reason != scripting.ReasonCreationNotAllowed {
+		t.Errorf("result = %+v after a failed reload, want the old script", res)
+	}
+}
+
+func TestChat(t *testing.T) {
+	h := LoadSource(t, map[string]string{"chat.lua": `
+events.on_chat(function(ev)
+  if ev.type == "trade" and ev.player:level() < 10 then return false end
+  return ev.player:name() .. ": " .. ev.text
+end)`})
+	p := &Player{ObjectID: 1, Name: "Hero", Level: 5}
+	if res := h.Chat(scripting.ChatMessage{Player: p.Ref(), Type: 0, Text: "hi"}); res.Dropped || res.Text != "Hero: hi" {
+		t.Errorf("general = %+v", res)
+	}
+	if res := h.Chat(scripting.ChatMessage{Player: p.Ref(), Type: 8, Text: "WTS"}); !res.Dropped {
+		t.Errorf("trade = %+v, want dropped", res)
+	}
+	p.Level = 10 // the ref reads the fields at call time
+	if res := h.Chat(scripting.ChatMessage{Player: p.Ref(), Type: 8, Text: "WTS"}); res.Dropped {
+		t.Errorf("trade at level 10 = %+v", res)
+	}
+}
+
+func TestNpcHelpers(t *testing.T) {
+	h := LoadSource(t, map[string]string{"npcs/shop.lua": `
+local s = script.new("Shop")
+s:on_first_talk(30001, function(npc, player)
+  npc:say("Welcome, " .. player:name())
+  return "shop.htm", { name = player:name() }
+end)
+s:on_talk(30001, function(npc, player) return "<html><body>Quest talk</body></html>" end)
+s:on_event(function(event, npc, player)
+  if npc == nil then return "far away" end
+  return ""
+end)`})
+	hero := &Player{ObjectID: 0x10000001, Name: "Hero", Level: 5}
+	lector := &Npc{ObjectID: 0x60000001, ID: 30001, Name: "Lector"}
+
+	reply, ok := h.FirstTalk(hero, lector)
+	if !ok || reply.Kind != scripting.ReplyPage || reply.Content != "shop.htm" || reply.Vars["name"] != "Hero" || reply.Script != "Shop" {
+		t.Errorf("first talk = %+v, %v", reply, ok)
+	}
+	want := []Speech{{NpcID: 30001, ObjectID: 0x60000001, Text: "Welcome, Hero"}}
+	if said := h.Said(); !slices.Equal(said, want) {
+		t.Errorf("said = %+v, want %+v", said, want)
+	}
+	h.ClearSaid()
+	if len(h.Said()) != 0 {
+		t.Error("ClearSaid kept speech")
+	}
+
+	if reply, ok := h.Talk("Shop", hero, lector); !ok || reply.Kind != scripting.ReplyHTML {
+		t.Errorf("talk = %+v, %v", reply, ok)
+	}
+	if reply, ok := h.Event("Shop", "buy", hero, lector); !ok || reply.Kind != scripting.ReplyNone {
+		t.Errorf("event = %+v, %v", reply, ok)
+	}
+	if reply, ok := h.Event("Shop", "buy", hero, nil); !ok || reply.Content != "far away" {
+		t.Errorf("event without an NPC = %+v, %v", reply, ok)
+	}
+	if _, ok := h.FirstTalk(hero, &Npc{ID: 30002}); ok {
+		t.Error("an NPC without a script answered")
 	}
 }

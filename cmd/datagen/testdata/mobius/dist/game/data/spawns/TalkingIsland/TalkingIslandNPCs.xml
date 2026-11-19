@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/spawns.xsd">
+	<spawn name="TalkingIslandNPCs">
+		<npc id="31688" x="-85151" y="241476" z="-3728" heading="25000" respawnDelay="60" /> <!-- Grand Olympiad Manager: not in the sample NPCs, left out -->
+		<npc id="30001" x="-86385" y="243267" z="-3717" heading="52000" respawnDelay="60" /> <!-- Lector -->
+		<npc id="30006" x="-84108" y="244604" z="-3728" heading="40960" respawnDelay="60" /> <!-- Roxxy -->
+	</spawn>
+</list>

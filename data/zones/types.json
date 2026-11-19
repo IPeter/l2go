@@ -1,0 +1,165 @@
+[
+  {
+    "name": "ArenaZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "BossZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "CastleZone",
+    "parent": "ResidenceZone",
+    "usable": true
+  },
+  {
+    "name": "ClanHallZone",
+    "parent": "ResidenceZone",
+    "usable": true
+  },
+  {
+    "name": "ConditionZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "DamageZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "DerbyTrackZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "EffectZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "FishingZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "FlagPvPZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "HqZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "JailZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "MotherTreeZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "NoLandingZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "NoPvPZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "NoRestartZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "NoStoreZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "NoSummonFriendZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "NpcSpawnTerritory"
+  },
+  {
+    "name": "OlympiadStadiumZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "PeaceZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "ResidenceHallTeleportZone",
+    "parent": "ResidenceTeleportZone",
+    "usable": true
+  },
+  {
+    "name": "ResidenceTeleportZone",
+    "parent": "ZoneRespawn",
+    "usable": true
+  },
+  {
+    "name": "ResidenceZone",
+    "parent": "ZoneRespawn",
+    "abstract": true
+  },
+  {
+    "name": "RespawnZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "ScriptZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "SiegableHallZone",
+    "parent": "ClanHallZone",
+    "usable": true
+  },
+  {
+    "name": "SiegeZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "SwampZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "TownZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "WaterZone",
+    "parent": "ZoneType",
+    "usable": true
+  },
+  {
+    "name": "ZoneRespawn",
+    "parent": "ZoneType",
+    "abstract": true
+  },
+  {
+    "name": "ZoneType",
+    "parent": "ListenersContainer",
+    "abstract": true
+  }
+]

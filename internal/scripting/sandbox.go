@@ -42,6 +42,7 @@ func (v *vm) newState() *lua.LState {
 		L.SetGlobal(m.name, L.SetFuncs(L.NewTable(), m.funcs))
 	}
 	initRejectionType(L)
+	v.initTypes(L)
 	return L
 }
 
@@ -52,11 +53,14 @@ type module struct {
 }
 
 // modules returns the API modules. scripts/types/l2go.lua documents every
-// function in them, and a test keeps the two in sync.
+// function in them (and the methods of the userdata types), and a test
+// keeps the two in sync.
 func (v *vm) modules() []module {
 	return []module{
 		{name: "events", funcs: v.eventsFuncs()},
+		{name: "html", funcs: v.htmlFuncs()},
 		{name: "log", funcs: v.logFuncs()},
+		{name: "script", funcs: v.scriptFuncs()},
 	}
 }
 
@@ -113,7 +117,9 @@ func (v *vm) loadModule(L *lua.LState, path, name string) lua.LValue {
 		return lua.LNil
 	}
 	v.loaded[path] = loadingModule
+	v.running = append(v.running, path)
 	defer func() {
+		v.running = v.running[:len(v.running)-1]
 		// The file failed (we are panicking); let a later require retry.
 		if v.loaded[path] == loadingModule {
 			delete(v.loaded, path)

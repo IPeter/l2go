@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
-<list>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/classList.xsd">
 	<class classId="0" name="Human Fighter" />
 	<class classId="1" name="Warrior" parentClassId="0" />
 	<class classId="49" name="Orc Mystic" />

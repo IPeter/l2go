@@ -43,6 +43,30 @@
         "dir": "scripts",
         "devReload": false,
         "eventTimeout": "50ms"
+      },
+
+      "world": {
+        "tickInterval": "100ms",
+        "autosaveInterval": "15m",
+        "deleteCharAfterDays": 7,
+        "maxRunSpeed": 250
+      },
+
+      "chat": {
+        "generalRange": 1250,
+        "globalShout": true,
+        "globalTrade": true,
+        "maxLength": 105
+      },
+
+      "npcs": {
+        "spawnCustom": false,
+        "maxFreeTeleportLevel": 40,
+        "interactionRange": 250
+      },
+
+      "geodata": {
+        "dir": ""
       }
     }
   ]

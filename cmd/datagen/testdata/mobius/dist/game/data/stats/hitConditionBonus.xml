@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests.
+     rain is left out: Mobius takes 0. -->
+<hitConditionBonus xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/hitConditionBonus.xsd">
+	<back val="10" /> <!-- 10% attacking to enemy back -->
+	<dark val="-10" />
+	<front val="0" />
+	<high val="3" />
+	<low val="-3" />
+	<side val="5" />
+</hitConditionBonus>

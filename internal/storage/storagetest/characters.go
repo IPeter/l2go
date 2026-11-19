@@ -60,6 +60,44 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 	}
 }
 
+// changedCharacter returns c with every field that Update saves set to a new
+// value, as after a session in the world.
+func changedCharacter(c storage.Character) storage.Character {
+	c.Sex = 0
+	c.ClassID = 57
+	c.BaseClassID = 56
+	c.HairStyle = 1
+	c.HairColor = 2
+	c.Face = 0
+	c.Level = 40
+	c.Exp = 9_876_543_210
+	c.SP = 123_456
+	c.Karma = 0
+	c.PvPKills = 22
+	c.PKKills = 1
+	c.ClanID = 0
+	c.CurHP = 1200.5
+	c.MaxHP = 1500.25
+	c.CurMP = 400.75
+	c.MaxMP = 450.5
+	c.CurCP = 0
+	c.MaxCP = 900.125
+	c.X = 83400
+	c.Y = 147943
+	c.Z = -3404
+	c.Heading = 32768
+	c.AccessLevel = storage.AccessLevelPlayer
+	c.DeleteTime = baseTime.Add(48 * time.Hour)
+	c.LastAccess = baseTime.Add(36 * time.Hour)
+	c.Items = []storage.Item{
+		{ObjectID: c.ObjectID + 1, ItemID: 2369, Count: 1, Slot: storage.PaperdollNone},
+		{ObjectID: c.ObjectID + 4, ItemID: 124, Count: 1, Enchant: 5, Slot: storage.PaperdollRHand},
+		{ObjectID: c.ObjectID + 3, ItemID: 57, Count: 7_000_000_000, Slot: storage.PaperdollNone},
+		{ObjectID: c.ObjectID + 5, ItemID: 1835, Count: 300, Slot: storage.PaperdollNone},
+	}
+	return c
+}
+
 // diffCharacter describes how got differs from want, or returns "" if they
 // are equal. Times are compared with time.Equal, and a nil Items slice equals
 // an empty one.
@@ -331,6 +369,204 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		}
 		if len(got.Items) != 0 {
 			t.Errorf("Items = %+v, want none", got.Items)
+		}
+	})
+
+	t.Run("Update", func(t *testing.T) {
+		s := newStore(t)
+		orig := sampleCharacter(100, "alice", "Thorin", baseTime)
+		if err := s.Create(t.Context(), &orig); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		other := sampleCharacter(200, "alice", "Balin", baseTime)
+		if err := s.Create(t.Context(), &other); err != nil {
+			t.Fatalf("Create(other): %v", err)
+		}
+
+		upd := changedCharacter(orig)
+		arg := upd
+		arg.Items = slices.Clone(upd.Items)
+		// The identity fields are kept as stored, whatever the caller sends.
+		arg.Account, arg.Name, arg.Race, arg.CreatedAt = "mallory", "Smaug", 0, baseTime.Add(time.Hour)
+		if err := s.Update(t.Context(), &arg); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		arg.Items[0].Count = 999 // must not reach the store
+
+		got, err := s.Get(t.Context(), 100)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if d := diffCharacter(got, upd); d != "" {
+			t.Errorf("Get after Update: %s", d)
+		}
+		list, err := s.ListByAccount(t.Context(), "alice")
+		if err != nil {
+			t.Fatalf("ListByAccount: %v", err)
+		}
+		if len(list) != 2 {
+			t.Fatalf("ListByAccount = %d characters, want 2", len(list))
+		}
+		if d := diffCharacter(list[0], upd); d != "" {
+			t.Errorf("ListByAccount[0] after Update: %s", d)
+		}
+		if d := diffCharacter(list[1], other); d != "" {
+			t.Errorf("Update changed another character: %s", d)
+		}
+		if n, err := s.CountByAccount(t.Context(), "mallory"); err != nil || n != 0 {
+			t.Errorf("CountByAccount(mallory) = %d, %v, want 0", n, err)
+		}
+		for name, want := range map[string]bool{"Thorin": true, "Smaug": false} {
+			if ok, err := s.NameExists(t.Context(), name); err != nil || ok != want {
+				t.Errorf("NameExists(%s) = %v, %v, want %v", name, ok, err, want)
+			}
+		}
+	})
+
+	t.Run("UpdateClearsTimesAndItems", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Dwalin", baseTime)
+		if err := s.Create(t.Context(), &c); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		c.DeleteTime, c.LastAccess, c.Items = time.Time{}, time.Time{}, nil
+		if err := s.Update(t.Context(), &c); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		got, err := s.Get(t.Context(), 100)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if d := diffCharacter(got, c); d != "" {
+			t.Errorf("Get: %s", d)
+		}
+		if !got.DeleteTime.IsZero() || !got.LastAccess.IsZero() || len(got.Items) != 0 {
+			t.Errorf("DeleteTime %v, LastAccess %v, Items %+v; want all empty", got.DeleteTime, got.LastAccess, got.Items)
+		}
+	})
+
+	t.Run("UpdateNotFound", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Ghost", baseTime)
+		if err := s.Update(t.Context(), &c); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("Update error = %v, want ErrNotFound", err)
+		}
+		if _, err := s.Get(t.Context(), 100); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("Get after a failed Update: error = %v, want ErrNotFound", err)
+		}
+		if ok, err := s.NameExists(t.Context(), "Ghost"); err != nil || ok {
+			t.Errorf("NameExists after a failed Update = %v, %v, want false", ok, err)
+		}
+	})
+
+	t.Run("Delete", func(t *testing.T) {
+		s := newStore(t)
+		gone := sampleCharacter(100, "alice", "Fili", baseTime)
+		kept := sampleCharacter(200, "alice", "Kili", baseTime.Add(time.Minute))
+		for _, c := range []storage.Character{gone, kept} {
+			if err := s.Create(t.Context(), &c); err != nil {
+				t.Fatalf("Create(%s): %v", c.Name, err)
+			}
+		}
+		if err := s.Delete(t.Context(), 100); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		if _, err := s.Get(t.Context(), 100); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("Get after Delete: error = %v, want ErrNotFound", err)
+		}
+		if ok, err := s.NameExists(t.Context(), "FILI"); err != nil || ok {
+			t.Errorf("NameExists after Delete = %v, %v, want false", ok, err)
+		}
+		list, err := s.ListByAccount(t.Context(), "alice")
+		if err != nil {
+			t.Fatalf("ListByAccount: %v", err)
+		}
+		if len(list) != 1 || list[0].ObjectID != 200 {
+			t.Errorf("ListByAccount after Delete = %+v, want only Kili", list)
+		}
+		if n, err := s.CountByAccount(t.Context(), "alice"); err != nil || n != 1 {
+			t.Errorf("CountByAccount after Delete = %d, %v, want 1", n, err)
+		}
+		if err := s.Delete(t.Context(), 100); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("second Delete error = %v, want ErrNotFound", err)
+		}
+
+		// The name and the object ID are free again.
+		again := sampleCharacter(100, "bob", "fili", baseTime)
+		if err := s.Create(t.Context(), &again); err != nil {
+			t.Fatalf("Create with the deleted name and ID: %v", err)
+		}
+		got, err := s.Get(t.Context(), 100)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if d := diffCharacter(got, again); d != "" {
+			t.Errorf("Get of the new character: %s", d)
+		}
+	})
+
+	t.Run("DeleteNotFound", func(t *testing.T) {
+		s := newStore(t)
+		if err := s.Delete(t.Context(), 12345); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("Delete error = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("SetDeleteTime", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Oin", baseTime)
+		c.DeleteTime = time.Time{}
+		if err := s.Create(t.Context(), &c); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		// Sub-millisecond parts are dropped and the zone becomes UTC.
+		at := baseTime.Add(7*24*time.Hour + 456*time.Microsecond).In(time.FixedZone("CET", 3600))
+		if err := s.SetDeleteTime(t.Context(), 100, at); err != nil {
+			t.Fatalf("SetDeleteTime: %v", err)
+		}
+		want := c
+		want.DeleteTime = baseTime.Add(7 * 24 * time.Hour)
+		got, err := s.Get(t.Context(), 100)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if d := diffCharacter(got, want); d != "" {
+			t.Errorf("Get after SetDeleteTime: %s", d)
+		}
+		if !got.Deleting() {
+			t.Error("Deleting() = false after SetDeleteTime")
+		}
+		list, err := s.ListByAccount(t.Context(), "alice")
+		if err != nil {
+			t.Fatalf("ListByAccount: %v", err)
+		}
+		if len(list) != 1 || !list[0].DeleteTime.Equal(want.DeleteTime) {
+			t.Errorf("ListByAccount = %+v, want the delete time %v", list, want.DeleteTime)
+		}
+
+		// The zero time restores the character.
+		if err := s.SetDeleteTime(t.Context(), 100, time.Time{}); err != nil {
+			t.Fatalf("SetDeleteTime(zero): %v", err)
+		}
+		got, err = s.Get(t.Context(), 100)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if d := diffCharacter(got, c); d != "" {
+			t.Errorf("Get after the restore: %s", d)
+		}
+		if got.Deleting() {
+			t.Errorf("Deleting() = true after the restore, DeleteTime %v", got.DeleteTime)
+		}
+	})
+
+	t.Run("SetDeleteTimeNotFound", func(t *testing.T) {
+		s := newStore(t)
+		if err := s.SetDeleteTime(t.Context(), 12345, baseTime); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("SetDeleteTime error = %v, want ErrNotFound", err)
+		}
+		if err := s.SetDeleteTime(t.Context(), 12345, time.Time{}); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("SetDeleteTime(zero) error = %v, want ErrNotFound", err)
 		}
 	})
 

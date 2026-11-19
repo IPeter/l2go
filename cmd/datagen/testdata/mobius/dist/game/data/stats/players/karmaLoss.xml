@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests. -->
+<list>
+	<modifier level="1" val="0.772184315" />
+	<modifier level="2" val="2.069377971" />
+	<modifier level="3" val="2.315085083" />
+</list>

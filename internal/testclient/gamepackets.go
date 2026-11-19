@@ -36,16 +36,6 @@ const (
 	PingProtocol int32 = -2
 )
 
-// gamePacketNames maps game server opcodes to Mobius packet names.
-var gamePacketNames = map[byte]string{
-	OpKeyPacket:           "KeyPacket",
-	OpCharSelectionInfo:   "CharSelectionInfo",
-	OpGameLoginFail:       "LoginFail",
-	OpNewCharacterSuccess: "NewCharacterSuccess",
-	OpCharCreateOk:        "CharCreateOk",
-	OpCharCreateFail:      "CharCreateFail",
-}
-
 // GameLoginFailReason is the reason of the game server LoginFail (Mobius
 // gameserver LoginFail).
 type GameLoginFailReason int32
@@ -128,6 +118,10 @@ const (
 	// NumEquipSlots is the number of equipment slots in CharSelectionInfo.
 	NumEquipSlots
 )
+
+// SlotFace is where UserInfo lists the face slot (Mobius PAPERDOLL_FACE):
+// the place where CharSelectionInfo lists HAIR2.
+const SlotFace = SlotHair2
 
 // KeyPacket answers ProtocolVersion (Mobius KeyPacket).
 type KeyPacket struct {
@@ -318,12 +312,30 @@ func encodeCharacterCreate(req CreateRequest) []byte {
 	return w.Bytes()
 }
 
+// PacketName implements Packet.
+func (KeyPacket) PacketName() string { return "KeyPacket" }
+
+// PacketName implements Packet.
+func (CharacterList) PacketName() string { return "CharSelectionInfo" }
+
+// PacketName implements Packet.
+func (GameLoginFail) PacketName() string { return "LoginFail" }
+
+// PacketName implements Packet.
+func (NewCharacterSuccess) PacketName() string { return "NewCharacterSuccess" }
+
+// PacketName implements Packet.
+func (CharCreateOk) PacketName() string { return "CharCreateOk" }
+
+// PacketName implements Packet.
+func (CharCreateFail) PacketName() string { return "CharCreateFail" }
+
 // unexpectedGame builds the error for a game packet the call did not want.
 func unexpectedGame(body []byte, want string) *UnexpectedPacketError {
 	e := &UnexpectedPacketError{Server: "game", Want: want}
 	if len(body) > 0 {
 		e.Opcode = body[0]
-		e.Name = gamePacketNames[body[0]]
+		e.Name = serverPacketName(body)
 		e.Body = append([]byte(nil), body[1:]...)
 	}
 	return e
@@ -360,46 +372,40 @@ func parseKeyPacket(body []byte) (KeyPacket, error) {
 	return k, nil
 }
 
-// decodeGamePacket parses a decrypted game packet that followed KeyPacket.
-// It returns one of CharacterList, GameLoginFail, NewCharacterSuccess,
-// CharCreateOk or CharCreateFail. Any other opcode gives an
-// *UnexpectedPacketError.
+// decodeGamePacket parses a decrypted game packet that followed KeyPacket,
+// the way the request methods do: DecodeServerPacket, with an unknown
+// opcode or a second KeyPacket as an *UnexpectedPacketError.
 func decodeGamePacket(body []byte) (any, error) {
-	if len(body) == 0 {
-		return nil, malformed("game packet", "empty body")
-	}
-	op := body[0]
-	name, known := gamePacketNames[op]
-	if !known || op == OpKeyPacket {
-		return nil, unexpectedGame(body, "")
-	}
-	r := packets.NewReader(body[1:])
-	var (
-		p   any
-		err error
-	)
-	switch op {
-	case OpCharSelectionInfo:
-		p, err = readCharSelectionInfo(r)
-	case OpGameLoginFail:
-		p = GameLoginFail{Reason: GameLoginFailReason(r.ReadInt32())}
-	case OpNewCharacterSuccess:
-		p, err = readNewCharacterSuccess(r)
-	case OpCharCreateOk:
-		p = CharCreateOk{Result: r.ReadInt32()}
-	case OpCharCreateFail:
-		p = CharCreateFail{Reason: CreateFailReason(r.ReadInt32())}
-	}
+	p, err := DecodeServerPacket(body)
+	p, err = received{raw: body, p: p, err: err}.known("")
 	if err != nil {
 		return nil, err
 	}
-	if err := r.Err(); err != nil {
-		return nil, readerError(name, err)
-	}
-	if r.Len() != 0 {
-		return nil, malformed(name, "%d bytes after the last field", r.Len())
-	}
 	return p, nil
+}
+
+// The packets of the character screen, for the decoder table.
+
+func readCharSelectionInfoPacket(f *fields) Packet {
+	l, err := readCharSelectionInfo(f.r)
+	f.setErr(err)
+	return l
+}
+
+func readNewCharacterSuccessPacket(f *fields) Packet {
+	s, err := readNewCharacterSuccess(f.r)
+	f.setErr(err)
+	return s
+}
+
+func readGameLoginFail(f *fields) Packet {
+	return GameLoginFail{Reason: GameLoginFailReason(f.i32())}
+}
+
+func readCharCreateOk(f *fields) Packet { return CharCreateOk{Result: f.i32()} }
+
+func readCharCreateFail(f *fields) Packet {
+	return CharCreateFail{Reason: CreateFailReason(f.i32())}
 }
 
 // readCharSelectionInfo parses CharSelectionInfo after its opcode: a count

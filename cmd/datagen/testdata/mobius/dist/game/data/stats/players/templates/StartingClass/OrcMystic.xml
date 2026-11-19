@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Small sample in the L2J Mobius format, for the datagen golden test.
-     Level 2 comes first on purpose: datagen must pick level 1 by its val. -->
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests.
+     Levels are out of order on purpose (Mobius indexes them by val), and the
+     speeds, attack type and safe fall are left out to get the Mobius
+     defaults. -->
 <list>
 	<classId>49</classId>
 	<staticData>
@@ -14,17 +16,59 @@
 			<node x="-56733" y="-113459" z="-690" />
 			<node x="-56686" y="-113470" z="-690" />
 		</creationPoints>
+		<basePAtk>3</basePAtk>
+		<basePDef>
+			<chest>15</chest>
+			<legs>8</legs>
+			<head>12</head>
+			<feet>7</feet>
+			<gloves>8</gloves>
+			<underwear>3</underwear>
+			<cloak>1</cloak>
+		</basePDef>
+		<baseMAtk>6</baseMAtk>
+		<baseMDef>
+			<rear>9</rear>
+			<lear>9</lear>
+			<rfinger>5</rfinger>
+			<lfinger>5</lfinger>
+			<neck>13</neck>
+		</baseMDef>
+		<baseAtkRange>20</baseAtkRange>
+		<baseRndDam>10</baseRndDam>
+		<collisionMale>
+			<radius>7.0</radius>
+			<height>27.5</height>
+		</collisionMale>
+		<collisionFemale>
+			<radius>8.0</radius>
+			<height>25.5</height>
+		</collisionFemale>
 	</staticData>
 	<lvlUpgainData>
 		<level val="2">
 			<hp>107.0</hp>
 			<mp>45.0</mp>
 			<cp>53.5</cp>
+			<hpRegen>2.05</hpRegen>
+			<mpRegen>0.9</mpRegen>
+			<cpRegen>2.0</cpRegen>
 		</level>
 		<level val="1">
 			<hp>95.0</hp>
 			<mp>40.0</mp>
 			<cp>47.5</cp>
+			<hpRegen>2.0</hpRegen>
+			<mpRegen>0.9</mpRegen>
+			<cpRegen>2.0</cpRegen>
+		</level>
+		<level val="3">
+			<hp>119.13</hp>
+			<mp>50.04</mp>
+			<cp>59.565</cp>
+			<hpRegen>2.1</hpRegen>
+			<mpRegen>0.9</mpRegen>
+			<cpRegen>2.0</cpRegen>
 		</level>
 	</lvlUpgainData>
 </list>

@@ -48,6 +48,34 @@
         "dir": "scripts",
         "devReload": true,
         "eventTimeout": "50ms"
+      },
+
+      "world": {
+        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed.",
+        "tickInterval": "100ms",
+        "autosaveInterval": "15m",
+        "deleteCharAfterDays": 7,
+        "maxRunSpeed": 250
+      },
+
+      "chat": {
+        "_comment": "Normal chat is heard within generalRange units. globalShout/globalTrade send shout (!) and trade (+) chat to the whole world; false limits them to the speaker's map region. Messages longer than maxLength characters are refused.",
+        "generalRange": 1250,
+        "globalShout": true,
+        "globalTrade": true,
+        "maxLength": 105
+      },
+
+      "npcs": {
+        "_comment": "spawnCustom also spawns the custom spawn lists. Players up to maxFreeTeleportLevel teleport for free. Players talk to NPCs within interactionRange units.",
+        "spawnCustom": false,
+        "maxFreeTeleportLevel": 40,
+        "interactionRange": 250
+      },
+
+      "geodata": {
+        "_comment": "dir is the geodata folder; empty means no geodata.",
+        "dir": ""
       }
     }
   ]

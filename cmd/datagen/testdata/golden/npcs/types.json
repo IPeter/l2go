@@ -1,0 +1,45 @@
+[
+  {
+    "name": "Attackable",
+    "parent": "Npc"
+  },
+  {
+    "name": "Creature",
+    "parent": "WorldObject",
+    "abstract": true
+  },
+  {
+    "name": "Folk",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "Guard",
+    "parent": "Attackable",
+    "usable": true
+  },
+  {
+    "name": "Merchant",
+    "parent": "Folk",
+    "usable": true
+  },
+  {
+    "name": "Monster",
+    "parent": "Attackable",
+    "usable": true
+  },
+  {
+    "name": "Npc",
+    "parent": "Creature"
+  },
+  {
+    "name": "RaidBoss",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "Teleporter",
+    "parent": "Merchant",
+    "usable": true
+  }
+]

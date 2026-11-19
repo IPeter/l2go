@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/zones.xsd">
+	<zone name="talking_island_town_21_25" type="RespawnZone" shape="NPoly" minZ="-6874" maxZ="-4874">
+		<node X="41090" Y="242210" />
+		<node X="49934" Y="242210" />
+		<node X="49985" Y="250489" />
+		<node X="41141" Y="250489" />
+		<race name="ELF" point="talking_island_town" />
+		<race name="HUMAN" point="talking_island_town" />
+		<race name="ORC" point="talking_island_town" />
+		<race name="DWARF" point="talking_island_town" />
+		<race name="DARK_ELF" point="talking_island_town" />
+	</zone>
+</list>

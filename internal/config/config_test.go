@@ -86,6 +86,11 @@ func TestLoadReportsJSONErrors(t *testing.T) {
 		"bad duration":   `{"gameservers": [{"id": 1, "scripts": {"eventTimeout": "fast"}}]}`,
 		"number timeout": `{"gameservers": [{"id": 1, "scripts": {"eventTimeout": 50}}]}`,
 		"unknown script": `{"gameservers": [{"id": 1, "scripts": {"folder": "x"}}]}`,
+		"unknown world":  `{"gameservers": [{"id": 1, "world": {"tick": "100ms"}}]}`,
+		"bad tick":       `{"gameservers": [{"id": 1, "world": {"tickInterval": "often"}}]}`,
+		"string range":   `{"gameservers": [{"id": 1, "chat": {"generalRange": "far"}}]}`,
+		"unknown npcs":   `{"gameservers": [{"id": 1, "npcs": {"range": 1}}]}`,
+		"unknown geo":    `{"gameservers": [{"id": 1, "geodata": {"path": "x"}}]}`,
 	}
 	for name, content := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -143,6 +148,79 @@ func TestParseAppliesDefaults(t *testing.T) {
 	}
 }
 
+// The game rule sections default to Mobius's values when left out, field by
+// field, while explicit false and 0 are kept.
+func TestParseGameSections(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want func(*GameServer)
+	}{
+		{"left out", `{"id": 1}`, func(*GameServer) {}},
+		{"empty sections", `{"id": 1, "world": {}, "chat": {}, "npcs": {}, "geodata": {}}`, func(*GameServer) {}},
+		{"some fields", `{"id": 1, "world": {"maxRunSpeed": 300}, "chat": {"globalTrade": false}}`, func(g *GameServer) {
+			g.World.MaxRunSpeed = 300
+			g.Chat.GlobalTrade = false
+		}},
+		{"explicit zeros", `{"id": 1, "world": {"deleteCharAfterDays": 0, "autosaveInterval": "0s"}, "npcs": {"maxFreeTeleportLevel": 0}}`, func(g *GameServer) {
+			g.World.DeleteCharAfterDays = 0
+			g.World.AutosaveInterval = 0
+			g.NPCs.MaxFreeTeleportLevel = 0
+		}},
+		{"everything", `{"id": 1,
+			"world": {"_comment": "w", "tickInterval": "50ms", "autosaveInterval": "1m", "deleteCharAfterDays": 3, "maxRunSpeed": 200},
+			"chat": {"generalRange": 900, "globalShout": false, "globalTrade": false, "maxLength": 80},
+			"npcs": {"spawnCustom": true, "maxFreeTeleportLevel": 20, "interactionRange": 150},
+			"geodata": {"dir": "/srv/geo"}}`, func(g *GameServer) {
+			g.World = World{Comment: "w", TickInterval: Duration(50 * time.Millisecond), AutosaveInterval: Duration(time.Minute), DeleteCharAfterDays: 3, MaxRunSpeed: 200}
+			g.Chat = Chat{GeneralRange: 900, MaxLength: 80}
+			g.NPCs = NPCs{SpawnCustom: true, MaxFreeTeleportLevel: 20, InteractionRange: 150}
+			g.Geodata = Geodata{Dir: "/srv/geo"}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := Parse([]byte(`{"gameservers": [` + tt.json + `]}`))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			want := GameServer{World: DefaultWorld(), Chat: DefaultChat(), NPCs: DefaultNPCs()}
+			tt.want(&want)
+			got := cfg.GameServers[0]
+			if got.World != want.World || got.Chat != want.Chat || got.NPCs != want.NPCs || got.Geodata != want.Geodata {
+				t.Errorf("sections = %+v %+v %+v %+v\nwant %+v %+v %+v %+v",
+					got.World, got.Chat, got.NPCs, got.Geodata, want.World, want.Chat, want.NPCs, want.Geodata)
+			}
+			// The other fields still get their usual defaults.
+			if got.ID != 1 || got.DataDir != DefaultDataDir || got.Scripts.Dir != DefaultScriptsDir {
+				t.Errorf("other fields: id %d dataDir %q scripts %q", got.ID, got.DataDir, got.Scripts.Dir)
+			}
+		})
+	}
+}
+
+func TestDefaultGameSections(t *testing.T) {
+	gs := Default().GameServers[0]
+	want := World{
+		TickInterval:        Duration(100 * time.Millisecond),
+		AutosaveInterval:    Duration(15 * time.Minute),
+		DeleteCharAfterDays: 7,
+		MaxRunSpeed:         250,
+	}
+	if gs.World != want {
+		t.Errorf("World = %+v, want %+v", gs.World, want)
+	}
+	if want := (Chat{GeneralRange: 1250, GlobalShout: true, GlobalTrade: true, MaxLength: 105}); gs.Chat != want {
+		t.Errorf("Chat = %+v, want %+v", gs.Chat, want)
+	}
+	if want := (NPCs{MaxFreeTeleportLevel: 40, InteractionRange: 250}); gs.NPCs != want {
+		t.Errorf("NPCs = %+v, want %+v", gs.NPCs, want)
+	}
+	if gs.Geodata != (Geodata{}) {
+		t.Errorf("Geodata = %+v, want no geodata", gs.Geodata)
+	}
+}
+
 func TestParseAcceptsComments(t *testing.T) {
 	_, err := Parse([]byte(`{"_comment": "a", "loginserver": {"_comment": "b"}, "gameservers": [{"_comment": "c"}]}`))
 	if err != nil {
@@ -187,6 +265,25 @@ func TestValidate(t *testing.T) {
 			c.GameServers[0].Scripts.EventTimeout = Duration(-time.Millisecond)
 		}, "scripts.eventTimeout"},
 		{"no game servers", func(c *Config) { c.GameServers = nil }, ""},
+		{"zero tick", func(c *Config) { c.GameServers[0].World.TickInterval = 0 }, "gameservers[0].world.tickInterval"},
+		{"negative autosave", func(c *Config) {
+			c.GameServers[0].World.AutosaveInterval = Duration(-time.Second)
+		}, "world.autosaveInterval"},
+		{"autosave off", func(c *Config) { c.GameServers[0].World.AutosaveInterval = 0 }, ""},
+		{"delete at once", func(c *Config) { c.GameServers[0].World.DeleteCharAfterDays = 0 }, ""},
+		{"negative delete days", func(c *Config) { c.GameServers[0].World.DeleteCharAfterDays = -1 }, "world.deleteCharAfterDays"},
+		{"huge delete days", func(c *Config) {
+			c.GameServers[0].World.DeleteCharAfterDays = MaxDeleteCharAfterDays + 1
+		}, "world.deleteCharAfterDays"},
+		{"zero run speed", func(c *Config) { c.GameServers[0].World.MaxRunSpeed = 0 }, "world.maxRunSpeed"},
+		{"zero chat range", func(c *Config) { c.GameServers[0].Chat.GeneralRange = 0 }, "chat.generalRange"},
+		{"negative chat length", func(c *Config) { c.GameServers[0].Chat.MaxLength = -5 }, "chat.maxLength"},
+		{"no free teleports", func(c *Config) { c.GameServers[0].NPCs.MaxFreeTeleportLevel = 0 }, ""},
+		{"negative free teleport level", func(c *Config) {
+			c.GameServers[0].NPCs.MaxFreeTeleportLevel = -1
+		}, "npcs.maxFreeTeleportLevel"},
+		{"zero interaction range", func(c *Config) { c.GameServers[0].NPCs.InteractionRange = 0 }, "npcs.interactionRange"},
+		{"geodata dir", func(c *Config) { c.GameServers[0].Geodata.Dir = "/srv/geodata" }, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

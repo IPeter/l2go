@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests:
+     the real table cut to maxLevel 3 (one level more is needed). -->
+<table maxLevel="3" maxPetLevel="3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/experience.xsd">
+	<experience level="1" tolevel="0" />
+	<experience level="3" tolevel="363" />
+	<experience level="2" tolevel="68" />
+	<experience level="4" tolevel="6300000000" />
+</table>

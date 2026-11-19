@@ -1,0 +1,329 @@
+[
+  {
+    "name": "Adventurer",
+    "parent": "Folk",
+    "usable": true
+  },
+  {
+    "name": "Artefact",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "Attackable",
+    "parent": "Npc"
+  },
+  {
+    "name": "Auctioneer",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "BabyPet",
+    "parent": "Pet",
+    "usable": true
+  },
+  {
+    "name": "Boat",
+    "parent": "Vehicle",
+    "usable": true
+  },
+  {
+    "name": "BroadcastingTower",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "CastleDoorman",
+    "parent": "Doorman",
+    "usable": true
+  },
+  {
+    "name": "Chest",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "ClanHallDoorman",
+    "parent": "Doorman",
+    "usable": true
+  },
+  {
+    "name": "ClanHallManager",
+    "parent": "Merchant",
+    "usable": true
+  },
+  {
+    "name": "ControlTower",
+    "parent": "Tower",
+    "usable": true
+  },
+  {
+    "name": "Creature",
+    "parent": "WorldObject",
+    "abstract": true
+  },
+  {
+    "name": "Cubic",
+    "usable": true
+  },
+  {
+    "name": "DawnPriest",
+    "parent": "SignsPriest",
+    "usable": true
+  },
+  {
+    "name": "Decoy",
+    "parent": "Creature",
+    "usable": true
+  },
+  {
+    "name": "Defender",
+    "parent": "Attackable",
+    "usable": true
+  },
+  {
+    "name": "Door",
+    "parent": "Creature",
+    "usable": true
+  },
+  {
+    "name": "Doorman",
+    "parent": "Folk",
+    "usable": true
+  },
+  {
+    "name": "DungeonGatekeeper",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "DuskPriest",
+    "parent": "SignsPriest",
+    "usable": true
+  },
+  {
+    "name": "EffectPoint",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "EventMonster",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "FeedableBeast",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "Fence",
+    "parent": "WorldObject",
+    "usable": true
+  },
+  {
+    "name": "FestivalGuide",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "FestivalMonster",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "Fisherman",
+    "parent": "Merchant",
+    "usable": true
+  },
+  {
+    "name": "FlameTower",
+    "parent": "Tower",
+    "usable": true
+  },
+  {
+    "name": "FlyTerrainObject",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "Folk",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "FriendlyMob",
+    "parent": "Attackable",
+    "usable": true
+  },
+  {
+    "name": "GrandBoss",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "Guard",
+    "parent": "Attackable",
+    "usable": true
+  },
+  {
+    "name": "Merchant",
+    "parent": "Folk",
+    "usable": true
+  },
+  {
+    "name": "Monster",
+    "parent": "Attackable",
+    "usable": true
+  },
+  {
+    "name": "Npc",
+    "parent": "Creature"
+  },
+  {
+    "name": "OlympiadManager",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "Pet",
+    "parent": "Summon",
+    "usable": true
+  },
+  {
+    "name": "PetManager",
+    "parent": "Merchant",
+    "usable": true
+  },
+  {
+    "name": "Playable",
+    "parent": "Creature",
+    "abstract": true
+  },
+  {
+    "name": "QuestGuard",
+    "parent": "Guard",
+    "usable": true
+  },
+  {
+    "name": "RaceManager",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "RaidBoss",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "RiftInvader",
+    "parent": "Monster",
+    "usable": true
+  },
+  {
+    "name": "SchemeBuffer",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "Servitor",
+    "parent": "Summon",
+    "usable": true
+  },
+  {
+    "name": "SiegeFlag",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "SignsPriest",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "StaticObject",
+    "parent": "Creature",
+    "usable": true
+  },
+  {
+    "name": "Summon",
+    "parent": "Playable",
+    "abstract": true
+  },
+  {
+    "name": "TamedBeast",
+    "parent": "FeedableBeast",
+    "usable": true
+  },
+  {
+    "name": "Teleporter",
+    "parent": "Merchant",
+    "usable": true
+  },
+  {
+    "name": "TerrainObject",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "Tower",
+    "parent": "Npc",
+    "abstract": true
+  },
+  {
+    "name": "Trainer",
+    "parent": "Folk",
+    "usable": true
+  },
+  {
+    "name": "Trap",
+    "parent": "Npc",
+    "usable": true
+  },
+  {
+    "name": "Vehicle",
+    "parent": "Creature",
+    "abstract": true
+  },
+  {
+    "name": "VillageMaster",
+    "parent": "Folk",
+    "usable": true
+  },
+  {
+    "name": "VillageMasterDElf",
+    "parent": "VillageMaster",
+    "usable": true
+  },
+  {
+    "name": "VillageMasterDwarf",
+    "parent": "VillageMaster",
+    "usable": true
+  },
+  {
+    "name": "VillageMasterFighter",
+    "parent": "VillageMaster",
+    "usable": true
+  },
+  {
+    "name": "VillageMasterMystic",
+    "parent": "VillageMaster",
+    "usable": true
+  },
+  {
+    "name": "VillageMasterOrc",
+    "parent": "VillageMaster",
+    "usable": true
+  },
+  {
+    "name": "VillageMasterPriest",
+    "parent": "VillageMaster",
+    "usable": true
+  },
+  {
+    "name": "Warehouse",
+    "parent": "Folk",
+    "usable": true
+  }
+]

@@ -7,13 +7,23 @@ MONGO_URI ?= mongodb://127.0.0.1:27017
 PUBLIC_IP ?= $(shell ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | cut -d' ' -f1)
 PUBLIC_IP_OR_LOCAL = $(or $(strip $(PUBLIC_IP)),127.0.0.1)
 
-.PHONY: all build test race cover fuzz lint vuln scripts-check integration smoke up down logs reload-scripts clean
+.PHONY: all build data test race cover fuzz lint vuln scripts-check integration smoke up down logs reload-scripts clean
+
+# The L2J Mobius Interlude checkout that cmd/datagen reads (not in git).
+MOBIUS ?= L2J_Mobius/L2J_Mobius_CT_0_Interlude
 
 all: build test
 
 ## build: compile the l2go binary into bin/
 build:
 	$(GO) build -o bin/l2go ./cmd/l2go
+
+## data: regenerate everything cmd/datagen makes from the Mobius checkout
+## (MOBIUS): the Go enums of internal/data, then all of data/, including the
+## dialog pages in data/html (git-ignored)
+data:
+	$(GO) run ./cmd/datagen -enums -mobius $(MOBIUS)
+	$(GO) run ./cmd/datagen -mobius $(MOBIUS)
 
 ## test: run the unit tests (no database needed)
 test:
@@ -91,3 +101,44 @@ reload-scripts:
 
 clean:
 	rm -rf bin coverage.out
+
+# Mobius reference stack, the oracle for cmd/refdiff (deploy/reference/README.md).
+# Its own compose project, l2go-reference, so it never touches the l2go stack.
+.PHONY: reference-up reference-down reference-logs reference-build
+
+## reference-up: start the Mobius reference stack (login 127.0.0.1:12106, game
+## 127.0.0.1:17777); the first run also compiles Mobius, which takes minutes
+reference-up:
+	docker compose -p l2go-reference -f deploy/reference/docker-compose.yml up -d --build
+
+## reference-down: stop the reference stack (the database and the build stay in volumes)
+reference-down:
+	docker compose -p l2go-reference -f deploy/reference/docker-compose.yml down
+
+## reference-logs: follow the reference stack's logs
+reference-logs:
+	docker compose -p l2go-reference -f deploy/reference/docker-compose.yml logs -f
+
+## reference-build: rebuild the reference image and recompile Mobius into its
+## volume; stops the Mobius servers first (start them with make reference-up)
+reference-build:
+	docker compose -p l2go-reference -f deploy/reference/docker-compose.yml build
+	docker compose -p l2go-reference -f deploy/reference/docker-compose.yml stop mobius-login mobius-game
+	docker compose -p l2go-reference -f deploy/reference/docker-compose.yml run --rm -e MOBIUS_FORCE_BUILD=1 mobius-build
+
+# Load test and reference diff (cmd/bots, cmd/refdiff).
+.PHONY: bots refdiff
+
+N ?= 50
+SCENARIO ?= login-create-enter
+
+## bots: run N load-test bots (default 50) against the running stack until
+## Ctrl+C, e.g. make bots N=500 BOTS_ARGS='-duration 5m -rate 50'
+bots:
+	$(GO) run ./cmd/bots -n $(N) $(BOTS_ARGS)
+
+## refdiff: run SCENARIO against L2Go and the Mobius reference stack and print
+## the differences (make up and make reference-up first; refdiff -list shows
+## the scenarios), e.g. make refdiff SCENARIO=chat REFDIFF_ARGS='-ignore NpcSay'
+refdiff:
+	$(GO) run ./cmd/refdiff $(REFDIFF_ARGS) $(SCENARIO)

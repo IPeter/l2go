@@ -1,0 +1,7 @@
+[
+{"file":"Others/Samples.xml","name":"sample_guards","zone":"sample_square","aiData":{"aggroRange":500,"disableRandomWalk":1},"npcs":[{"npcId":30099,"heading":-1,"count":3,"respawnDelay":60,"respawnRandom":20,"chaseRange":1500},{"npcId":20481,"heading":-1,"count":1,"respawnDelay":30,"periodOfDay":"night"}]},
+{"file":"Others/Samples.xml","zone":"gludio32_1725_01","npcs":[{"npcId":20001,"heading":-1,"count":2,"respawnDelay":25}]},
+{"file":"Others/Samples.xml","npcs":[{"npcId":20090,"x":-80000,"y":250000,"z":-3500,"count":1}]},
+{"file":"TalkingIsland/TalkingIslandMonsters.xml","zone":"gludio32_1725_01","npcs":[{"npcId":20481,"heading":-1,"count":10,"respawnDelay":25}]},
+{"file":"TalkingIsland/TalkingIslandNPCs.xml","name":"TalkingIslandNPCs","npcs":[{"npcId":30001,"x":-86385,"y":243267,"z":-3717,"heading":52000,"count":1,"respawnDelay":60},{"npcId":30006,"x":-84108,"y":244604,"z":-3728,"heading":40960,"count":1,"respawnDelay":60}]}
+]

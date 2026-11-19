@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests.
+     The SOULSHOT action makes it an etc item of type SHOT. -->
+<list>
+	<item id="1835" type="EtcItem" name="Soulshot: No Grade">
+		<set name="icon" val="icon.etc_spirit_bullet_white_i00" />
+		<set name="default_action" val="SOULSHOT" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="PAPER" />
+		<set name="weight" val="4" />
+		<set name="price" val="7" />
+		<set name="is_stackable" val="true" />
+		<set name="for_npc" val="true" />
+		<set name="handler" val="SoulShots" />
+		<skills>
+			<skill id="2039" level="1" /> <!-- Soulshot (No Grade) -->
+		</skills>
+	</item>
+</list>

@@ -1,0 +1,4 @@
+[
+{"name":"gludio32_1725_01","file":"TalkingIsland/TalkingIslandMonsters.xml","shape":{"type":"NPoly","points":[{"x":-75291,"y":251836},{"x":-70888,"y":254949},{"x":-74207,"y":257108},{"x":-77148,"y":253578}],"minZ":-3451,"maxZ":-3001}},
+{"name":"sample_square","file":"Others/Samples.xml","shape":{"type":"NPoly","points":[{"x":-1000,"y":-1000},{"x":1000,"y":-1000},{"x":1000,"y":1000},{"x":-1000,"y":1000}],"minZ":-3500,"maxZ":-3401},"banned":[{"type":"NPoly","points":[{"x":-100,"y":-100},{"x":100,"y":-100},{"x":100,"y":100},{"x":-100,"y":100}],"minZ":-3600,"maxZ":-3300}]}
+]

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
-<list>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests:
+     the real Human Fighter, cut to 3 levels. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../../xsd/playerTemplate.xsd">
 	<classId>0</classId>
 	<staticData>
 		<baseINT>21</baseINT>
@@ -14,10 +15,51 @@
 			<node x="-71417" y="258270" z="-3104" />
 		</creationPoints>
 		<basePAtk>4</basePAtk>
+		<baseCritRate>4</baseCritRate>
+		<baseAtkType>FIST</baseAtkType>
+		<basePAtkSpd>300</basePAtkSpd>
+		<basePDef>
+			<chest>31</chest>
+			<legs>18</legs>
+			<head>12</head>
+			<feet>7</feet>
+			<gloves>8</gloves>
+			<underwear>3</underwear>
+			<cloak>1</cloak>
+		</basePDef>
+		<baseMAtk>6</baseMAtk>
+		<baseMDef>
+			<rear>9</rear>
+			<lear>9</lear>
+			<rfinger>5</rfinger>
+			<lfinger>5</lfinger>
+			<neck>13</neck>
+		</baseMDef>
+		<baseCanPenetrate>0</baseCanPenetrate>
+		<baseAtkRange>20</baseAtkRange>
+		<baseDamRange>
+			<verticalDirection>0</verticalDirection>
+			<horizontalDirection>0</horizontalDirection>
+			<distance>26</distance>
+			<width>120</width>
+		</baseDamRange>
+		<baseRndDam>10</baseRndDam>
 		<baseMoveSpd>
 			<walk>80</walk>
 			<run>115</run>
+			<slowSwim>50</slowSwim>
+			<fastSwim>50</fastSwim>
 		</baseMoveSpd>
+		<baseBreath>100</baseBreath>
+		<baseSafeFall>250</baseSafeFall>
+		<collisionMale>
+			<radius>9.0</radius>
+			<height>23</height>
+		</collisionMale>
+		<collisionFemale>
+			<radius>8.0</radius>
+			<height>23.5</height>
+		</collisionFemale>
 	</staticData>
 	<lvlUpgainData>
 		<level val="1">
@@ -25,12 +67,24 @@
 			<mp>30.0</mp>
 			<cp>32.0</cp>
 			<hpRegen>2.0</hpRegen>
+			<mpRegen>0.9</mpRegen>
+			<cpRegen>2.0</cpRegen>
 		</level>
 		<level val="2">
 			<hp>91.83</hp>
 			<mp>35.46</mp>
 			<cp>36.732</cp>
 			<hpRegen>2.05</hpRegen>
+			<mpRegen>0.9</mpRegen>
+			<cpRegen>2.0</cpRegen>
+		</level>
+		<level val="3">
+			<hp>103.79</hp>
+			<mp>40.98</mp>
+			<cp>41.516</cp>
+			<hpRegen>2.1</hpRegen>
+			<mpRegen>0.9</mpRegen>
+			<cpRegen>2.0</cpRegen>
 		</level>
 	</lvlUpgainData>
 </list>

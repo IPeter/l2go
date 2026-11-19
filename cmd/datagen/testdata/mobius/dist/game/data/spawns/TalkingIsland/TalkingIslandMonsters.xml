@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/spawns.xsd">
+	<spawn zone="gludio32_1725_01">
+		<territory minZ="-3451" maxZ="-3001">
+			<node x="-75291" y="251836" />
+			<node x="-70888" y="254949" />
+			<node x="-74207" y="257108" />
+			<node x="-77148" y="253578" />
+		</territory>
+		<npc id="20481" count="10" respawnDelay="25" /> <!-- Bearded Keltir -->
+	</spawn>
+</list>

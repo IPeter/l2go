@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not Mobius data: a disabled list, which is skipped whatever it holds. -->
+<list enabled="false" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/zones.xsd">
+	<zone name="talking_island_tax" type="TaxZone" shape="NPoly" minZ="-4000" maxZ="-3000">
+		<stat name="domainId" val="1" />
+		<node X="-1" Y="-1" />
+	</zone>
+</list>

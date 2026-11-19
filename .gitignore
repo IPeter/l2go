@@ -29,3 +29,7 @@ coverage.out
 
 # Reference source (L2J Mobius), cloned locally for reading only
 /L2J_Mobius/
+
+# NPC dialog pages, copied from the Mobius checkout by make data (not
+# committed: they are NCSoft's text)
+/data/html/

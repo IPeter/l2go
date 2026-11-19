@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list enabled="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/zones.xsd">
+	<!-- Peace Zones -->
+	<zone name="talking_island_town_peace_zone1" type="PeaceZone" shape="NPoly" minZ="-3966" maxZ="-3466"> <!-- [17_25] -->
+		<node X="-84028" Y="239722" />
+		<node X="-81007" Y="243210" />
+		<node X="-81021" Y="243484" />
+		<node X="-84308" Y="246247" />
+		<node X="-84552" Y="246239" />
+		<node X="-87638" Y="242837" />
+		<node X="-87611" Y="242574" />
+		<node X="-84305" Y="239649" />
+	</zone>
+</list>

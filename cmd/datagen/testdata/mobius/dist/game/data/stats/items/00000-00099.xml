@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Small sample in the L2J Mobius format, for the datagen golden test.
-     Item 1 is not used by any initial equipment, so it is left out. -->
-<list>
+<!-- Small sample in the L2J Mobius format, for the datagen golden tests.
+     Items 13 and 99 are made up; the others are cut-down real items. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/items.xsd">
 	<item id="1" type="Weapon" name="Short Sword">
+		<!-- No stats: Mobius adds no enchant functions. -->
 		<set name="icon" val="icon.weapon_small_sword_i00" />
-		<set name="weapon_type" val="SWORD" />
+		<set name="weapon_type" val="sword" />
 		<set name="bodypart" val="rhand" />
 	</item>
 	<item id="10" type="Weapon" name="Dagger">
@@ -12,9 +13,78 @@
 		<set name="default_action" val="EQUIP" />
 		<set name="weapon_type" val="DAGGER" />
 		<set name="bodypart" val="rhand" />
+		<set name="damage_range" val="0;0;40;120" />
+		<set name="material" val="STEEL" />
 		<set name="weight" val="1160" />
+		<set name="price" val="138" />
 		<stats>
 			<stat type="pAtk">5</stat>
+			<stat type="mAtk">5</stat>
 		</stats>
+	</item>
+	<item id="13" type="Weapon" name="Sample Bow">
+		<!-- A bow without reuse_delay gets 1500 in Mobius. -->
+		<set name="default_action" val="EQUIP" />
+		<set name="weapon_type" val="BOW" />
+		<set name="bodypart" val="lrhand" />
+		<set name="damage_range" val="0;0;10;0" />
+		<set name="material" val="WOOD" />
+		<set name="soulshots" val="1" />
+		<set name="mp_consume" val="1" />
+		<set name="reduced_soulshot" val="59,7" />
+		<set name="reduced_mp_consume" val="38,2" />
+		<set name="isAttackWeapon" val="false" />
+		<set name="recipe_id" val="1" />
+		<stats>
+			<stat type="pAtk">23</stat>
+			<stat type="pAtkRange">500</stat>
+		</stats>
+	</item>
+	<item id="17" type="EtcItem" name="Wooden Arrow">
+		<set name="icon" val="icon.etc_wooden_quiver_i00" />
+		<set name="default_action" val="EQUIP" />
+		<set name="etcitem_type" val="ARROW" />
+		<set name="bodypart" val="lhand" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="WOOD" />
+		<set name="weight" val="6" />
+		<set name="price" val="2" />
+		<set name="is_stackable" val="true" />
+	</item>
+	<item id="20" type="Armor" name="Buckler">
+		<!-- No armor_type on the left hand: a shield. -->
+		<set name="icon" val="icon.shield_buckler_i00" />
+		<set name="default_action" val="EQUIP" />
+		<set name="bodypart" val="lhand" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="WOOD" />
+		<set name="weight" val="1410" />
+		<set name="price" val="2780" />
+		<conditions msgId="1518">
+			<player races="HUMAN,ELF,DARK_ELF,ORC,DWARF" />
+		</conditions>
+		<stats>
+			<stat type="rEvas">-8</stat>
+			<stat type="rShld">20</stat>
+			<stat type="sDef">67</stat>
+		</stats>
+	</item>
+	<item id="57" type="EtcItem" name="Adena">
+		<set name="icon" val="icon.etc_adena_i00" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="GOLD" />
+		<set name="price" val="1" />
+		<set name="is_stackable" val="true" />
+		<set name="is_sellable" val="false" />
+	</item>
+	<item id="99" type="EtcItem" name="Sample Quest Letter">
+		<set name="icon" val="icon.etc_letter_red_i00" />
+		<set name="immediate_effect" val="true" />
+		<set name="material" val="PAPER" />
+		<set name="is_questitem" val="true" />
+		<set name="is_tradable" val="false" />
+		<set name="is_dropable" val="false" />
+		<set name="is_destroyable" val="false" />
+		<set name="is_depositable" val="false" />
 	</item>
 </list>

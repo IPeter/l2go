@@ -277,6 +277,101 @@ func (s *Characters) NameExists(ctx context.Context, name string) (bool, error) 
 	return n > 0, nil
 }
 
+// Update implements storage.CharacterStore. The identity fields (_id,
+// account, name, name_lower, race, created_at) are not written.
+func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
+	doc := toCharacterDoc(c)
+	set := bson.D{
+		{Key: "sex", Value: doc.Sex},
+		{Key: "class_id", Value: doc.ClassID},
+		{Key: "base_class_id", Value: doc.BaseClassID},
+		{Key: "hair_style", Value: doc.HairStyle},
+		{Key: "hair_color", Value: doc.HairColor},
+		{Key: "face", Value: doc.Face},
+		{Key: "level", Value: doc.Level},
+		{Key: "exp", Value: doc.Exp},
+		{Key: "sp", Value: doc.SP},
+		{Key: "karma", Value: doc.Karma},
+		{Key: "pvp_kills", Value: doc.PvPKills},
+		{Key: "pk_kills", Value: doc.PKKills},
+		{Key: "clan_id", Value: doc.ClanID},
+		{Key: "cur_hp", Value: doc.CurHP},
+		{Key: "max_hp", Value: doc.MaxHP},
+		{Key: "cur_mp", Value: doc.CurMP},
+		{Key: "max_mp", Value: doc.MaxMP},
+		{Key: "cur_cp", Value: doc.CurCP},
+		{Key: "max_cp", Value: doc.MaxCP},
+		{Key: "x", Value: doc.X},
+		{Key: "y", Value: doc.Y},
+		{Key: "z", Value: doc.Z},
+		{Key: "heading", Value: doc.Heading},
+		{Key: "access_level", Value: doc.AccessLevel},
+		{Key: "items", Value: doc.Items},
+	}
+	var unset bson.D
+	for _, f := range []struct {
+		key string
+		t   *time.Time
+	}{
+		{"delete_time", doc.DeleteTime},
+		{"last_access", doc.LastAccess},
+	} {
+		if f.t != nil {
+			set = append(set, bson.E{Key: f.key, Value: *f.t})
+		} else {
+			unset = append(unset, bson.E{Key: f.key, Value: ""})
+		}
+	}
+	update := bson.D{{Key: "$set", Value: set}}
+	if len(unset) > 0 {
+		update = append(update, bson.E{Key: "$unset", Value: unset})
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	res, err := s.coll.UpdateOne(ctx, bson.D{{Key: "_id", Value: c.ObjectID}}, update)
+	if err != nil {
+		return fmt.Errorf("mongostore: update character: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+// Delete implements storage.CharacterStore.
+func (s *Characters) Delete(ctx context.Context, objectID int32) error {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	res, err := s.coll.DeleteOne(ctx, bson.D{{Key: "_id", Value: objectID}})
+	if err != nil {
+		return fmt.Errorf("mongostore: delete character: %w", err)
+	}
+	if res.DeletedCount == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+// SetDeleteTime implements storage.CharacterStore. The zero time removes
+// the delete_time field.
+func (s *Characters) SetDeleteTime(ctx context.Context, objectID int32, t time.Time) error {
+	update := bson.D{{Key: "$unset", Value: bson.D{{Key: "delete_time", Value: ""}}}}
+	if !t.IsZero() {
+		update = bson.D{{Key: "$set", Value: bson.D{{Key: "delete_time", Value: t}}}}
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	res, err := s.coll.UpdateOne(ctx, bson.D{{Key: "_id", Value: objectID}}, update)
+	if err != nil {
+		return fmt.Errorf("mongostore: set character delete time: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
 // Get implements storage.CharacterStore.
 func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
