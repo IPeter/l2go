@@ -25,6 +25,7 @@ _testmain.go
 
 # Build and coverage output
 /bin/
+/build/
 coverage.out
 
 # Reference source (L2J Mobius), cloned locally for reading only
