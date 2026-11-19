@@ -22,12 +22,14 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=build /out/l2go /usr/local/bin/l2go
 
-# Runtime files live under /opt/l2go. Coming later:
+# Runtime files live under /opt/l2go, the working directory, so relative
+# paths in the config ("scripts") point here.
+#   scripts/  Lua scripts, copied as defaults. docker compose mounts
+#             ./scripts over them read-only for live reload.
+# Coming later:
 #   data/     game data (Plan 03), copied into the image:
 #             COPY data /opt/l2go/data
-#   scripts/  Lua scripts (Plan 02), copied into the image as defaults and
-#             mounted read-only by docker compose for live reload:
-#             COPY scripts /opt/l2go/scripts
+COPY scripts /opt/l2go/scripts
 WORKDIR /opt/l2go
 
 # 2106: clients to login, 9413: game servers to login, 7777: clients to game.

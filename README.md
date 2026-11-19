@@ -12,7 +12,8 @@ What works with a C1 client:
 
 - Login with automatic account creation (bcrypt passwords, MongoDB storage), access levels, banned accounts.
 - Server list and server selection (`PlayOk` / `PlayFail`), including "testing" servers for staff only.
-- Game server handshake (`ProtocolVersion`, `CryptInit`), an empty character list, the character creation screen and `CharCreateOk`.
+- Game server handshake (`ProtocolVersion`, `CryptInit`), an empty character list, the character creation screen, `CharCreateOk` and `CharCreateFail`.
+- Lua scripting: character creation rules live in `scripts/` and reload without a restart.
 
 What does not work yet:
 
@@ -34,17 +35,22 @@ make build                     # or: go build -o bin/l2go ./cmd/l2go
 
 bin/l2go login                 # login server
 bin/l2go game -id 1            # game server 1 (start the login server first)
+bin/l2go scripts check         # load every Lua script without starting a server
 ```
 
-Flags (both commands):
+Flags:
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-config path` | `~/.l2go/config/server.json` | Config file. If it does not exist, built-in defaults are used. |
+| `-config path` (login, game) | `~/.l2go/config/server.json` | Config file. If it does not exist, built-in defaults are used. |
 | `-log-level level` | `info` | `debug`, `info`, `warn` or `error`. `debug` logs every packet as hex. |
-| `-id N` (game only) | `1` | Which game server from the config to run. |
+| `-id N` (game) | `1` | Which game server from the config to run. |
+| `-dev-reload` (game) | off | Reload the Lua scripts when a file changes (same as `scripts.devReload`). |
+| `-dir path` (scripts check) | `scripts` | Scripts folder to check. |
 
-Stop a server with Ctrl+C (or SIGTERM). It closes all connections and exits cleanly.
+Run the game server from the repository root (or set `scripts.dir`), so it finds the `scripts/` folder.
+
+Stop a server with Ctrl+C (or SIGTERM). It closes all connections and exits cleanly. `SIGHUP` makes the game server reload its Lua scripts.
 
 To run against a local MongoDB without the rest of the stack: `docker compose up -d mongo`.
 
@@ -91,6 +97,28 @@ One JSON file configures the login server and all game servers. The default is i
 | `database` | MongoDB settings, same format as above. Not used yet. |
 | `options.maxPlayers` | Shown in the server list. |
 | `options.testing` | Only accounts above player access level may join. |
+| `scripts.dir` | Lua scripts folder, relative to the working directory. Default `scripts`. |
+| `scripts.devReload` | Reload the scripts when a file changes. Default `false`. |
+| `scripts.eventTimeout` | Time limit for the script handlers of one event, e.g. `"50ms"` (the default). |
+
+Lua scripting
+----
+
+Game rules that admins want to change are Lua scripts in `scripts/`, run by the game server in a sandbox (Lua 5.1, no file or OS access, a time limit per event). Today's hook is character creation; `scripts/events/character_create.lua` refuses names with forbidden words (the L2J Mobius `ForbiddenNames` list) and is meant to be edited.
+
+```lua
+events.on_character_create(function(ev)
+  if ev.name:lower():find("admin", 1, true) then
+    return events.reject("incorrect_name")
+  end
+end)
+```
+
+- Reload without a restart: save with `-dev-reload` (on in Docker Compose), or send `SIGHUP` (`make reload-scripts` for Docker Compose). A broken script never replaces working ones; the errors are logged with file and line.
+- `make scripts-check` loads every script and reports problems as `file:line: message`. CI runs it, and `go test ./...` loads every script too.
+- `scripts/types/l2go.lua` gives editor autocomplete through the Lua Language Server.
+
+See `scripts/README.md` for the API, the sandbox and how to test scripts with `internal/scripting/scripttest`.
 
 Development
 ----
@@ -100,9 +128,10 @@ make test         # unit tests, no database needed
 make race         # with the race detector, random order
 make cover        # coverage report
 make fuzz         # every fuzz target for 60s (FUZZTIME=10s make fuzz)
-make lint         # golangci-lint
-make vuln         # govulncheck
-make integration  # MongoDB tests; starts the compose mongo service
+make lint           # golangci-lint
+make vuln           # govulncheck
+make scripts-check  # load every Lua script in scripts/
+make integration    # MongoDB tests; starts the compose mongo service
 ```
 
 Lint and vulnerability tools are pinned in `tools/go.mod` and run with `go tool -modfile=tools/go.mod`, so nothing has to be installed globally.
@@ -122,6 +151,9 @@ internal/storage/memstore/    in-memory store (tests)
 internal/storage/mongostore/  MongoDB store
 internal/loginserver/         login server
 internal/gameserver/          game server
+internal/scripting/           Lua engine: sandbox, loader, events, reload
+internal/scripting/scripttest/  test harness for Lua scripts
+scripts/                      Lua scripts (see scripts/README.md)
 deploy/compose/               config for docker compose
 ```
 

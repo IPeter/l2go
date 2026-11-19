@@ -17,7 +17,7 @@ import (
 
 func newTestServer(t *testing.T, cfg config.Config) *Server {
 	t.Helper()
-	s, err := New(cfg, 1, slog.New(slog.DiscardHandler))
+	s, err := New(cfg, 1, nil, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -25,7 +25,7 @@ func newTestServer(t *testing.T, cfg config.Config) *Server {
 }
 
 func TestNewUnknownID(t *testing.T) {
-	if _, err := New(config.Default(), 2, slog.New(slog.DiscardHandler)); err == nil {
+	if _, err := New(config.Default(), 2, nil, slog.New(slog.DiscardHandler)); err == nil {
 		t.Fatal("New succeeded for a game server ID that is not configured")
 	}
 }

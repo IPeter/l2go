@@ -20,6 +20,8 @@ type client struct {
 	cipher      *xor.Cipher
 	idleTimeout time.Duration
 	logger      *slog.Logger
+
+	account string // from AuthLogin; empty before it
 }
 
 func newClient(conn net.Conn, idleTimeout time.Duration, logger *slog.Logger) *client {

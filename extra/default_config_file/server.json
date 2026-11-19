@@ -34,6 +34,12 @@
       "options": {
         "maxPlayers": 10000,
         "testing": false
+      },
+
+      "scripts": {
+        "dir": "scripts",
+        "devReload": false,
+        "eventTimeout": "50ms"
       }
     }
   ]

@@ -30,6 +30,9 @@ jobs:
       - name: Lint
         run: make lint
 
+      - name: Check Lua scripts
+        run: make scripts-check
+
       - name: Test
         run: go test -race -shuffle=on -coverprofile=coverage.out ./...
 

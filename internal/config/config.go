@@ -15,12 +15,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Defaults for fields that may be left out of the file.
 const (
 	DefaultClientListen     = ":2106"
 	DefaultGameServerListen = ":9413"
+	DefaultScriptsDir       = "scripts"
+	DefaultEventTimeout     = Duration(50 * time.Millisecond)
 )
 
 // DefaultInternalNetworks are the client networks that get a game server's
@@ -74,6 +77,38 @@ type GameServer struct {
 	Port     int      `json:"port"`
 	Database Database `json:"database"`
 	Options  Options  `json:"options"`
+	Scripts  Scripts  `json:"scripts"`
+}
+
+// Scripts configures the Lua scripts of a game server.
+type Scripts struct {
+	Comment string `json:"_comment,omitempty"`
+	// Dir is the scripts folder. A relative path is relative to the working
+	// directory.
+	Dir string `json:"dir"`
+	// DevReload reloads the scripts when a file in Dir changes.
+	DevReload bool `json:"devReload"`
+	// EventTimeout bounds the script handlers of one event, for example
+	// "50ms".
+	EventTimeout Duration `json:"eventTimeout"`
+}
+
+// Duration is a time.Duration written as a string such as "50ms" or "2s".
+type Duration time.Duration
+
+// MarshalText writes d like time.Duration.String.
+func (d Duration) MarshalText() ([]byte, error) {
+	return []byte(time.Duration(d).String()), nil
+}
+
+// UnmarshalText parses a time.ParseDuration string.
+func (d *Duration) UnmarshalText(b []byte) error {
+	v, err := time.ParseDuration(string(b))
+	if err != nil {
+		return err
+	}
+	*d = Duration(v)
+	return nil
 }
 
 // Options are game server settings shown in the server list.
@@ -156,6 +191,7 @@ func Default() Config {
 				Port: 27017,
 			},
 			Options: Options{MaxPlayers: 10000},
+			Scripts: Scripts{Dir: DefaultScriptsDir, EventTimeout: DefaultEventTimeout},
 		}},
 	}
 }
@@ -189,8 +225,8 @@ func Load(path string) (Config, error) {
 }
 
 // Parse decodes a config file. Fields left out of the file stay at their
-// zero value, except the listen addresses and internal networks, which get
-// their defaults.
+// zero value, except the listen addresses, internal networks, scripts
+// folder and event timeout, which get their defaults.
 func Parse(data []byte) (Config, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -215,6 +251,15 @@ func (c *Config) applyDefaults() {
 	}
 	if l.InternalNetworks == nil {
 		l.InternalNetworks = append([]string(nil), DefaultInternalNetworks...)
+	}
+	for i := range c.GameServers {
+		s := &c.GameServers[i].Scripts
+		if s.Dir == "" {
+			s.Dir = DefaultScriptsDir
+		}
+		if s.EventTimeout == 0 {
+			s.EventTimeout = DefaultEventTimeout
+		}
 	}
 }
 
@@ -267,6 +312,12 @@ func (c Config) Validate() error {
 		}
 		if err := gs.Database.validate(); err != nil {
 			add("%s.database: %w", where, err)
+		}
+		if strings.TrimSpace(gs.Scripts.Dir) == "" {
+			add("%s.scripts.dir is empty", where)
+		}
+		if gs.Scripts.EventTimeout <= 0 {
+			add("%s.scripts.eventTimeout: %v is not positive", where, time.Duration(gs.Scripts.EventTimeout))
 		}
 	}
 	if err := errors.Join(errs...); err != nil {

@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func writeFile(t *testing.T, content string) string {
@@ -76,12 +77,15 @@ func TestLoadSetsPath(t *testing.T) {
 // B11: JSON errors used to be ignored and gave a zero config.
 func TestLoadReportsJSONErrors(t *testing.T) {
 	tests := map[string]string{
-		"syntax":        `{"loginserver": {"host": "x",}}`,
-		"wrong type":    `{"loginserver": {"host": 5}}`,
-		"unknown field": `{"loginserver": {"hots": "x"}}`,
-		"trailing data": `{} {}`,
-		"empty":         ``,
-		"removed cache": `{"gameservers": [{"id": 1, "cache": {}}]}`,
+		"syntax":         `{"loginserver": {"host": "x",}}`,
+		"wrong type":     `{"loginserver": {"host": 5}}`,
+		"unknown field":  `{"loginserver": {"hots": "x"}}`,
+		"trailing data":  `{} {}`,
+		"empty":          ``,
+		"removed cache":  `{"gameservers": [{"id": 1, "cache": {}}]}`,
+		"bad duration":   `{"gameservers": [{"id": 1, "scripts": {"eventTimeout": "fast"}}]}`,
+		"number timeout": `{"gameservers": [{"id": 1, "scripts": {"eventTimeout": 50}}]}`,
+		"unknown script": `{"gameservers": [{"id": 1, "scripts": {"folder": "x"}}]}`,
 	}
 	for name, content := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -115,6 +119,18 @@ func TestParseAppliesDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(l.InternalNetworks, DefaultInternalNetworks) {
 		t.Errorf("InternalNetworks = %v, want %v", l.InternalNetworks, DefaultInternalNetworks)
+	}
+
+	// Scripts settings left out get their defaults.
+	cfg, err = Parse([]byte(`{"gameservers": [{"id": 1}, {"id": 2, "scripts": {"dir": "/srv/lua", "devReload": true, "eventTimeout": "2s"}}]}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got, want := cfg.GameServers[0].Scripts, (Scripts{Dir: DefaultScriptsDir, EventTimeout: DefaultEventTimeout}); got != want {
+		t.Errorf("default scripts = %+v, want %+v", got, want)
+	}
+	if got, want := cfg.GameServers[1].Scripts, (Scripts{Dir: "/srv/lua", DevReload: true, EventTimeout: Duration(2 * time.Second)}); got != want {
+		t.Errorf("scripts = %+v, want %+v", got, want)
 	}
 
 	// An explicit empty list is kept: no client counts as internal.
@@ -165,6 +181,11 @@ func TestValidate(t *testing.T) {
 		{"ipv6 external ip", func(c *Config) { c.GameServers[0].ExternalIP = "::1" }, "externalIP"},
 		{"port 0", func(c *Config) { c.GameServers[0].Port = 0 }, "gameservers[0].port"},
 		{"game db", func(c *Config) { c.GameServers[0].Database.Name = "" }, "gameservers[0].database"},
+		{"no scripts dir", func(c *Config) { c.GameServers[0].Scripts.Dir = "" }, "gameservers[0].scripts.dir"},
+		{"zero event timeout", func(c *Config) { c.GameServers[0].Scripts.EventTimeout = 0 }, "scripts.eventTimeout"},
+		{"negative event timeout", func(c *Config) {
+			c.GameServers[0].Scripts.EventTimeout = Duration(-time.Millisecond)
+		}, "scripts.eventTimeout"},
 		{"no game servers", func(c *Config) { c.GameServers = nil }, ""},
 	}
 	for _, tt := range tests {
@@ -245,6 +266,19 @@ func TestDefaultPath(t *testing.T) {
 	}
 	if !strings.HasSuffix(path, filepath.Join(".l2go", "config", "server.json")) {
 		t.Errorf("DefaultPath = %q", path)
+	}
+}
+
+func TestDurationText(t *testing.T) {
+	var d Duration
+	if err := d.UnmarshalText([]byte("1m30s")); err != nil || time.Duration(d) != 90*time.Second {
+		t.Errorf("UnmarshalText(1m30s) = %v, %v", time.Duration(d), err)
+	}
+	if err := d.UnmarshalText([]byte("soon")); err == nil {
+		t.Error("UnmarshalText(soon) succeeded")
+	}
+	if b, err := DefaultEventTimeout.MarshalText(); err != nil || string(b) != "50ms" {
+		t.Errorf("MarshalText = %q, %v; want 50ms", b, err)
 	}
 }
 

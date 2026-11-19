@@ -1,6 +1,6 @@
 // Package gameserver implements the game server: the client handshake,
-// the character list and character creation (C1 protocol), plus the link
-// to the login server.
+// the character list and character creation (C1 protocol) with its Lua
+// script hook, plus the link to the login server.
 package gameserver
 
 import (
@@ -18,6 +18,7 @@ import (
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/netutil"
 	"github.com/IPeter/l2go/internal/packets"
+	"github.com/IPeter/l2go/internal/scripting"
 )
 
 const (
@@ -30,11 +31,17 @@ const (
 	dialTimeout  = 10 * time.Second
 )
 
+// Scripts runs script hooks. *scripting.Engine implements it.
+type Scripts interface {
+	Call(ctx context.Context, ev scripting.Event) (scripting.Result, error)
+}
+
 // Server is one game server. Serve or Run may be called only once.
 type Server struct {
-	cfg    config.Config
-	gs     config.GameServer
-	logger *slog.Logger
+	cfg     config.Config
+	gs      config.GameServer
+	scripts Scripts
+	logger  *slog.Logger
 
 	idleTimeout time.Duration
 
@@ -43,8 +50,10 @@ type Server struct {
 }
 
 // New returns the game server with the given ID from cfg, which should be
-// validated.
-func New(cfg config.Config, id int, logger *slog.Logger) (*Server, error) {
+// validated. scripts may be nil: then every script hook allows everything.
+// The caller runs the scripts engine and keeps it running until Run or
+// Serve returns.
+func New(cfg config.Config, id int, scripts Scripts, logger *slog.Logger) (*Server, error) {
 	gs, ok := cfg.GameServerByID(id)
 	if !ok {
 		return nil, fmt.Errorf("gameserver: no game server with id %d in the config", id)
@@ -52,6 +61,7 @@ func New(cfg config.Config, id int, logger *slog.Logger) (*Server, error) {
 	return &Server{
 		cfg:         cfg,
 		gs:          gs,
+		scripts:     scripts,
 		logger:      logger.With("server", gs.ID),
 		idleTimeout: DefaultIdleTimeout,
 	}, nil
@@ -168,7 +178,7 @@ func (s *Server) serveClient(ctx context.Context, conn net.Conn) {
 			}
 			return
 		}
-		if err := s.handlePacket(c, opcode, data); err != nil {
+		if err := s.handlePacket(ctx, c, opcode, data); err != nil {
 			logger.Warn("closing client connection", "err", err)
 			return
 		}
@@ -192,9 +202,16 @@ func (s *Server) handshake(c *client) error {
 }
 
 // handlePacket handles one client packet. An error closes the connection.
-func (s *Server) handlePacket(c *client, opcode byte, data []byte) error {
+func (s *Server) handlePacket(ctx context.Context, c *client, opcode byte, data []byte) error {
 	switch opcode {
 	case clientpackets.OpAuthLogin:
+		auth, err := clientpackets.ParseAuthLogin(data)
+		if err != nil {
+			s.hackAttempts.Add(1)
+			return err
+		}
+		c.account = auth.Account
+		c.logger = c.logger.With("account", auth.Account)
 		c.logger.Info("client requests the character list")
 		return c.send(serverpackets.NewCharListPacket())
 
@@ -207,6 +224,9 @@ func (s *Server) handlePacket(c *client, opcode byte, data []byte) error {
 			s.hackAttempts.Add(1)
 			return err
 		}
+		if reason, ok := s.allowCharacterCreate(ctx, c, ch); !ok {
+			return c.send(serverpackets.NewCharCreateFailPacket(reason))
+		}
 		c.logger.Info("character created", "name", ch.Name, "race", ch.Race, "class", ch.ClassID)
 		if err := c.send(serverpackets.NewCharCreateOkPacket()); err != nil {
 			return err
@@ -217,4 +237,38 @@ func (s *Server) handlePacket(c *client, opcode byte, data []byte) error {
 		c.logger.Warn("unknown packet", "opcode", opcode)
 		return nil
 	}
+}
+
+// allowCharacterCreate runs the character_create script hook. It returns
+// false and the code to send if a script rejects the character, or if the
+// hook could not run. Handler errors are logged by the engine and do not
+// block creation.
+func (s *Server) allowCharacterCreate(ctx context.Context, c *client, ch clientpackets.CharacterCreate) (serverpackets.CharCreateFailReason, bool) {
+	if s.scripts == nil {
+		return 0, true
+	}
+	res, err := s.scripts.Call(ctx, scripting.CharacterCreate{
+		Account:   c.account,
+		Name:      ch.Name,
+		Race:      int(ch.Race),
+		Sex:       int(ch.Sex),
+		ClassID:   int(ch.ClassID),
+		HairStyle: int(ch.HairStyle),
+		HairColor: int(ch.HairColor),
+		Face:      int(ch.Face),
+	}.Event())
+	if err != nil {
+		c.logger.Warn("character creation refused: the script hook did not run", "name", ch.Name, "err", err)
+		return serverpackets.CharCreateFailCreationFailed, false
+	}
+	if !res.Rejected {
+		return 0, true
+	}
+	code, ok := serverpackets.CharCreateFailReasonByName(res.Reason)
+	if !ok {
+		c.logger.Warn("unknown character creation reason, using creation_failed", "reason", res.Reason)
+		code = serverpackets.CharCreateFailCreationFailed
+	}
+	c.logger.Info("character creation rejected by a script", "name", ch.Name, "reason", res.Reason)
+	return code, false
 }

@@ -7,6 +7,10 @@
 # The client connects to 127.0.0.1:2106 (login) and 127.0.0.1:7777 (game).
 # Servers read deploy/compose/server.json, which uses the service names
 # below as host names.
+#
+# The game server reads the Lua scripts from ./scripts (mounted read-only).
+# Saving a script reloads it (devReload in deploy/compose/server.json). To
+# reload by hand: make reload-scripts (docker compose kill -s HUP game).
 
 name: l2go
 
@@ -16,8 +20,6 @@ x-l2go: &l2go
   restart: on-failure
   volumes:
     - ./deploy/compose/server.json:/etc/l2go/server.json:ro
-    # Plan 02 adds Lua scripts, mounted read-only for live reload:
-    # - ./scripts:/opt/l2go/scripts:ro
 
 services:
   mongo:
@@ -48,6 +50,10 @@ services:
   game:
     <<: *l2go
     command: ["game", "-id", "1", "-config", "/etc/l2go/server.json", "-log-level", "${L2GO_LOG_LEVEL:-info}"]
+    # Replaces the volumes of x-l2go, so the config is listed again.
+    volumes:
+      - ./deploy/compose/server.json:/etc/l2go/server.json:ro
+      - ./scripts:/opt/l2go/scripts:ro
     ports:
       - "7777:7777"
     # The game server connects to login:9413 at startup; restart: on-failure

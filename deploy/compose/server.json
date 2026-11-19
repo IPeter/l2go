@@ -38,6 +38,13 @@
       "options": {
         "maxPlayers": 10000,
         "testing": false
+      },
+
+      "scripts": {
+        "_comment": "docker-compose.yml mounts ./scripts read-only at /opt/l2go/scripts (the working directory is /opt/l2go). devReload reloads on save; `docker compose kill -s HUP game` reloads by hand.",
+        "dir": "scripts",
+        "devReload": true,
+        "eventTimeout": "50ms"
       }
     }
   ]

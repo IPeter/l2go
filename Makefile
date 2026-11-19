@@ -3,7 +3,7 @@ TOOL     := $(GO) tool -modfile=tools/go.mod
 FUZZTIME ?= 60s
 MONGO_URI ?= mongodb://127.0.0.1:27017
 
-.PHONY: all build test race cover fuzz lint vuln integration up down logs clean
+.PHONY: all build test race cover fuzz lint vuln scripts-check integration up down logs reload-scripts clean
 
 all: build test
 
@@ -42,6 +42,10 @@ lint:
 vuln:
 	$(TOOL) govulncheck ./...
 
+## scripts-check: load every Lua script in scripts/ without starting a server
+scripts-check:
+	$(GO) run ./cmd/l2go scripts check -dir scripts
+
 ## integration: MongoDB tests against the compose mongo service
 integration:
 	docker compose up -d --wait mongo
@@ -58,6 +62,10 @@ down:
 ## logs: follow the compose logs
 logs:
 	docker compose logs -f
+
+## reload-scripts: reload the Lua scripts of the running compose game server
+reload-scripts:
+	docker compose kill -s HUP game
 
 clean:
 	rm -rf bin coverage.out

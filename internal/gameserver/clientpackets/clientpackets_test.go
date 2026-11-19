@@ -52,12 +52,36 @@ func TestParseCharacterCreate(t *testing.T) {
 	}
 }
 
+func TestParseAuthLogin(t *testing.T) {
+	w := packets.NewWriter(64)
+	w.WriteString("Frostwind")
+	for _, k := range []uint32{2, 1, 3, 4} {
+		w.WriteUint32(k)
+	}
+	got, err := ParseAuthLogin(w.Bytes())
+	if err != nil {
+		t.Fatalf("ParseAuthLogin: %v", err)
+	}
+	want := AuthLogin{Account: "Frostwind", PlayKey2: 2, PlayKey1: 1, LoginKey1: 3, LoginKey2: 4}
+	if got != want {
+		t.Errorf("got %+v\nwant %+v", got, want)
+	}
+
+	full := w.Bytes()
+	for n := range len(full) {
+		if _, err := ParseAuthLogin(full[:n]); err == nil {
+			t.Fatalf("%d of %d bytes: no error", n, len(full))
+		}
+	}
+}
+
 func FuzzParsers(f *testing.F) {
 	f.Add([]byte{})
 	f.Add([]byte{0xa3, 0x01, 0x00, 0x00})
 	f.Add([]byte{'A', 0, 0, 0, 1, 0, 0, 0})
 	f.Fuzz(func(t *testing.T, data []byte) {
 		_, _ = ParseProtocolVersion(data)
+		_, _ = ParseAuthLogin(data)
 		_, _ = ParseCharacterCreate(data)
 	})
 }
