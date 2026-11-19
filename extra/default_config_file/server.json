@@ -1,18 +1,22 @@
 {
   "loginserver": {
     "host": "127.0.0.1",
+    "clientListen": ":2106",
+    "gameServerListen": ":9413",
     "autoCreate": true,
+    "internalNetworks": ["127.0.0.0/8"],
     "database": {
       "name": "l2go-login",
       "host": "127.0.0.1",
       "port": 27017,
       "user": "",
       "password": ""
-    } 
+    }
   },
 
   "gameservers": [
     {
+      "id": 1,
       "name": "Bartz",
       "secret": "CHANGE_ME_PLEASE",
       "internalIP": "127.0.0.1",
@@ -27,16 +31,10 @@
         "password": ""
       },
 
-      "cache": {
-        "host": "127.0.0.1",
-        "port": 6379,
-        "password": ""
-      },
-
       "options": {
         "maxPlayers": 10000,
         "testing": false
       }
-    }    
+    }
   ]
 }

@@ -1,0 +1,44 @@
+{
+  "_comment": "Config for docker compose. Service names (mongo, login) replace 127.0.0.1.",
+
+  "loginserver": {
+    "_comment": "Game servers reach the login server at host:9413 on the compose network. Port 9413 is not published.",
+    "host": "login",
+    "clientListen": ":2106",
+    "gameServerListen": ":9413",
+    "autoCreate": true,
+    "internalNetworks": ["127.0.0.0/8"],
+    "database": {
+      "name": "l2go-login",
+      "host": "mongo",
+      "port": 27017,
+      "user": "",
+      "password": ""
+    }
+  },
+
+  "gameservers": [
+    {
+      "_comment": "Inside Docker the login server sees clients coming from the Docker gateway, not 127.0.0.1, so they get externalIP. The client runs on the host and connects to the published port, so both IPs are 127.0.0.1. For remote players, set externalIP to the host's public address.",
+      "id": 1,
+      "name": "Bartz",
+      "secret": "CHANGE_ME_PLEASE",
+      "internalIP": "127.0.0.1",
+      "externalIP": "127.0.0.1",
+      "port": 7777,
+
+      "database": {
+        "name": "l2go-server",
+        "host": "mongo",
+        "port": 27017,
+        "user": "",
+        "password": ""
+      },
+
+      "options": {
+        "maxPlayers": 10000,
+        "testing": false
+      }
+    }
+  ]
+}

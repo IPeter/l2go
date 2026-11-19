@@ -1,0 +1,62 @@
+# Local stack: MongoDB, the login server and game server 1.
+#
+#   make up      (docker compose up --build)
+#   make down
+#   L2GO_LOG_LEVEL=debug make up    for packet dumps
+#
+# The client connects to 127.0.0.1:2106 (login) and 127.0.0.1:7777 (game).
+# Servers read deploy/compose/server.json, which uses the service names
+# below as host names.
+
+name: l2go
+
+x-l2go: &l2go
+  build: .
+  image: l2go:dev
+  restart: on-failure
+  volumes:
+    - ./deploy/compose/server.json:/etc/l2go/server.json:ro
+    # Plan 02 adds Lua scripts, mounted read-only for live reload:
+    # - ./scripts:/opt/l2go/scripts:ro
+
+services:
+  mongo:
+    image: mongo:8
+    volumes:
+      - mongo-data:/data/db
+    # Published on localhost only, for `make integration` and local tools.
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  login:
+    <<: *l2go
+    command: ["login", "-config", "/etc/l2go/server.json", "-log-level", "${L2GO_LOG_LEVEL:-info}"]
+    # 2106 is for clients. 9413 (game server link) stays on the compose
+    # network and is not published.
+    ports:
+      - "2106:2106"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  game:
+    <<: *l2go
+    command: ["game", "-id", "1", "-config", "/etc/l2go/server.json", "-log-level", "${L2GO_LOG_LEVEL:-info}"]
+    ports:
+      - "7777:7777"
+    # The game server connects to login:9413 at startup; restart: on-failure
+    # retries if the login server is not listening yet.
+    depends_on:
+      mongo:
+        condition: service_healthy
+      login:
+        condition: service_started
+
+volumes:
+  mongo-data:

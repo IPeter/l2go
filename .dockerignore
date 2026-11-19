@@ -1,0 +1,10 @@
+# Allowlist: the image build only needs the Go module and its sources.
+# Everything else (.git, plan/, L2J_Mobius/, docs, local files) stays out.
+*
+!go.mod
+!go.sum
+!cmd
+!internal
+# Later: game data (Plan 03) and Lua scripts (Plan 02).
+# !data
+# !scripts

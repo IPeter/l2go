@@ -1,0 +1,33 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - errorlint
+    - gosec
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  # Integer conversions in packet code (gosec G115) are bounded by config
+  # validation or by the wire format. They carry //nolint:gosec comments with
+  # the reason instead of a global exclusion.
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      # Tests may ignore errors from cleanup and use fixed test data.
+      - path: _test\.go
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/IPeter/l2go

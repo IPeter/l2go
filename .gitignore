@@ -22,3 +22,10 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+# Build and coverage output
+/bin/
+coverage.out
+
+# Reference source (L2J Mobius), cloned locally for reading only
+/L2J_Mobius/
