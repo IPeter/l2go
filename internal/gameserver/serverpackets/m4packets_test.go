@@ -13,15 +13,11 @@ import (
 // test.
 
 // m4Golden builds an expected packet like the Mobius WriteBuffer: c byte,
-// h short, d int, f double, s string.
+// d int, f double, s string. (The shorts of these packets are written out
+// with unhex.)
 type m4Golden struct{ b []byte }
 
 func (g *m4Golden) c(v byte) *m4Golden { g.b = append(g.b, v); return g }
-
-func (g *m4Golden) h(v int16) *m4Golden {
-	g.b = binary.LittleEndian.AppendUint16(g.b, uint16(v))
-	return g
-}
 
 func (g *m4Golden) d(v int32) *m4Golden {
 	g.b = binary.LittleEndian.AppendUint32(g.b, uint32(v))

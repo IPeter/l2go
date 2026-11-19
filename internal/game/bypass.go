@@ -125,7 +125,7 @@ func needsHTMLValidation(command string) bool {
 // Npc.INTERACTION_DISTANCE, a 3D distance).
 func (s *Server) inInteractionRange(p *Player, id world.ObjectID) bool {
 	o, ok := s.world.Find(id)
-	return ok && p.Position().InRange3D(o.Position(), int32(s.settings.NPCs.InteractionRange)) //nolint:gosec // a small configured range
+	return ok && p.Position().InRange3D(o.Position(), s.npcInteractionRange())
 }
 
 // npcBypass handles "npc_<objectId>_<command>": the command goes to the NPC
@@ -149,7 +149,7 @@ func (s *Server) npcBypass(p *Player, command string) {
 		return
 	}
 	n := s.Npc(world.ObjectID(id))
-	if n == nil || n.Template == nil || p.Position().Distance2D(n.Position()) > float64(s.settings.NPCs.InteractionRange) {
+	if n == nil || n.Template == nil || p.Position().Distance2D(n.Position()) > float64(s.npcInteractionRange()) {
 		return
 	}
 	s.npcCommand(p, n, command[end+1:])
@@ -191,17 +191,12 @@ func (s *Server) npcCommand(p *Player, n *Npc, command string) {
 			return
 		}
 	}
-	if !s.canInteract(p, n) {
+	// Mobius Npc.onBypassFeedback runs the handlers only when the player
+	// can interact with the NPC: standing, in its instance and in range.
+	if !s.npcCanInteract(p, n) {
 		return
 	}
 	s.runBypassHandler(p, n, command)
-}
-
-// canInteract reports whether p can use n's dialog now (Mobius
-// Npc.canInteract, for what exists so far): standing, and within
-// interaction range.
-func (s *Server) canInteract(p *Player, n *Npc) bool {
-	return !p.Sitting && p.Position().InRange3D(n.Position(), int32(s.settings.NPCs.InteractionRange)) //nolint:gosec // a small configured range
 }
 
 // runBypassHandler runs the bypass handler of command's first word (Mobius

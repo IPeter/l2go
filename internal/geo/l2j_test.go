@@ -112,6 +112,26 @@ func movementTile(t *testing.T) *Geo {
 	return tt.load(t)
 }
 
+func TestCompletelyBlocked(t *testing.T) {
+	g := movementTile(t)
+	tests := []struct {
+		name string
+		p    Point
+		want bool
+	}{
+		{"closed on every side", at(30, 80, 0), true},
+		{"open cell beside it", at(29, 80, 0), false},
+		{"beside a wall", at(30, 30, 0), false},
+		{"flat block", at(10, 10, 0), false},
+		{"no geodata", outside, false},
+	}
+	for _, tc := range tests {
+		if got := g.CompletelyBlocked(tc.p.X, tc.p.Y, tc.p.Z); got != tc.want {
+			t.Errorf("%s: CompletelyBlocked(%v) = %t, want %t", tc.name, tc.p, got, tc.want)
+		}
+	}
+}
+
 func TestCanMoveToTarget(t *testing.T) {
 	g := movementTile(t)
 	tests := []struct {

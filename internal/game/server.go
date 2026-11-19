@@ -267,7 +267,7 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 		cancel()
 		stopLoop()
-		<-loopDone
+		runErr = <-loopDone // nil: the loop stops quietly when its context ends
 	case runErr = <-loopDone:
 	}
 

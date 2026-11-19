@@ -19,6 +19,9 @@ func TestNone(t *testing.T) {
 	if e.HasGeo(from.X, from.Y) {
 		t.Error("HasGeo = true, want false")
 	}
+	if e.CompletelyBlocked(to.X, to.Y, to.Z) {
+		t.Error("CompletelyBlocked = true, want false")
+	}
 	if !e.CanSeeTarget(from, to) {
 		t.Error("CanSeeTarget = false, want true")
 	}

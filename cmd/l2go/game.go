@@ -15,6 +15,7 @@ import (
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/game"
 	"github.com/IPeter/l2go/internal/gameserver"
+	"github.com/IPeter/l2go/internal/geo"
 	"github.com/IPeter/l2go/internal/link"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/storage/mongostore"
@@ -46,6 +47,17 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	}
 	logger.Info("world data loaded", "dir", gs.DataDir, "npcs", len(worldData.Npcs),
 		"spawns", len(worldData.Spawns), "zones", len(worldData.Zones))
+
+	// Geodata (ground heights, walls) from the L2J tiles in geodata.dir. An
+	// empty setting, or a folder without tiles, runs without geodata, as
+	// Mobius does without its files; Open logs what it loaded.
+	geoEngine, err := geo.Open(gs.Geodata.Dir, logger)
+	if err != nil {
+		return err
+	}
+	if _, none := geoEngine.(geo.None); none && gs.Geodata.Dir == "" {
+		logger.Info("no geodata (geodata.dir is empty): heights come from the clients and the spawns")
+	}
 
 	// The scripts run on the world loop. Their output (npc:say and the
 	// like) reaches the players through the game's adapter.
@@ -84,6 +96,7 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		IDs:          store.IDs(),
 		Scripts:      engine,
 		ScriptOutput: out,
+		Geo:          geoEngine,
 		Logger:       gsLogger,
 	})
 	if err != nil {

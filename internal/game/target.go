@@ -232,10 +232,16 @@ func (s *Server) npcInteractionRange() int32 {
 	return config.DefaultNPCInteractionRange
 }
 
-// talkToNpc is the end of Mobius NpcClick in range: MoveToPawn turns the
-// player to the NPC, the NPC may play a random animation, and the
-// interaction hooks open its dialog.
+// talkToNpc is the end of Mobius NpcClick in range. A walking player stops
+// first: Mobius sets the AI active, which ends any walk, a walk up to an NPC
+// included, with StopMove to the player and the players around
+// (StopPlayer). Then MoveToPawn turns the player to the NPC, the NPC may
+// play a random animation, and the interaction hooks open its dialog.
 func (s *Server) talkToNpc(p *Player, n *Npc) {
+	delete(s.npc.approaches, p)
+	if p.Move != nil {
+		s.StopPlayer(p)
+	}
 	p.Send(npcMoveToPawnPacket(p, n, targetTalkTurnDistance))
 	s.npcTalkAnimation(n)
 	s.runNpcInteract(p, n)

@@ -1,11 +1,15 @@
 package game
 
 import (
+	"encoding/binary"
+	"fmt"
 	"math"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
+	"github.com/IPeter/l2go/internal/geo"
 	"github.com/IPeter/l2go/internal/packets"
 	"github.com/IPeter/l2go/internal/stats"
 	"github.com/IPeter/l2go/internal/testclient"
@@ -249,11 +253,11 @@ func TestValidatePositionPolicy(t *testing.T) {
 	// server checked: where the "150 lower" report found her.
 	walkReport(e, sa, at(1450, 30000-home.Z))
 	ps := sa.take(t)
-	checkNames(t, "a height of 30,000", ps, "DeleteObject", "TeleportToLocation")
-	if tp := ps[1].(testclient.TeleportToLocation); tp.Position() != walkTC(at(1450, 1900+teleportZOffset)) {
+	checkNames(t, "a height of 30,000", ps, "StopMove", "DeleteObject", "TeleportToLocation")
+	if tp := ps[2].(testclient.TeleportToLocation); tp.Position() != walkTC(at(1450, 1900+teleportZOffset)) {
 		t.Errorf("teleported to %v, want %v", tp.Position(), at(1450, 1900+teleportZOffset))
 	}
-	checkNames(t, "Bob", sb.take(t), "DeleteObject", "TeleportToLocation")
+	checkNames(t, "Bob", sb.take(t), "StopMove", "DeleteObject", "TeleportToLocation")
 
 	// While teleporting, reports are ignored.
 	walkReport(e, sa, at(100, 0))
@@ -261,6 +265,74 @@ func TestValidatePositionPolicy(t *testing.T) {
 	if got := e.position(pa); got.X != home.X+1450 {
 		t.Errorf("a report while teleporting moved Alice to %v", got)
 	}
+}
+
+// walkGeoTile returns L2J geodata of the one map tile that holds blocked:
+// flat ground at blocked's height (cut to a multiple of 8, as geodata
+// heights are), except blocked's own cell, which is closed on every side.
+func walkGeoTile(t *testing.T, blocked world.Position) *geo.Geo {
+	t.Helper()
+	const (
+		worldMinX, worldMinY = -655360, -589824 // where geodata cell (0, 0) starts
+		cellSize, tileCells  = 16, 2048
+		tileBlocks           = 256 // blocks per tile side
+		blockCells           = 8   // cells per block side
+	)
+	gx, gy := (int(blocked.X)-worldMinX)/cellSize, (int(blocked.Y)-worldMinY)/cellSize
+	tileX, tileY := gx/tileCells, gy/tileCells
+	gx, gy = gx%tileCells, gy%tileCells
+	z := int16(blocked.Z) &^ 7
+	// The blocks, x-major, each starting with its type: 0 flat (one height
+	// for all cells), 1 complex (8×8 cells, x-major, each the height doubled
+	// above 4 bits of NSWE flags).
+	var b []byte
+	for bx := range tileBlocks {
+		for by := range tileBlocks {
+			if bx != gx/blockCells || by != gy/blockCells {
+				b = append(b, 0)
+				b = binary.LittleEndian.AppendUint16(b, uint16(z))
+				continue
+			}
+			b = append(b, 1)
+			for cx := range blockCells {
+				for cy := range blockCells {
+					nswe := int16(0xF)
+					if cx == gx%blockCells && cy == gy%blockCells {
+						nswe = 0
+					}
+					b = binary.LittleEndian.AppendUint16(b, uint16(z<<1|nswe))
+				}
+			}
+		}
+	}
+	g, err := geo.LoadFS(fstest.MapFS{fmt.Sprintf("%d_%d.l2j", tileX, tileY): {Data: b}})
+	if err != nil {
+		t.Fatalf("geodata: %v", err)
+	}
+	return g
+}
+
+// With geodata, a click on a cell closed on every side gets ActionFailed
+// and starts no walk (Mobius isCompletelyBlocked); open ground is walkable.
+func TestWalkRefusedOnABlockedCell(t *testing.T) {
+	start := npcTestStart(t)
+	blocked := world.Position{X: int32(start.X) + 300, Y: int32(start.Y), Z: int32(start.Z)}
+	g := walkGeoTile(t, blocked)
+	e := newEnv(t, nil, func(s *Server) { s.geo = g })
+	sa, sb, pa, _ := twoPlayers(t, e)
+	walkSettle(t, e, sa, sb)
+	home := e.position(pa)
+
+	walkClick(e, sa, home, blocked)
+	checkNames(t, "a click on a blocked cell", sa.take(t), "ActionFailed")
+	checkNames(t, "Bob", sb.take(t))
+	if walking, _ := walkState(e, pa); walking {
+		t.Error("walking towards a blocked cell")
+	}
+
+	walkClick(e, sa, home, walkOffset(home, 0, 300, 0))
+	checkNames(t, "a click on open ground", sa.take(t), "MoveToLocation")
+	checkNames(t, "Bob sees the walk", sb.take(t), "MoveToLocation")
 }
 
 // With the arrow keys the client is in charge: the walk starts at the
@@ -479,22 +551,30 @@ func TestWalkOutOfTheWorld(t *testing.T) {
 	}
 }
 
-// A teleport ends the walk; TeleportToLocation makes StopMove moot.
+// A teleport ends the walk where the player stands, with StopMove for
+// everyone before TeleportToLocation (Mobius teleToLocation's stopMove).
 func TestTeleportEndsTheWalk(t *testing.T) {
 	e := newEnv(t, nil)
 	sa, sb, pa, _ := twoPlayers(t, e)
 	walkSettle(t, e, sa, sb)
 	home := e.position(pa)
 	walkClick(e, sa, home, walkOffset(home, 300, 0, 0))
+	e.advance(3 * world.GameTick)
 	sa.take(t)
 	sb.take(t)
+	_, here := walkState(e, pa)
 
 	e.onLoop(func() {
 		if err := e.srv.Teleport(pa, gludio); err != nil {
 			t.Errorf("Teleport: %v", err)
 		}
 	})
-	checkNames(t, "Alice teleporting while walking", sa.take(t), "DeleteObject", "TeleportToLocation")
+	ps := sa.take(t)
+	checkNames(t, "Alice teleporting while walking", ps, "StopMove", "DeleteObject", "TeleportToLocation")
+	if s := ps[0].(testclient.StopMove); s.ObjectID != pa.ObjectID() || s.Position() != walkTC(here) {
+		t.Errorf("StopMove %+v, want Alice where the walk got to, %v", s, here)
+	}
+	checkNames(t, "Bob", sb.take(t), "StopMove", "DeleteObject", "TeleportToLocation")
 	e.srv.Handle(sa, clientpackets.OpAppearing, nil)
 	e.sync()
 	e.advance(time.Second)

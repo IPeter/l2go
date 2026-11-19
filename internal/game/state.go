@@ -17,8 +17,10 @@ type MoveState struct {
 	Destination world.Position
 	// Start is the loop time the walk started at.
 	Start time.Time
-	// Speed is in game units per second (stats.PlayerView.MoveSpeed when
-	// the walk started).
+	// Speed is the speed of the last update, in game units per second
+	// (stats.PlayerView.MoveSpeed): set when the walk starts and again on
+	// every tick, as a walk/run toggle, water or //gmspeed change the pace
+	// of a walk under way.
 	Speed float64
 	// Running is set when the creature runs rather than walks.
 	Running bool

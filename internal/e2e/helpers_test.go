@@ -382,8 +382,9 @@ func moveTo(t *testing.T, ctx context.Context, pl *player, dest testclient.Posit
 }
 
 // awaitMove waits on c for a MoveToLocation of the object id that goes to
-// dest. The server sends a walk's MoveToLocation again while the walk goes
-// on and when it arrives, so one of an earlier walk may still be queued.
+// dest. The server sends a walk's MoveToLocation again when it arrives
+// (from its destination to its destination), and to a player that starts
+// to see the walker, so one of an earlier walk may still be queued.
 func awaitMove(t *testing.T, ctx context.Context, c *testclient.GameConn, id int32, dest testclient.Position) testclient.MoveToLocation {
 	t.Helper()
 	var others []testclient.Position

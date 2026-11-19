@@ -87,7 +87,9 @@ func (w *walk) helperLinks(t *testing.T) {
 
 // luaGuard: A clicks the guard down the road. The first click targets it.
 // The guard stands out of talking range, so the second click walks A up to
-// it (MoveToPawn) and its dialog opens on arrival (M4.2). The script in
+// it (MoveToPawn). Once A is close, the walk ends with StopMove (on arrival,
+// or when A comes within reach and talks) and the dialog opens, so the
+// client knows where A stands (M4.2). The script in
 // scripts/npcs/talking_island_guard owns the guards' first talk: its page
 // greets A by name and level, its links lead back into the script (an
 // inline page, then the page again), and one makes the guard speak (M4.5).
@@ -115,6 +117,11 @@ func (w *walk) luaGuard(t *testing.T) {
 	if !slices.ContainsFunc(testclient.FindAll[testclient.MoveToPawn](before), walkUp) {
 		t.Errorf("A talked to the guard %.0f units away without walking up to it (MoveToPawn); it got %s",
 			far, strings.Join(testclient.Names(before), ", "))
+	}
+	stopped := func(m testclient.StopMove) bool { return m.ObjectID == a.id }
+	if !slices.ContainsFunc(testclient.FindAll[testclient.StopMove](before), stopped) {
+		t.Errorf("A's walk up to the guard did not end with StopMove before the dialog; it got %s",
+			strings.Join(testclient.Names(before), ", "))
 	}
 	me := c.World().Me()
 	if d := dist2D(me.Pos, guard.Pos); d > talkRange {

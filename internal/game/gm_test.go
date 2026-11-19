@@ -53,15 +53,15 @@ func TestGMTeleport(t *testing.T) {
 
 	gmRun(e, sg, "teleport -12672 122776 -3116")
 	ps := sg.take(t)
-	checkNames(t, "the GM after //teleport", ps, "DeleteObject", "TeleportToLocation", "SystemMessage")
-	if tp := ps[1].(testclient.TeleportToLocation); tp.ObjectID != gm.ObjectID() ||
+	checkNames(t, "the GM after //teleport", ps, "StopMove", "DeleteObject", "TeleportToLocation", "SystemMessage")
+	if tp := ps[2].(testclient.TeleportToLocation); tp.ObjectID != gm.ObjectID() ||
 		tp.Position() != (testclient.Position{X: -12672, Y: 122776, Z: -3116 + teleportZOffset}) {
 		t.Errorf("TeleportToLocation %+v", tp)
 	}
 	if msgs := gmSaid(ps); !slices.Equal(msgs, []string{"You have been teleported to -12672 122776 -3116"}) {
 		t.Errorf("messages %q", msgs)
 	}
-	checkNames(t, "the player left behind", sp.take(t), "DeleteObject", "TeleportToLocation")
+	checkNames(t, "the player left behind", sp.take(t), "StopMove", "DeleteObject", "TeleportToLocation")
 	e.srv.Handle(sg, clientpackets.OpAppearing, nil)
 	e.sync()
 	sg.take(t)
@@ -80,8 +80,8 @@ func TestGMTeleport(t *testing.T) {
 
 	gmRun(e, sg, "move_to -12000 122776 -3116")
 	ps = sg.take(t)
-	checkNames(t, "the GM after //move_to", ps, "TeleportToLocation", "SystemMessage")
-	if tp := ps[0].(testclient.TeleportToLocation); tp.X != -12000 {
+	checkNames(t, "the GM after //move_to", ps, "StopMove", "TeleportToLocation", "SystemMessage")
+	if tp := ps[1].(testclient.TeleportToLocation); tp.X != -12000 {
 		t.Errorf("//move_to went to %v", tp.Position())
 	}
 }

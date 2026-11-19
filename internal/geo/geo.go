@@ -6,12 +6,13 @@
 // walkable, and every path is a straight line. Mobius behaves the same when
 // it has no geodata files, and towns and fields play fine that way.
 //
-// # Planned: L2J geodata (Milestone 10)
+// # L2J geodata
 //
-// A loader for the L2J format will implement Engine from the files in the
-// configured folder (gameservers[].geodata.dir; empty means None). Geodata
-// is not part of Mobius or of this repository: whoever runs a server
-// supplies the files. As in Mobius GeoEngine:
+// Geo is the Engine for L2J geodata files, read as Mobius GeoEngine reads
+// them. Open loads the folder of the gameservers[].geodata.dir setting; an
+// empty setting, or a folder without tiles, gives None. Geodata is not part
+// of Mobius or of this repository: whoever runs a server supplies the
+// files.
 //
 //   - One file per map tile of 32768×32768 units, named "X_Y.l2j" for tiles
 //     X 16–26 and Y 10–25. A missing file leaves its tile without geodata,
@@ -23,10 +24,11 @@
 //     then that many int16 layers). A cell value keeps the height in its
 //     upper 12 bits (int16(v&0xFFF0) >> 1) and the NSWE movement flags in
 //     its low 4 bits. Little endian.
-//   - Height is getNearestZ; CanSeeTarget walks the 3D grid line and lets
-//     the eye see over 48 units; CanMoveToTarget and ValidLocation walk the
-//     2D grid line with NSWE and anti corner cut checks; FindPath is Mobius's
-//     cell A* with its post-filter passes.
+//   - Height is getNearestZ; CompletelyBlocked is isCompletelyBlocked (a
+//     floor closed on all four sides); CanSeeTarget walks the 3D grid line
+//     and lets the eye see over 48 units; CanMoveToTarget and ValidLocation
+//     walk the 2D grid line with NSWE and anti corner cut checks; FindPath
+//     is Mobius's cell A* with its post-filter passes.
 //
 // Doors and fences block sight and movement in Mobius too. They are not
 // geodata; the game layer will check them once doors exist.
@@ -46,6 +48,11 @@ type Engine interface {
 	SpawnHeight(x, y, z int32) int32
 	// HasGeo reports whether geodata covers (x, y).
 	HasGeo(x, y int32) bool
+	// CompletelyBlocked reports whether the floor nearest to z of the
+	// geodata cell holding (x, y) is closed in every direction (Mobius
+	// isCompletelyBlocked): nothing can walk there. Without geodata at
+	// (x, y) nothing is blocked.
+	CompletelyBlocked(x, y, z int32) bool
 	// CanSeeTarget reports whether there is a line of sight from from to
 	// to (Mobius canSeeTarget, without doors and fences).
 	CanSeeTarget(from, to Point) bool
@@ -74,6 +81,9 @@ func (None) SpawnHeight(x, y, z int32) int32 { return z }
 
 // HasGeo returns false.
 func (None) HasGeo(x, y int32) bool { return false }
+
+// CompletelyBlocked returns false.
+func (None) CompletelyBlocked(x, y, z int32) bool { return false }
 
 // CanSeeTarget returns true.
 func (None) CanSeeTarget(from, to Point) bool { return true }

@@ -59,7 +59,13 @@
 //
 // The hooks: OnPlayerEnter, OnPlayerLeave, OnPlayerMoved, OnForget (a pair
 // of objects lost sight of each other: drop targets), OnTeleport (stop
-// movement, drop the target) and OnTick.
+// movement, drop the target) and OnTick. Features offer some of their own:
+// OnPlayerArrived (movement: a walk reached its destination), OnNpcInteract
+// (NPCs: a player talks to an NPC), and the RegisterActionUse registry
+// (movement: the action window). Hooks run in the order they were added, so
+// features run theirs in name order: on a teleport the movement feature's
+// StopMove comes before the NPC feature's TargetUnselected, as in Mobius,
+// and on a tick the walks advance before the walks up to NPCs are checked.
 //
 // Game objects other than players (NPCs) embed world.Base, implement
 // InfoProvider (NpcInfo, plus MoveToLocation while walking) and, for

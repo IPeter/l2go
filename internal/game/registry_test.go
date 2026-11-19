@@ -121,18 +121,31 @@ func TestGMCommands(t *testing.T) {
 			}
 		})
 	}
-	if names := e.srv.GMCommands(); !slices.Equal(names, []string{"echo", "master"}) {
-		t.Errorf("GMCommands() = %q", names)
+	// The features register their own commands too.
+	names := e.srv.GMCommands()
+	for _, want := range []string{"echo", "master"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("GMCommands() = %q, want it to hold %q", names, want)
+		}
+	}
+	if !slices.IsSorted(names) {
+		t.Errorf("GMCommands() = %q, want them sorted", names)
 	}
 }
 
 func TestUserCommands(t *testing.T) {
+	// testUserCmd is a command number no feature and no Mobius handler uses;
+	// /loc (0) is the dialog feature's.
+	const testUserCmd int32 = 1000
 	e := newEnv(t, nil, func(s *Server) {
-		if err := s.RegisterUserCommand(clientpackets.UserCmdLoc, func(p *Player) { p.SendMessage("you are here") }); err != nil {
+		if err := s.RegisterUserCommand(testUserCmd, func(p *Player) { p.SendMessage("you are here") }); err != nil {
 			t.Fatalf("RegisterUserCommand: %v", err)
 		}
-		if err := s.RegisterUserCommand(clientpackets.UserCmdLoc, func(*Player) {}); !errors.Is(err, ErrDuplicate) {
+		if err := s.RegisterUserCommand(testUserCmd, func(*Player) {}); !errors.Is(err, ErrDuplicate) {
 			t.Errorf("second RegisterUserCommand = %v, want ErrDuplicate", err)
+		}
+		if err := s.RegisterUserCommand(clientpackets.UserCmdLoc, func(*Player) {}); !errors.Is(err, ErrDuplicate) {
+			t.Errorf("RegisterUserCommand of /loc = %v, want ErrDuplicate: the dialog feature has it", err)
 		}
 	})
 	e.createCharacter("gm", "Gm", classHumanFighter, storage.AccessLevelAdmin)
@@ -143,11 +156,11 @@ func TestUserCommands(t *testing.T) {
 	gm.take(t)
 	pl.take(t)
 
-	e.srv.Handle(pl, clientpackets.OpBypassUserCmd, int32Body(clientpackets.UserCmdLoc))
+	e.srv.Handle(pl, clientpackets.OpBypassUserCmd, int32Body(testUserCmd))
 	e.srv.Handle(pl, clientpackets.OpBypassUserCmd, int32Body(99))
 	e.sync()
 	if msgs := messages(pl.take(t)); !slices.Equal(msgs, []string{"you are here"}) {
-		t.Errorf("player got %q, want the /loc answer only", msgs)
+		t.Errorf("player got %q, want the test command's answer only", msgs)
 	}
 	// An unknown command tells a GM, as Mobius does.
 	e.srv.Handle(gm, clientpackets.OpBypassUserCmd, int32Body(99))
@@ -167,15 +180,21 @@ func TestEnterWorldRequestsAreAnswered(t *testing.T) {
 	e.srv.HandleEx(sess, clientpackets.ExOpRequestManorList, nil)
 	e.srv.Handle(sess, clientpackets.OpRequestQuestList, nil)
 	e.srv.Handle(sess, clientpackets.OpRequestSkillCoolTime, nil)
+	e.srv.Handle(sess, clientpackets.OpRequestShowMiniMap, nil)
 	e.sync()
 	ps := sess.take(t)
-	checkNames(t, "answers", ps, "ExSendManorList", "QuestList", "SkillCoolTime")
+	checkNames(t, "answers", ps, "ExSendManorList", "QuestList", "SkillCoolTime", "ShowMiniMap")
 	manor, ok := ps[0].(testclient.Unknown)
 	if sub, isEx := manor.ExOpcode(); !ok || !isEx || sub != serverpackets.ExOpSendManorList {
 		t.Errorf("manor answer %v, want ExSendManorList", ps[0])
 	}
 	if q := ps[1].(testclient.QuestList); len(q.Quests) != 0 {
 		t.Errorf("QuestList has %d quests, want none", len(q.Quests))
+	}
+	// Mobius opens map 1665; a new Mobius database is in the competition
+	// period of Seven Signs.
+	if m := ps[3].(testclient.ShowMiniMap); m.MapID != 1665 || m.Period != 1 {
+		t.Errorf("ShowMiniMap %+v, want map 1665 in period 1", m)
 	}
 }
 

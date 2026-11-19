@@ -43,13 +43,19 @@ func TestTeleportAndAppearing(t *testing.T) {
 			t.Errorf("teleporting: in the world %v, teleporting %v, moving %v", pa.InWorld(), pa.Teleporting(), pa.Move != nil)
 		}
 	})
+	// Mobius teleToLocation stops the player first (stopMove sends StopMove
+	// where it stands), then takes it out of the world.
 	ps := sa.take(t)
-	checkNames(t, "the teleporting player", ps, "DeleteObject", "TeleportToLocation")
-	if tp := ps[1].(testclient.TeleportToLocation); tp.ObjectID != pa.ObjectID() || tp.Position() != (testclient.Position{X: want.X, Y: want.Y, Z: want.Z}) || tp.Fade != 0 {
+	checkNames(t, "the teleporting player", ps, "StopMove", "DeleteObject", "TeleportToLocation")
+	if s := ps[0].(testclient.StopMove); s.ObjectID != pa.ObjectID() || s.Position() != (testclient.Position{X: start.X, Y: start.Y, Z: start.Z}) {
+		t.Errorf("StopMove %+v, want the player at its old place %v", s, start)
+	}
+	if tp := ps[2].(testclient.TeleportToLocation); tp.ObjectID != pa.ObjectID() || tp.Position() != (testclient.Position{X: want.X, Y: want.Y, Z: want.Z}) || tp.Fade != 0 {
 		t.Errorf("TeleportToLocation %+v, want %v (Z + 5)", tp, want)
 	}
-	// The players around the old place forget the player and see it go.
-	checkNames(t, "the player left behind", sb.take(t), "DeleteObject", "TeleportToLocation")
+	// The players around the old place see the player stop, forget it and
+	// see it go.
+	checkNames(t, "the player left behind", sb.take(t), "StopMove", "DeleteObject", "TeleportToLocation")
 
 	// Appearing puts the player back at the destination and sends UserInfo.
 	e.srv.Handle(sa, clientpackets.OpAppearing, nil)

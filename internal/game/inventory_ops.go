@@ -164,7 +164,7 @@ func (s *Server) takeFromStack(p *Player, it *Item, count int64) serverpackets.I
 	}
 	it.Count = 0
 	if slot := p.inv.removeItem(it); slot >= 0 {
-		p.stats.Unequip(stats.Slot(slot))
+		p.stats.Unequip(stats.Slot(slot)) //nolint:gosec // a paperdoll index, below storage.PaperdollTotalSlots
 		p.BroadcastUserInfo()
 	}
 	return s.inventoryChange(it, serverpackets.ItemRemoved)

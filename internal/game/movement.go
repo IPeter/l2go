@@ -133,14 +133,14 @@ func (s *Server) movementEnter(p *Player) {
 // position is where the last tick left it, which is what Mobius saves.
 func (s *Server) movementLeave(p *Player) { delete(s.movement.players, p) }
 
-// movementTeleport is the OnTeleport hook: the walk ends where p stands
-// (Mobius teleToLocation calls stopMove; its StopMove packet is left out,
-// as TeleportToLocation and DeleteObject follow at once), and the
-// destination becomes the last server position (Mobius onTeleported).
+// movementTeleport is the OnTeleport hook: the walk ends where p stands,
+// and p and the players around get StopMove, also when p stood still
+// (Mobius teleToLocation calls stopMove(null) first, before it drops the
+// target and sends DeleteObject and TeleportToLocation). The destination
+// becomes the last server position (Mobius onTeleported).
 func (s *Server) movementTeleport(p *Player, to world.Position) {
 	m := s.motionOf(p)
-	p.Move = nil
-	m.pawnStop = false
+	s.stopWalk(p, m, nil)
 	m.lastServer = lastServerPosition(to)
 }
 

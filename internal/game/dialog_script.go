@@ -190,7 +190,7 @@ func (s *Server) npcInRange2D(p *Player, id world.ObjectID) *Npc {
 		return nil
 	}
 	n := s.Npc(id)
-	if n == nil || p.Position().Distance2D(n.Position()) > float64(s.settings.NPCs.InteractionRange) {
+	if n == nil || p.Position().Distance2D(n.Position()) > float64(s.npcInteractionRange()) {
 		return nil
 	}
 	return n

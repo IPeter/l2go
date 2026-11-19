@@ -56,7 +56,9 @@ func (s *Server) handleMoveToLocation(p *Player, body []byte) {
 		p.SendActionFailed()
 		return
 	}
-	if s.walkBlocked(req.TargetX, req.TargetY, req.TargetZ) {
+	if s.geo.CompletelyBlocked(req.TargetX, req.TargetY, req.TargetZ) {
+		// Mobius isCompletelyBlocked: geodata closes the clicked cell on
+		// every side. Without geodata nothing is blocked.
 		p.SendActionFailed()
 		return
 	}
@@ -87,14 +89,6 @@ func (s *Server) handleMoveToLocation(p *Player, body []byte) {
 	if s.startWalk(p, m, world.Position{X: req.TargetX, Y: req.TargetY, Z: req.TargetZ}, 0) {
 		s.broadcastWalk(p, m, false)
 	}
-}
-
-// walkBlocked reports whether geodata blocks a target cell completely
-// (Mobius isCompletelyBlocked). A geo.Engine answers it with an optional
-// CompletelyBlocked method; without geodata nothing is blocked.
-func (s *Server) walkBlocked(x, y, z int32) bool {
-	b, ok := s.geo.(interface{ CompletelyBlocked(x, y, z int32) bool })
-	return ok && s.geo.HasGeo(x, y) && b.CompletelyBlocked(x, y, z)
 }
 
 // handleValidatePosition handles ValidatePosition (0x48), where the client

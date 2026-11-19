@@ -23,12 +23,12 @@ type teleportState struct {
 }
 
 // Teleport moves p to pos the way Mobius teleToLocation does. The OnTeleport
-// hooks run first (they stop the movement and drop the target); then p
-// leaves the world (DeleteObject to its viewers), TeleportToLocation goes to
-// p and to the players around the old position, and p waits outside the
-// world at pos for its client's Appearing, which puts it back
-// (handleAppearing). If Appearing does not come within 5 seconds, p is put
-// back anyway.
+// hooks run first (they stop the movement with StopMove and drop the
+// target); then p leaves the world (DeleteObject to its viewers),
+// TeleportToLocation goes to p and to the players around the old position,
+// and p waits outside the world at pos for its client's Appearing, which
+// puts it back (handleAppearing). If Appearing does not come within 5
+// seconds, p is put back anyway.
 //
 // The height is the geodata ground nearest to pos.Z (the given Z without
 // geodata) plus 5, as in Mobius. A heading of 0 keeps p's heading. Callers

@@ -208,6 +208,14 @@ func (g *Geo) SpawnHeight(x, y, z int32) int32 {
 // loaded.
 func (g *Geo) HasGeo(x, y int32) bool { return g.hasGeoPos(toGeoX(x), toGeoY(y)) }
 
+// CompletelyBlocked reports whether the floor nearest to z of the cell
+// holding (x, y) has every direction closed (Mobius isCompletelyBlocked,
+// which MoveToLocation checks for the clicked target). Without geodata at
+// (x, y) nothing is blocked.
+func (g *Geo) CompletelyBlocked(x, y, z int32) bool {
+	return g.completelyBlocked(toGeoX(x), toGeoY(y), int(z))
+}
+
 // CanSeeTarget reports whether there is a line of sight from from to to
 // (Mobius canSeeTarget without doors and fences). Both ends snap to their
 // nearest geodata height. The line runs from the higher end down through

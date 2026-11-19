@@ -29,25 +29,25 @@ In the world (Milestones 3 and 4, ported from L2J Mobius):
 | Feature | What works |
 |---|---|
 | Entering the world | Selecting a character and Mobius's enter-world sequence. The character stands where it left the game, with its equipment on. The character window (Alt+T) shows the stats Mobius computes from the class, level, base stats and equipped items (no skills or buffs yet). |
-| Movement | Walking by mouse click or keyboard with Mobius's `ValidatePosition` policy, and teleporting with the loading screen. |
+| Movement | Walking by mouse click or keyboard with Mobius's `ValidatePosition` policy, sitting and standing, walking or running, and teleporting with the loading screen. With geodata (`geodata.dir` pointing to L2J `.l2j` tiles), heights follow the ground, a mouse walk stops at a wall and a click on a closed cell is refused. |
 | Seeing others | Players and NPCs appear and disappear as in Mobius: the world is cut into regions of 2048×2048 units with 16 height layers, and everyone sees the 3×3×3 regions around them. |
-| Chat | General chat (heard within 1,250 units), shout (`!`) and trade (`+`) in the speaker's map region or the whole world (`chat.shout`, `chat.trade`), and whispers (`"name text`) with Mobius's messages for players who are not online. A Lua handler (`events.on_chat`) can change or drop messages. |
+| Chat | General chat (heard within 1,250 units), shout (`!`) and trade (`+`, from level 20) heard in the speaker's map region by default, or in the whole world, from GMs only, or not at all (`chat.shout`, `chat.trade`), and whispers (`"name text`) with Mobius's messages for players who are not online. A Lua handler (`events.on_chat`) can change or drop messages. |
 | Restart and logout | Back to the character screen, or out of the game. Position, HP, MP and CP are saved then, every 15 minutes, and when the server stops. Selecting a character while the same account is in the game disconnects the other session first. |
 | Deleting and restoring characters | A deleted character stays in the list with its timer for 7 days (`world.deleteCharAfterDays`) and can be restored until then. |
 | NPCs and spawns | All NPCs and monsters of the Mobius spawn lists, with their names and titles. Respawn timers; NPCs that exist only by day or by night follow the game clock. NPCs stand still for now: they do not walk around or fight. |
-| Targeting | Clicking an NPC targets it, with the level-difference colour and its HP bar. |
+| Targeting | Clicking an NPC or a player targets it, with the level-difference colour and its HP bar. Social actions (greet, bow, dance, ...) are shown to the players around. |
 | Dialogs | Clicking the target again walks up to the NPC and opens its dialog, with Mobius's page rules and placeholders. Links that were not on the last page, and clicks too far from the NPC, are refused. Shops, warehouses and trainers answer with a "not available yet" page, the quest link with Mobius's "no quests" page. The pages come from `make data` (see [Game data](#game-data)). |
 | Gatekeepers | Teleport lists with their prices: free up to level 40 (`npcs.maxFreeTeleportLevel`), otherwise paid in adena. |
-| Zones and map regions | Every Mobius zone is loaded, and the server knows which zones each player is in. In water the character swims, at swim speed. `/loc` names the nearest town. |
+| Zones and map regions | Every Mobius zone is loaded, and the server knows which zones each player is in. In water the character swims, at swim speed. `/loc` names the nearest town, and the map window (Alt+M) opens. |
 | Lua NPC scripts | Scripts answer the first click on an NPC, its quest link and their own dialog links with a page, inline HTML or a message, and can make the NPC speak. Like every Lua script, they reload without a restart (see [Lua scripting](#lua-scripting)). |
-| GM commands | For characters with access level 1 or more ([how](#connecting-an-interlude-client)): `//teleport x y z`, `//loc`, `//gmspeed n`, `//heal`, `//spawn <npcId> [count]`, `//delete` (the targeted NPC), `//respawn`, and shift-click on an NPC for its info page. |
+| GM commands | For characters with access level 1 or more ([how](#connecting-an-interlude-client)): `//teleport x y z` (also `//move_to`), `//loc`, `//gmspeed n`, `//heal [name or radius]`, `//invis` and `//vis`, `//online`, `//spawn <npcId or name> [count]`, `//delete [range]` (the targeted NPC, or the NPCs around, with their spawns), `//respawn`, `//npcinfo`, and shift-click on an NPC for its info page. |
 
 What does not work yet:
 
 - Fighting: monsters can be targeted but not attacked. No damage, death, experience or drops (Milestone 6).
 - Items and shops: no buying, selling, equipping, using or dropping items, and no warehouses (Milestone 5).
 - Skills, quests, parties, clans and the rest of the game, which come after those.
-- Geodata: heights come from the client and the spawn data, and every place is walkable.
+- Pathfinding: with geodata a mouse walk stops at the first obstacle instead of going around it. Without geodata (the default) heights come from the client and the spawn data, and every place is walkable.
 
 Requirements
 ----
@@ -106,7 +106,7 @@ docker compose exec mongo mongosh l2go-server --eval 'db.characters.updateOne({n
 
 ### Smoke test
 
-With the stack running, `make smoke` walks a fake client through the whole flow (login, server list, character list, creation, logging in again, wrong password) with a new random account and character each time. Like a real client, it connects to the game server at the address the server list announces. `L2GO_LOGIN_ADDR` (default `127.0.0.1:2106`) points it at another login server; `L2GO_GAME_ADDR` overrides the announced game server address.
+With the stack running, `make smoke` walks two fake clients through the whole flow with new random accounts and characters each time: the character screen (login, server list, character list, creation, logging in again, wrong password), then the world (walking, seeing each other, chat, NPC dialogs, a Lua NPC, restart, delete and restore, a second login). The steps that need a GM or adena skip, since the test cannot reach into the server's store. Like a real client, it connects to the game server at the address the server list announces. `L2GO_LOGIN_ADDR` (default `127.0.0.1:2106`) points it at another login server; `L2GO_GAME_ADDR` overrides the announced game server address.
 
 Build and run without Docker
 ----
@@ -192,9 +192,9 @@ The game rules of a game server are in four more sections: `world`, `chat`, `npc
 | Key | Default | Meaning |
 |---|---|---|
 | `generalRange` | `1250` | How far normal chat is heard, in game units. |
-| `shout` | `"on"` | Who hears shout chat (`!`): `"on"` the players in the speaker's map region (Mobius `GlobalChat = ON`), `"global"` every player in the world, `"off"` nobody. |
-| `trade` | `"on"` | The same for trade chat (`+`), Mobius `TradeChat`. |
-| `maxLength` | `105` | Longest message in characters. Longer ones are refused, except from GMs. |
+| `shout` | `"on"` | Who hears shout chat (`!`), Mobius `GlobalChat`: `"on"` the players in the speaker's map region and instance (Mobius's default), `"global"` every player in the game (players below GM level may then speak there once every 500 ms), `"gm"` like `"on"` but only GMs are heard, `"off"` nobody. |
+| `trade` | `"on"` | The same for trade chat (`+`), Mobius `TradeChat`. Only characters of level 20 and up can use it. |
+| `maxLength` | `105` | Longest message in characters (500 when it links an item). Longer ones are refused, except from GMs. |
 
 `npcs`:
 
@@ -208,7 +208,7 @@ The game rules of a game server are in four more sections: `world`, `chat`, `npc
 
 | Key | Default | Meaning |
 |---|---|---|
-| `dir` | `""` | Geodata folder. Empty means no geodata: heights come from the client and the spawns, and everything is walkable and visible, as in Mobius without geodata files. Geodata is not loaded yet; the server always runs without it. |
+| `dir` | `""` | Folder of L2J geodata tiles, one `X_Y.l2j` file per map tile, as Mobius reads them. The files are not part of L2Go or Mobius: bring your own. With them, ground heights, walls and closed cells count for movement, teleports and spawns; a tile without a file has no geodata. Empty, or a folder without tiles, means no geodata: heights come from the client and the spawns, and everything is walkable and visible, as in Mobius without geodata files. A folder that does not exist stops the game server. |
 
 Lua scripting
 ----
@@ -276,7 +276,7 @@ make bots           # load test against the running stack (see below)
 make refdiff        # compare L2Go with the Mobius reference server (see below)
 ```
 
-`go test ./...` includes `internal/e2e`, which starts the real login server and game server in one process (in-memory storage, the real `data/` and `scripts/`) and walks the fake Interlude client in `internal/testclient` through the F1-F11 checklist above. `make smoke` runs the same flow against a running stack.
+`go test ./...` includes `internal/e2e`, which starts the real login server and game server in one process (in-memory storage, the real `data/` and `scripts/`) and walks two fake Interlude clients from `internal/testclient` through the F1-F11 checklist above and the world features of Milestones 3 and 4. `make smoke` runs the same flow against a running stack.
 
 Lint and vulnerability tools are pinned in `tools/go.mod` and run with `go tool -modfile=tools/go.mod`, so nothing has to be installed globally.
 
@@ -342,7 +342,7 @@ internal/gameserver/htmlutil/       the links of dialog pages (the bypass link c
 internal/game/                      the game on the world loop: players, NPCs, movement, chat, dialogs, ...
 internal/world/                     world loop, clock and timers, regions and visibility, broadcasting
 internal/stats/                     stat engine: Mobius formulas and modifiers
-internal/geo/                       geodata interface (no geodata yet)
+internal/geo/                       geodata: L2J tiles, heights, walls, line of sight, paths
 internal/scripting/                 Lua engine: sandbox, loader, events, NPC scripts, reload
 internal/scripting/scripttest/      test harness for Lua scripts
 internal/testclient/                fake Interlude client for the tests, the bots and refdiff

@@ -182,8 +182,9 @@ func (s *Server) startWalk(p *Player, m *motion, dest world.Position, offset int
 	}
 
 	// A mouse walk on land ends where geodata blocks it; without geodata
-	// the destination stays (Mobius getValidLocation; pathfinding comes
-	// with geodata).
+	// the destination stays (Mobius getValidLocation). Mobius would walk
+	// around the obstacle on a path (geo.FindPath); walks do not follow
+	// paths yet.
 	if !inWater && !m.keyboard && distance < walkGeoCheckDistance &&
 		!(float64(cur.Z)-float64(z) > 300 && distance < 300) {
 		to := s.geo.ValidLocation(geo.Point{X: cur.X, Y: cur.Y, Z: cur.Z}, geo.Point{X: x, Y: y, Z: z})

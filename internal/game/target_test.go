@@ -107,6 +107,45 @@ func TestSecondClickTalksInRange(t *testing.T) {
 	}
 }
 
+// A walking player that clicks its NPC target in range stops first (Mobius
+// NpcClick sets the AI active, which ends the walk with StopMove), then
+// turns to the NPC and talks.
+func TestTalkWhileWalkingStops(t *testing.T) {
+	var talks []npcTalk
+	e := newNpcEnv(t, nil, npcRecordTalks(&talks))
+	sa, sb, pa, _ := twoPlayers(t, e)
+	walkSettle(t, e, sa, sb)
+	roxxy := npcSpawnedOne(t, e, npcTestRoxxy)
+	npcTestClick(e, sa, roxxy, false)
+	// Alice walks north; Roxxy stands 100 units east of where she started.
+	home := e.position(pa)
+	walkClick(e, sa, home, walkOffset(home, 0, 300, 0))
+	e.advance(3 * world.GameTick)
+	sa.take(t)
+	sb.take(t)
+	walking, here := walkState(e, pa)
+	if !walking {
+		t.Fatal("Alice does not walk")
+	}
+
+	npcTestClick(e, sa, roxxy, false)
+	ps := sa.take(t)
+	checkNames(t, "Alice talks to Roxxy while walking", ps, "StopMove", "MoveToPawn", "ActionFailed")
+	if s := ps[0].(testclient.StopMove); s.ObjectID != pa.ObjectID() || s.Position() != walkTC(here) {
+		t.Errorf("StopMove %+v, want Alice at %v", s, here)
+	}
+	if m := ps[1].(testclient.MoveToPawn); m.X != here.X || m.Y != here.Y || m.Distance != targetTalkTurnDistance {
+		t.Errorf("MoveToPawn %+v, want Alice turning from %v", m, here)
+	}
+	checkNames(t, "Bob sees Alice stop", sb.take(t), "StopMove")
+	if walking, pos := walkState(e, pa); walking || pos != here {
+		t.Errorf("walking %v at %v, want standing at %v", walking, pos, here)
+	}
+	if got := npcTalks(e, &talks); !slices.Equal(got, []npcTalk{{"Alice", npcTestRoxxy}}) {
+		t.Errorf("interaction hooks ran %v, want once for Alice and Roxxy", got)
+	}
+}
+
 func TestTalkPlaysARandomAnimation(t *testing.T) {
 	e := newNpcEnv(t, nil)
 	sa, sb, _, _ := twoPlayers(t, e)

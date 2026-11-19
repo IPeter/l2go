@@ -318,7 +318,7 @@ func (p *Player) autoAttackableBy(v *Player) bool {
 		return false
 	case p.Zones.Inside(ZonePeace) || p.Zones.Inside(ZoneNoPvP):
 		return false
-	case p.Zones.Inside(ZonePvP) && v.Zones.Inside(ZonePvP) && !(p.Zones.Inside(ZoneSiege) && v.Zones.Inside(ZoneSiege)):
+	case p.Zones.Inside(ZonePvP) && v.Zones.Inside(ZonePvP) && (!p.Zones.Inside(ZoneSiege) || !v.Zones.Inside(ZoneSiege)):
 		return true
 	}
 	return p.char.Karma > 0 || p.PvPFlag > 0

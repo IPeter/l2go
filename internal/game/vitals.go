@@ -40,7 +40,7 @@ func (s *Server) NewCharacterVitals(classID, level int, items []storage.Item) (C
 			continue
 		}
 		// An item without usable stats changes nothing, as when it is worn.
-		_ = st.Equip(stats.Slot(it.Slot), stats.ItemOwner(it.ObjectID), statsItem(t, int(it.Enchant)))
+		_ = st.Equip(stats.Slot(it.Slot), stats.ItemOwner(it.ObjectID), statsItem(t, int(it.Enchant))) //nolint:gosec // Equipped: a slot from 0 up
 	}
 	v.MaxHP, v.MaxMP, v.MaxCP = float64(st.MaxHP()), float64(st.MaxMP()), float64(st.MaxCP())
 	return v, nil

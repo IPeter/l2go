@@ -150,9 +150,10 @@ func (f *npcFeature) ensureMaps() {
 // The hooks run on the loop when a player clicks the NPC it already
 // targets, the NPC is not attackable and the player is within
 // Settings.NPCs.InteractionRange (3D) and not sitting; or, when the player
-// was too far, once it has walked up to the NPC. Before them the player got
-// MoveToPawn (turning it to the NPC) and Player.LastNpc is the NPC; right
-// after them the player gets ActionFailed.
+// was too far, once it has walked up to the NPC. Before them a walking
+// player stopped (StopMove), the player got MoveToPawn (turning it to the
+// NPC) and Player.LastNpc is the NPC; right after them the player gets
+// ActionFailed.
 func (s *Server) OnNpcInteract(fn NpcInteraction) {
 	s.npc.interact = append(s.npc.interact, fn)
 }

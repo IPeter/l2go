@@ -209,44 +209,44 @@ func newZoneRule(z *data.Zone) zoneRule {
 		return "", false
 	}
 
-	switch typ := z.Type; {
-	case typ == "WaterZone":
+	switch z.Type {
+	case "WaterZone":
 		r.flags = []ZoneFlag{ZoneWater}
 		r.water = true
-	case typ == "PeaceZone":
+	case "PeaceZone":
 		r.flags = []ZoneFlag{ZonePeace}
 		if !allowStore {
 			r.flags = append(r.flags, ZoneNoStore)
 		}
-	case typ == "TownZone":
+	case "TownZone":
 		r.flags = []ZoneFlag{ZoneTown}
-	case typ == "NoPvPZone":
+	case "NoPvPZone":
 		r.flags = []ZoneFlag{ZoneNoPvP}
-	case typ == "NoStoreZone":
+	case "NoStoreZone":
 		r.flags = []ZoneFlag{ZoneNoStore}
-	case typ == "ArenaZone":
+	case "ArenaZone":
 		r.flags = []ZoneFlag{ZonePvP}
-	case typ == "CastleZone":
+	case "CastleZone":
 		r.flags = []ZoneFlag{ZoneCastle}
-	case typ == "ClanHallZone":
+	case "ClanHallZone":
 		r.flags = []ZoneFlag{ZoneClanHall}
-	case typ == "JailZone":
+	case "JailZone":
 		r.flags = []ZoneFlag{ZoneJail, ZoneNoSummonFriend}
-	case typ == "MotherTreeZone":
+	case "MotherTreeZone":
 		r.flags = []ZoneFlag{ZoneMotherTree}
-	case typ == "NoLandingZone":
+	case "NoLandingZone":
 		r.flags = []ZoneFlag{ZoneNoLanding}
-	case typ == "NoRestartZone":
+	case "NoRestartZone":
 		r.flags = []ZoneFlag{ZoneNoRestart}
-	case typ == "NoSummonFriendZone", typ == "ResidenceTeleportZone":
+	case "NoSummonFriendZone", "ResidenceTeleportZone":
 		r.flags = []ZoneFlag{ZoneNoSummonFriend}
-	case typ == "ScriptZone":
+	case "ScriptZone":
 		r.flags = []ZoneFlag{ZoneScript}
-	case typ == "HqZone":
+	case "HqZone":
 		r.flags = []ZoneFlag{ZoneHQ}
-	case typ == "DerbyTrackZone":
+	case "DerbyTrackZone":
 		r.flags = []ZoneFlag{ZoneMonsterTrack}
-	case typ == "SwampZone":
+	case "SwampZone":
 		if v, ok := param("castleId"); ok {
 			if id, err := strconv.Atoi(v); err == nil && id > 0 {
 				break // a castle's swamp works only during its siege
@@ -259,7 +259,7 @@ func newZoneRule(z *data.Zone) zoneRule {
 				r.swamp = f
 			}
 		}
-	case typ == "EffectZone":
+	case "EffectZone":
 		// EffectZone affects playable creatures only by default.
 		r.check = true
 		if !zoneHasParam(z, "targetClass") {
@@ -273,14 +273,14 @@ func newZoneRule(z *data.Zone) zoneRule {
 		if r.danger {
 			r.flags = append(r.flags, ZoneDangerArea)
 		}
-	case typ == "ConditionZone":
+	case "ConditionZone":
 		if v, ok := param("NoBookmark"); ok && zoneBool(v) {
 			r.flags = append(r.flags, ZoneNoBookmark)
 		}
 		if v, ok := param("NoItemDrop"); ok && zoneBool(v) {
 			r.flags = append(r.flags, ZoneNoItemDrop)
 		}
-	case typ == "OlympiadStadiumZone":
+	case "OlympiadStadiumZone":
 		r.flags = []ZoneFlag{ZonePvP, ZoneNoSummonFriend, ZoneNoLanding, ZoneNoRestart, ZoneNoBookmark}
 	}
 	return r
