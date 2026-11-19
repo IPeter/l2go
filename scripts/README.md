@@ -51,7 +51,7 @@ The full API with types is in `types/l2go.lua`. A Go test checks that it lists e
 
 | Function | Meaning |
 |---|---|
-| `events.on_character_create(fn)` | `fn(ev)` runs before a new character is accepted. |
+| `events.on_character_create(fn)` | `fn(ev)` runs before a new character is accepted, after the server's own checks (name length and letters, appearance, starting class, characters per account, name taken). |
 | `events.reject(reason)` | Rejects the event being handled. Only inside a handler, and only with a reason the event knows; anything else is an error. |
 
 `on_character_create` event table:
@@ -60,21 +60,21 @@ The full API with types is in `types/l2go.lua`. A Go test checks that it lists e
 |---|---|---|
 | `account` | string | Account creating the character. |
 | `name` | string | Name as typed. |
-| `race` | integer | 0 human, 1 elf, 2 dark elf, 3 orc, 4 dwarf. |
+| `race` | integer | 0 human, 1 elf, 2 dark elf, 3 orc, 4 dwarf. Taken from the class template, not from the client. |
 | `sex` | integer | 0 male, 1 female. |
 | `class_id` | integer | Starting class. |
 | `hair_style`, `hair_color`, `face` | integer | Appearance. |
 
-Reasons (the client shows a fixed message for each; the server maps the name to the protocol code):
+Reasons (the client shows a fixed message for each; the server sends the matching Interlude `CharCreateFail` code):
 
-| Reason | Client message |
-|---|---|
-| `creation_failed` | Your character creation has failed. |
-| `too_many_characters` | You cannot create another character. |
-| `name_exists` | This name already exists. |
-| `name_too_long` | The name is longer than 16 characters. |
-| `incorrect_name` | Incorrect name. Please try again. |
-| `creation_not_allowed` | Characters cannot be created from this server. |
+| Reason | Code | Client message |
+|---|---|---|
+| `creation_failed` | `0x00` | Your character creation has failed. |
+| `too_many_characters` | `0x01` | You cannot create another character. Please delete the existing character and try again. |
+| `name_exists` | `0x02` | This name already exists. |
+| `name_too_long` | `0x03` | Your title cannot exceed 16 characters in length. Please try again. |
+| `incorrect_name` | `0x04` | Incorrect name. Please try again. |
+| `creation_not_allowed` | `0x05` | Characters cannot be created from this server. |
 
 ### `log`
 

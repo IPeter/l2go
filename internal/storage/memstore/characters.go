@@ -178,7 +178,7 @@ func (a *IDs) NextIDs(ctx context.Context, n int) ([]int32, error) {
 	a.used += int64(n)
 	ids := make([]int32, n)
 	for i := range ids {
-		ids[i] = int32(first + int64(i))
+		ids[i] = int32(first + int64(i)) //nolint:gosec // range checked against math.MaxInt32 above
 	}
 	return ids, nil
 }

@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 
-	"golang.org/x/crypto/blowfish"
+	"golang.org/x/crypto/blowfish" //nolint:staticcheck // the Lineage II protocol requires Blowfish
 )
 
 // BlockSize is the Blowfish block size in bytes.

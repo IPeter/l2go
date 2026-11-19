@@ -221,7 +221,7 @@ func (c *Client) runConn(ctx context.Context) (registered bool, err error) {
 	c.mu.Lock()
 	c.conn = cc
 	c.mu.Unlock()
-	c.logger.Info("registered with the login server", "server", c.cfg.ServerID)
+	c.logger.Info("registered with the login server", "id", c.cfg.ServerID)
 
 	var readErr error
 	readDone := make(chan struct{})

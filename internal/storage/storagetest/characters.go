@@ -259,7 +259,7 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		for i := range n {
 			wg.Go(func() {
 				// Different object IDs, so only the name can collide.
-				c := sampleCharacter(int32(100*(i+1)), "alice", names[i%len(names)], baseTime)
+				c := sampleCharacter(int32(100*(i+1)), "alice", names[i%len(names)], baseTime) //nolint:gosec // small test loop index
 				err := s.Create(t.Context(), &c)
 				switch {
 				case err == nil:

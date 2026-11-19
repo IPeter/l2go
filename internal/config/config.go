@@ -81,7 +81,9 @@ type GameServer struct {
 	// (1-255).
 	ID   int    `json:"id"`
 	Name string `json:"name"`
-	// Secret will authenticate the game server to the login server.
+	// Secret authenticates the game server to the login server on the
+	// link (an HMAC challenge; the secret itself is never sent). Both
+	// servers read it from the same file.
 	Secret string `json:"secret"` //nolint:gosec // read from the config file, never sent
 	// InternalIP is announced to clients from InternalNetworks, ExternalIP
 	// to everyone else. Both must be IPv4.

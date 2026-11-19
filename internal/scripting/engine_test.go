@@ -571,7 +571,7 @@ func TestSandboxForbidden(t *testing.T) {
 	}
 	for name, src := range tests {
 		t.Run(name, func(t *testing.T) {
-			loadErr(t, map[string]string{"evil.lua": src}, Options{})
+			_ = loadErr(t, map[string]string{"evil.lua": src}, Options{})
 		})
 	}
 }

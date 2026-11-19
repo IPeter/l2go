@@ -65,7 +65,7 @@ func checkName(name string) (serverpackets.CharCreateFailReason, bool) {
 		return serverpackets.CharCreateFailNameTooLong, false
 	}
 	for _, r := range name {
-		if utf16.RuneLen(r) != 1 || !(unicode.IsLetter(r) || unicode.IsDigit(r)) {
+		if utf16.RuneLen(r) != 1 || (!unicode.IsLetter(r) && !unicode.IsDigit(r)) {
 			return serverpackets.CharCreateFailIncorrectName, false
 		}
 	}

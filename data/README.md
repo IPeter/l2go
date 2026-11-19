@@ -1,7 +1,10 @@
 # Game data
 
-The server loads these files at startup with `internal/data`. They are
-generated; do not edit them by hand.
+The game server loads these files at startup with `internal/data`, from the
+folder set by `dataDir` in its config (default `data`, relative to the
+working directory; the Docker image has them in `/opt/l2go/data`). It does
+not start if a file is missing or invalid. The files are generated; do not
+edit them by hand.
 
 | File | Content |
 |---|---|

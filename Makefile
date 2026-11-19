@@ -3,7 +3,7 @@ TOOL     := $(GO) tool -modfile=tools/go.mod
 FUZZTIME ?= 60s
 MONGO_URI ?= mongodb://127.0.0.1:27017
 
-.PHONY: all build test race cover fuzz lint vuln scripts-check integration up down logs reload-scripts clean
+.PHONY: all build test race cover fuzz lint vuln scripts-check integration smoke up down logs reload-scripts clean
 
 all: build test
 
@@ -30,7 +30,15 @@ fuzz:
 	$(GO) test ./internal/packets -run '^$$' -fuzz '^FuzzReader$$' -fuzztime $(FUZZTIME)
 	$(GO) test ./internal/packets -run '^$$' -fuzz '^FuzzStringRoundTrip$$' -fuzztime $(FUZZTIME)
 	$(GO) test ./internal/crypt/blowfish -run '^$$' -fuzz '^FuzzDecrypt$$' -fuzztime $(FUZZTIME)
-	$(GO) test ./internal/crypt/checksum -run '^$$' -fuzz '^FuzzVerify$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/logincrypt -run '^$$' -fuzz '^FuzzDecryptClientPacket$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/logincrypt -run '^$$' -fuzz '^FuzzClientDecryptServerPacket$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/logincrypt -run '^$$' -fuzz '^FuzzXORPass$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/logincrypt -run '^$$' -fuzz '^FuzzChecksum$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/rsakey -run '^$$' -fuzz '^FuzzDecryptRaw$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/rsakey -run '^$$' -fuzz '^FuzzParseCredentials$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/rsakey -run '^$$' -fuzz '^FuzzUnscramble$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/crypt/gamecrypt -run '^$$' -fuzz '^FuzzDecrypt$$' -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/link -run '^$$' -fuzz '^FuzzDecode$$' -fuzztime $(FUZZTIME)
 	$(GO) test ./internal/loginserver/clientpackets -run '^$$' -fuzz '^FuzzParsers$$' -fuzztime $(FUZZTIME)
 	$(GO) test ./internal/gameserver/clientpackets -run '^$$' -fuzz '^FuzzParsers$$' -fuzztime $(FUZZTIME)
 
@@ -50,6 +58,11 @@ scripts-check:
 integration:
 	docker compose up -d --wait mongo
 	L2GO_MONGO_URI=$(MONGO_URI) $(GO) test -tags integration -count=1 ./internal/storage/...
+
+## smoke: run the full client flow against the running stack (make up first;
+## L2GO_LOGIN_ADDR and L2GO_GAME_ADDR change the addresses)
+smoke:
+	$(GO) test -tags smoke -count=1 ./internal/e2e/
 
 ## up: build the image and run MongoDB, the login server and game server 1
 up:

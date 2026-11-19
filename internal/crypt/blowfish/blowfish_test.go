@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"golang.org/x/crypto/blowfish"
+	"golang.org/x/crypto/blowfish" //nolint:staticcheck // reference implementation for the L2 wrapper
 )
 
 // reverseWords returns a copy of b with the bytes of every 4-byte word
@@ -113,8 +113,11 @@ func TestMatchesStandardBlowfishOnSwappedWords(t *testing.T) {
 }
 
 func TestStaticLoginKey(t *testing.T) {
-	// The C1 login key, with its trailing zero byte (22 bytes).
-	c, err := NewCipher([]byte("[;'.]94-31==-%&@!^+]\x00"))
+	// The Interlude static login key (logincrypt.StaticKey, 16 bytes).
+	c, err := NewCipher([]byte{
+		0x6b, 0x60, 0xcb, 0x5b, 0x82, 0xce, 0x90, 0xb1,
+		0xcc, 0x2b, 0x6c, 0x55, 0x6c, 0x6c, 0x6c, 0x6c,
+	})
 	if err != nil {
 		t.Fatalf("NewCipher: %v", err)
 	}
