@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden test.
+     Item 1 is not used by any initial equipment, so it is left out. -->
+<list>
+	<item id="1" type="Weapon" name="Short Sword">
+		<set name="icon" val="icon.weapon_small_sword_i00" />
+		<set name="weapon_type" val="SWORD" />
+		<set name="bodypart" val="rhand" />
+	</item>
+	<item id="10" type="Weapon" name="Dagger">
+		<set name="icon" val="icon.weapon_dagger_i00" />
+		<set name="default_action" val="EQUIP" />
+		<set name="weapon_type" val="DAGGER" />
+		<set name="bodypart" val="rhand" />
+		<set name="weight" val="1160" />
+		<stats>
+			<stat type="pAtk">5</stat>
+		</stats>
+	</item>
+</list>

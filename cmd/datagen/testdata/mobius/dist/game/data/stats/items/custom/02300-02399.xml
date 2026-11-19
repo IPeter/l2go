@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Custom items are optional in Mobius and datagen ignores them. If this
+     file were read, item 2369 would be defined twice and datagen would fail. -->
+<list>
+	<item id="2369" type="Weapon" name="Custom Sword">
+		<set name="bodypart" val="lrhand" />
+	</item>
+</list>

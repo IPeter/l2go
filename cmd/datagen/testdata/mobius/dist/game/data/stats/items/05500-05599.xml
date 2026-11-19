@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<list>
+	<item id="5588" type="EtcItem" name="Tutorial Guide">
+		<!-- A booklet containing general information for the new player. -->
+		<set name="default_action" val="SHOW_HTML" />
+		<set name="handler" val="Book" />
+	</item>
+</list>

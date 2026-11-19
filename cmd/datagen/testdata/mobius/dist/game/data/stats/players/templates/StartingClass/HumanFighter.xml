@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<list>
+	<classId>0</classId>
+	<staticData>
+		<baseINT>21</baseINT>
+		<baseSTR>40</baseSTR>
+		<baseCON>43</baseCON>
+		<baseMEN>25</baseMEN>
+		<baseDEX>30</baseDEX>
+		<baseWIT>11</baseWIT>
+		<creationPoints>
+			<node x="-71338" y="258271" z="-3104" />
+			<node x="-71417" y="258270" z="-3104" />
+		</creationPoints>
+		<basePAtk>4</basePAtk>
+		<baseMoveSpd>
+			<walk>80</walk>
+			<run>115</run>
+		</baseMoveSpd>
+	</staticData>
+	<lvlUpgainData>
+		<level val="1">
+			<hp>80.0</hp>
+			<mp>30.0</mp>
+			<cp>32.0</cp>
+			<hpRegen>2.0</hpRegen>
+		</level>
+		<level val="2">
+			<hp>91.83</hp>
+			<mp>35.46</mp>
+			<cp>36.732</cp>
+			<hpRegen>2.05</hpRegen>
+		</level>
+	</lvlUpgainData>
+</list>

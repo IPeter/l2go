@@ -1,0 +1,64 @@
+[
+  {
+    "classId": 0,
+    "className": "Human Fighter",
+    "race": 0,
+    "raceName": "Human",
+    "baseStats": {
+      "str": 40,
+      "con": 43,
+      "dex": 30,
+      "int": 21,
+      "wit": 11,
+      "men": 25
+    },
+    "level1": {
+      "hp": 80,
+      "mp": 30,
+      "cp": 32
+    },
+    "creationPoints": [
+      {
+        "x": -71338,
+        "y": 258271,
+        "z": -3104
+      },
+      {
+        "x": -71417,
+        "y": 258270,
+        "z": -3104
+      }
+    ]
+  },
+  {
+    "classId": 49,
+    "className": "Orc Mystic",
+    "race": 3,
+    "raceName": "Orc",
+    "baseStats": {
+      "str": 27,
+      "con": 31,
+      "dex": 24,
+      "int": 31,
+      "wit": 15,
+      "men": 42
+    },
+    "level1": {
+      "hp": 95,
+      "mp": 40,
+      "cp": 47.5
+    },
+    "creationPoints": [
+      {
+        "x": -56733,
+        "y": -113459,
+        "z": -690
+      },
+      {
+        "x": -56686,
+        "y": -113470,
+        "z": -690
+      }
+    ]
+  }
+]

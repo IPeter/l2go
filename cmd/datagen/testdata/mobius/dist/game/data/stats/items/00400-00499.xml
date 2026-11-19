@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<list>
+	<item id="425" type="Armor" name="Apprentice's Tunic">
+		<set name="icon" val="icon.armor_t01_u_i00" />
+		<set name="armor_type" val="MAGIC" />
+		<set name="bodypart" val="chest" />
+	</item>
+</list>

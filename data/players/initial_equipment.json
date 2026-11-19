@@ -1,0 +1,252 @@
+[
+  {
+    "classId": 0,
+    "items": [
+      {
+        "itemId": 10,
+        "count": 1,
+        "equipped": false
+      },
+      {
+        "itemId": 1146,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 1147,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2369,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 10,
+    "items": [
+      {
+        "itemId": 6,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 425,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 461,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 18,
+    "items": [
+      {
+        "itemId": 10,
+        "count": 1,
+        "equipped": false
+      },
+      {
+        "itemId": 1146,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 1147,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2369,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 25,
+    "items": [
+      {
+        "itemId": 6,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 425,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 461,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 31,
+    "items": [
+      {
+        "itemId": 10,
+        "count": 1,
+        "equipped": false
+      },
+      {
+        "itemId": 1146,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 1147,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2369,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 38,
+    "items": [
+      {
+        "itemId": 6,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 425,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 461,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 44,
+    "items": [
+      {
+        "itemId": 1146,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 1147,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2368,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2369,
+        "count": 1,
+        "equipped": false
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 49,
+    "items": [
+      {
+        "itemId": 425,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 461,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2368,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 53,
+    "items": [
+      {
+        "itemId": 10,
+        "count": 1,
+        "equipped": false
+      },
+      {
+        "itemId": 1146,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 1147,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2370,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  }
+]

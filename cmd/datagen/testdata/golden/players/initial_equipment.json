@@ -1,0 +1,42 @@
+[
+  {
+    "classId": 0,
+    "items": [
+      {
+        "itemId": 10,
+        "count": 2,
+        "equipped": false
+      },
+      {
+        "itemId": 2369,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  },
+  {
+    "classId": 49,
+    "items": [
+      {
+        "itemId": 425,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 2368,
+        "count": 1,
+        "equipped": true
+      },
+      {
+        "itemId": 5588,
+        "count": 1,
+        "equipped": false
+      }
+    ]
+  }
+]

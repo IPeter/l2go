@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<list>
+	<item id="2368" type="Weapon" name="Training Gloves">
+		<set name="weapon_type" val="DUALFIST" />
+		<set name="bodypart" val="lrhand" />
+	</item>
+	<item id="2369" type="Weapon" name="Squire's Sword">
+		<set name="weapon_type" val="SWORD" />
+		<set name="bodypart" val="rhand" />
+	</item>
+</list>

@@ -1,4 +1,10 @@
 // Package mongostore implements the storage interfaces on MongoDB.
+//
+// Collections:
+//   - accounts: one document per login account, unique on username.
+//   - characters: one document per character, with its items embedded.
+//     Unique on name_lower, indexed on account (see Characters).
+//   - counters: the object ID counter (see IDs).
 package mongostore
 
 import (
@@ -74,6 +80,10 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("mongostore: create accounts index: %w", err)
+	}
+	_, err = s.db.Collection(charactersCollection).Indexes().CreateMany(ctx, characterIndexes())
+	if err != nil {
+		return fmt.Errorf("mongostore: create characters indexes: %w", err)
 	}
 	return nil
 }

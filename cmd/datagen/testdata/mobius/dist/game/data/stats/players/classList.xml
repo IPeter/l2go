@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen golden test. -->
+<list>
+	<class classId="0" name="Human Fighter" />
+	<class classId="1" name="Warrior" parentClassId="0" />
+	<class classId="49" name="Orc Mystic" />
+</list>

@@ -1,0 +1,31 @@
+[
+  {
+    "id": 10,
+    "name": "Dagger",
+    "type": "Weapon",
+    "bodyPart": "rhand"
+  },
+  {
+    "id": 425,
+    "name": "Apprentice's Tunic",
+    "type": "Armor",
+    "bodyPart": "chest"
+  },
+  {
+    "id": 2368,
+    "name": "Training Gloves",
+    "type": "Weapon",
+    "bodyPart": "lrhand"
+  },
+  {
+    "id": 2369,
+    "name": "Squire's Sword",
+    "type": "Weapon",
+    "bodyPart": "rhand"
+  },
+  {
+    "id": 5588,
+    "name": "Tutorial Guide",
+    "type": "EtcItem"
+  }
+]

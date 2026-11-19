@@ -1,0 +1,61 @@
+[
+  {
+    "id": 6,
+    "name": "Apprentice's Wand",
+    "type": "Weapon",
+    "bodyPart": "rhand"
+  },
+  {
+    "id": 10,
+    "name": "Dagger",
+    "type": "Weapon",
+    "bodyPart": "rhand"
+  },
+  {
+    "id": 425,
+    "name": "Apprentice's Tunic",
+    "type": "Armor",
+    "bodyPart": "chest"
+  },
+  {
+    "id": 461,
+    "name": "Apprentice's Stockings",
+    "type": "Armor",
+    "bodyPart": "legs"
+  },
+  {
+    "id": 1146,
+    "name": "Squire's Shirt",
+    "type": "Armor",
+    "bodyPart": "chest"
+  },
+  {
+    "id": 1147,
+    "name": "Squire's Pants",
+    "type": "Armor",
+    "bodyPart": "legs"
+  },
+  {
+    "id": 2368,
+    "name": "Training Gloves",
+    "type": "Weapon",
+    "bodyPart": "lrhand"
+  },
+  {
+    "id": 2369,
+    "name": "Squire's Sword",
+    "type": "Weapon",
+    "bodyPart": "rhand"
+  },
+  {
+    "id": 2370,
+    "name": "Guild Member's Club",
+    "type": "Weapon",
+    "bodyPart": "rhand"
+  },
+  {
+    "id": 5588,
+    "name": "Tutorial Guide",
+    "type": "EtcItem"
+  }
+]
