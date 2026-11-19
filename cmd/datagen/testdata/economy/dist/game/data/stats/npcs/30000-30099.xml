@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Small sample in the L2J Mobius format, for the datagen economy golden
+     test: real NPCs cut down to their first line (only their IDs matter). -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../xsd/npcs.xsd">
+	<npc id="30001" level="70" type="Merchant" name="Lector" title="Trader" />
+	<npc id="30004" level="70" type="Merchant" name="Katerina" title="Trader" />
+</list>

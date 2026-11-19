@@ -111,7 +111,10 @@ type client struct {
 	bg       sync.WaitGroup
 }
 
-var _ game.Session = (*client)(nil)
+var (
+	_ game.Session        = (*client)(nil)
+	_ game.CharacterSlots = (*client)(nil)
+)
 
 // newClient returns a client for conn whose ciphers use key, with its
 // writer running. The output cipher sends the first packet (KeyPacket)
@@ -376,6 +379,12 @@ func (c *client) slotObjectID(slot int32) (int32, bool) {
 	}
 	return c.slots[slot], true
 }
+
+// SlotObjectID implements game.CharacterSlots: the object ID of the
+// character in slot of the last list sent, so that selecting a slot picks
+// the character the client saw there, even if the account's characters
+// changed since.
+func (c *client) SlotObjectID(slot int32) (int32, bool) { return c.slotObjectID(slot) }
 
 // Account implements game.Session: the lower case account name, or "" before
 // AuthLogin.

@@ -59,10 +59,10 @@
       },
 
       "chat": {
-        "_comment": "Normal chat is heard within generalRange units. globalShout/globalTrade send shout (!) and trade (+) chat to the whole world; false limits them to the speaker's map region. Messages longer than maxLength characters are refused.",
+        "_comment": "Normal chat is heard within generalRange units. shout (!) and trade (+) say who hears those channels: \"on\" the players in the speaker's map region (the Mobius default), \"global\" every player, \"gm\" only GMs speak (to their region), \"off\" nobody. As in Mobius, trade chat needs level 20. Messages longer than maxLength characters are refused.",
         "generalRange": 1250,
-        "globalShout": true,
-        "globalTrade": true,
+        "shout": "on",
+        "trade": "on",
         "maxLength": 105
       },
 

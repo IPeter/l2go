@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not Mobius data: Mobius loads only files named <id>.xml, so this one is
+     left out with a warning. -->
+<list>
+	<item>
+		<ingredient id="57" count="1" />
+		<production id="17" count="1" />
+	</item>
+</list>

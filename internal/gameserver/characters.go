@@ -10,6 +10,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/IPeter/l2go/internal/data"
+	"github.com/IPeter/l2go/internal/game"
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/scripting"
@@ -219,9 +220,34 @@ func sexOf(req clientpackets.CharacterCreate) int32 {
 	return 0
 }
 
+// vitalsGame is a game that knows the HP, MP and CP of new characters
+// (*game.Server).
+type vitalsGame interface {
+	NewCharacterVitals(classID, level int, items []storage.Item) (game.CharacterVitals, error)
+}
+
+var _ vitalsGame = (*game.Server)(nil)
+
+// startingVitals returns the HP, MP and CP of a new level 1 character of
+// class tmpl with items, the worn ones in their slots: full HP and MP and
+// CP 0, from the game's stats (with the CON and MEN bonuses, as Mobius
+// CharacterCreate sets them). A game that cannot compute them leaves the
+// template's level 1 values.
+func (s *Server) startingVitals(tmpl data.Template, items []storage.Item) game.CharacterVitals {
+	if g, ok := s.game.(vitalsGame); ok {
+		v, err := g.NewCharacterVitals(tmpl.ClassID, 1, items)
+		if err == nil {
+			return v
+		}
+		s.logger.Warn("cannot compute the starting HP, MP and CP, using the template's", "class", tmpl.ClassID, "err", err)
+	}
+	l := tmpl.Level1
+	return game.CharacterVitals{CurHP: l.HP, MaxHP: l.HP, CurMP: l.MP, MaxMP: l.MP, MaxCP: l.CP}
+}
+
 // newCharacter builds a level 1 character of class tmpl with its starting
 // items, at a random creation point of the template. HP and MP are full and
-// CP is 0, as in Mobius.
+// CP is 0, as in Mobius (startingVitals).
 func (s *Server) newCharacter(ctx context.Context, account string, req clientpackets.CharacterCreate, tmpl data.Template) (*storage.Character, error) {
 	start := s.data.InitialItems(tmpl.ClassID)
 	ids, err := s.ids.NextIDs(ctx, 1+len(start))
@@ -253,6 +279,7 @@ func (s *Server) newCharacter(ctx context.Context, account string, req clientpac
 		}
 	}
 
+	vitals := s.startingVitals(tmpl, items)
 	return &storage.Character{
 		ObjectID:    ids[0],
 		Account:     account,
@@ -265,11 +292,12 @@ func (s *Server) newCharacter(ctx context.Context, account string, req clientpac
 		HairColor:   req.HairColor,
 		Face:        req.Face,
 		Level:       1,
-		CurHP:       tmpl.Level1.HP,
-		MaxHP:       tmpl.Level1.HP,
-		CurMP:       tmpl.Level1.MP,
-		MaxMP:       tmpl.Level1.MP,
-		MaxCP:       tmpl.Level1.CP,
+		CurHP:       vitals.CurHP,
+		MaxHP:       vitals.MaxHP,
+		CurMP:       vitals.CurMP,
+		MaxMP:       vitals.MaxMP,
+		CurCP:       vitals.CurCP,
+		MaxCP:       vitals.MaxCP,
 		X:           int32(loc.X), //nolint:gosec // world coordinates fit in int32
 		Y:           int32(loc.Y), //nolint:gosec // world coordinates fit in int32
 		Z:           int32(loc.Z), //nolint:gosec // world coordinates fit in int32

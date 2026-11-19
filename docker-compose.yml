@@ -15,6 +15,10 @@
 # The game server reads the Lua scripts from ./scripts (mounted read-only).
 # Saving a script reloads it (devReload in deploy/compose/server.json). To
 # reload by hand: make reload-scripts (docker compose kill -s HUP game).
+#
+# The game data is part of the image: data/, plus the NPC dialog pages in
+# data/html once `make data` has copied them from the Mobius checkout.
+# `make up` rebuilds the image, so it always has the current data.
 
 name: l2go
 
@@ -64,6 +68,9 @@ services:
       - ./scripts:/opt/l2go/scripts:ro
     ports:
       - "7777:7777"
+    # On stop the game server saves every player in the world before it
+    # exits; Docker's default 10 s before SIGKILL can cut that short.
+    stop_grace_period: 1m
     # The game server stores characters in mongo and registers with the
     # login server at login:9413. If the login server is not listening yet,
     # or restarts later, the game server keeps retrying the link; until it

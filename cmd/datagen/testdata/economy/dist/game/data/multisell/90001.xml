@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not Mobius data: made up to cover CorrectPrices and items missing from
+     the item data. Without <npcs> the list is for GMs only. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/multisell.xsd">
+	<item>
+		<!-- One adena ingredient, one product: 50000 is raised to the sell
+		     price of the Long Sword, 68000. -->
+		<ingredient id="57" count="50000" />
+		<production id="2" count="1" />
+	</item>
+	<item>
+		<!-- 100 arrows at their sell price of 1 each: kept. -->
+		<ingredient id="57" count="100" />
+		<production id="17" count="100" />
+	</item>
+	<item>
+		<!-- Item 9999 is not in the item data: the entry is left out, the
+		     next one keeps its ID, 4. -->
+		<ingredient id="9999" count="1" />
+		<production id="1" count="1" />
+	</item>
+	<item>
+		<!-- Two ingredients: CorrectPrices does not apply. -->
+		<ingredient id="1" count="1" />
+		<ingredient id="57" count="1000" />
+		<production id="2" count="1" />
+	</item>
+</list>

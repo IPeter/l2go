@@ -149,7 +149,29 @@ What an NPC handler returns (Mobius's `showResult` rules, checked in this order)
 | `""` | Nothing: the handler did what it needed (for example `npc:say`). |
 | `nil` | The default: the NPC's own dialog after a first talk, nothing after a talk or an event. (In Mobius a first-talk handler that wants the default dialog calls `npc.showChatWindow` and returns null.) |
 
-A table as the second return value fills `%name%` placeholders: `return "welcome.htm", { name = player:name() }`. The server's own placeholders, like `%objectId%`, are filled too.
+A table as the second return value fills `%name%` placeholders: `return "welcome.htm", { name = player:name() }`. The server's own placeholders are filled too, as Mobius fills them: `%objectId%` (the NPC) and `%playername%` in a page file, `%playername%` in returned HTML.
+
+A page name is looked up next to the script first, then in the server's HTML folder (`data/html`), so a script can also answer with a shared Mobius page, for example `"default/30598.htm"`; a name starting with `data/html/` always means the HTML folder. A page that does not exist shows nothing (and is logged). A handler that fails shows players nothing (the first talk falls back to the NPC's own page); GMs get a "Script error" page with the error.
+
+How links reach scripts:
+
+- `bypass -h Script <name> <event>` (also `npc_%objectId%_Script <name> <event>`) runs `on_event` of script `<name>` with the NPC the player talked to last, if the player still stands within talking range of it (Mobius `processScriptEvent`); otherwise nothing happens.
+- `bypass -h Script <name>` runs `on_talk` of `<name>` at the page's NPC.
+- `bypass -h Script` alone is the NPC's quest link: with one script talking at the NPC it answers; with several the player picks one from a list; with none the server shows `data/html/noquest.htm`.
+- `npc_%objectId%_Chat 0` on an NPC whose first talk a script owns runs `on_first_talk` again.
+
+Every link a page offers is remembered for the player; a link that the last page did not offer, or clicked too far from the NPC, is ignored.
+
+### Shipped NPC scripts
+
+| Folder | Script | NPCs | What it shows |
+|---|---|---|---|
+| `npcs/talking_island_guard/` | `TalkingIslandGuard` | Talking Island guards | The example above. |
+| `npcs/symbol_maker/` | `SymbolMaker` | The 11 Symbol Makers | Mobius's `ai/others/SymbolMaker`: the symbol pages; drawing and removing symbols answer "not available yet" until symbols exist. |
+| `npcs/asamah/` | `Asamah` | Asamah (32115) | Mobius's `ai/others/Asamah`: the Elroki pages and the capture skill explanations. |
+| `npcs/kier/` | `Kier` | Kierre's statue (32022) | Mobius's `ai/others/Kier`. |
+
+The Mobius ports keep their page names and links. Where Mobius asks for quest states or items, which the Lua API does not have yet, the scripts take the branch of a player who never took the quest (marked in the code).
 
 ### `Player` and `Npc`
 
@@ -232,7 +254,7 @@ func TestGuard(t *testing.T) {
 - `scripttest.Player` and `scripttest.Npc` are fake players and NPCs; `Ref()` gives them to the engine directly.
 - `Said()` returns what NPCs said, `Logs()` what the scripts logged, and `Reload()` reloads like the server.
 
-The tests for the shipped scripts are in `internal/scripting/scripts_test.go`.
+The tests for the shipped scripts are in `internal/scripting/scripts_test.go` and, for the NPC scripts ported from Mobius, `internal/game/dialog_script_test.go`, which also runs scripts inside a game server.
 
 Editor support
 ----

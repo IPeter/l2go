@@ -145,6 +145,13 @@ type Server struct {
 	gmCommands   map[string]gmCommand
 	userCommands map[int32]UserCommand
 	hooks        hooks
+
+	// Per-feature state, loop-only. Each type is defined in its feature's
+	// own file (movement.go, npc.go, dialog.go), so features never need to
+	// edit this struct.
+	movement movementFeature
+	npc      npcFeature
+	dialog   dialogFeature
 }
 
 var _ Service = (*Server)(nil)

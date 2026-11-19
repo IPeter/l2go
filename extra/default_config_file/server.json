@@ -54,8 +54,8 @@
 
       "chat": {
         "generalRange": 1250,
-        "globalShout": true,
-        "globalTrade": true,
+        "shout": "on",
+        "trade": "on",
         "maxLength": 105
       },
 

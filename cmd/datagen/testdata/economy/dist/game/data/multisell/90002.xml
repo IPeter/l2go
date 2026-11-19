@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not Mobius data: made up to cover the list and ingredient flags, a
+     special ingredient (clan reputation) and the "any NPC" entry. -->
+<list maintainEnchantment="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/multisell.xsd">
+	<npcs>
+		<npc>-1</npc>
+	</npcs>
+	<item>
+		<ingredient id="1" count="1" enchantmentLevel="3" />
+		<ingredient id="-200" count="3480" />
+		<ingredient id="57" count="1000" isTaxIngredient="true" />
+		<production id="2" count="1" enchantmentLevel="3" />
+	</item>
+</list>

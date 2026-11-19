@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Cut-down real file. Not Mobius data: config 17 is moved after 18, so
+     the sorting by ID shows. -->
+<merchantPriceConfig defaultPriceConfig="18" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="xsd/MerchantPriceConfig.xsd">
+	<priceConfig id="2" name="Talking Island" baseTax="15" castleId="1" zoneId="11022" />
+	<priceConfig id="18" name="Gludio Castle" baseTax="10" castleId="1" zoneId="11200" />
+	<priceConfig id="17" name="Neutral Territory" baseTax="50" />
+</merchantPriceConfig>

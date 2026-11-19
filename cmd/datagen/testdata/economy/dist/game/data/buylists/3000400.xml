@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Cut-down real list: the Talking Island grocer. The products have no
+     price, so they cost the item's reference price. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/buylist.xsd">
+	<npcs>
+		<npc>30004</npc> <!-- Katerina -->
+	</npcs>
+	<item id="1835" /> <!-- Soulshot: No Grade -->
+	<item id="9999" /> <!-- Not Mobius data: not in the item data, left out -->
+	<item id="17" /> <!-- Wooden Arrow -->
+</list>

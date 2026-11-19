@@ -1,6 +1,8 @@
 # Allowlist: the image build only needs the Go module, its sources, the
 # Lua scripts and the game data. Everything else (.git, plan/, L2J_Mobius/,
-# docs, local files) stays out.
+# docs, local files) stays out. Docker does not read .gitignore, so data/
+# brings the git-ignored data/html (NPC dialog pages from `make data`) when
+# it exists.
 *
 !go.mod
 !go.sum

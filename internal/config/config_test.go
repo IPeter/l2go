@@ -89,6 +89,8 @@ func TestLoadReportsJSONErrors(t *testing.T) {
 		"unknown world":  `{"gameservers": [{"id": 1, "world": {"tick": "100ms"}}]}`,
 		"bad tick":       `{"gameservers": [{"id": 1, "world": {"tickInterval": "often"}}]}`,
 		"string range":   `{"gameservers": [{"id": 1, "chat": {"generalRange": "far"}}]}`,
+		"old chat flag":  `{"gameservers": [{"id": 1, "chat": {"globalShout": true}}]}`,
+		"bool chat mode": `{"gameservers": [{"id": 1, "chat": {"shout": true}}]}`,
 		"unknown npcs":   `{"gameservers": [{"id": 1, "npcs": {"range": 1}}]}`,
 		"unknown geo":    `{"gameservers": [{"id": 1, "geodata": {"path": "x"}}]}`,
 	}
@@ -158,9 +160,13 @@ func TestParseGameSections(t *testing.T) {
 	}{
 		{"left out", `{"id": 1}`, func(*GameServer) {}},
 		{"empty sections", `{"id": 1, "world": {}, "chat": {}, "npcs": {}, "geodata": {}}`, func(*GameServer) {}},
-		{"some fields", `{"id": 1, "world": {"maxRunSpeed": 300}, "chat": {"globalTrade": false}}`, func(g *GameServer) {
+		{"some fields", `{"id": 1, "world": {"maxRunSpeed": 300}, "chat": {"trade": "global"}}`, func(g *GameServer) {
 			g.World.MaxRunSpeed = 300
-			g.Chat.GlobalTrade = false
+			g.Chat.Trade = ChatModeGlobal
+		}},
+		{"chat modes in Mobius case", `{"id": 1, "chat": {"shout": "OFF", "trade": " Gm "}}`, func(g *GameServer) {
+			g.Chat.Shout = ChatModeOff
+			g.Chat.Trade = ChatModeGM
 		}},
 		{"explicit zeros", `{"id": 1, "world": {"deleteCharAfterDays": 0, "autosaveInterval": "0s"}, "npcs": {"maxFreeTeleportLevel": 0}}`, func(g *GameServer) {
 			g.World.DeleteCharAfterDays = 0
@@ -169,11 +175,11 @@ func TestParseGameSections(t *testing.T) {
 		}},
 		{"everything", `{"id": 1,
 			"world": {"_comment": "w", "tickInterval": "50ms", "autosaveInterval": "1m", "deleteCharAfterDays": 3, "maxRunSpeed": 200},
-			"chat": {"generalRange": 900, "globalShout": false, "globalTrade": false, "maxLength": 80},
+			"chat": {"generalRange": 900, "shout": "global", "trade": "off", "maxLength": 80},
 			"npcs": {"spawnCustom": true, "maxFreeTeleportLevel": 20, "interactionRange": 150},
 			"geodata": {"dir": "/srv/geo"}}`, func(g *GameServer) {
 			g.World = World{Comment: "w", TickInterval: Duration(50 * time.Millisecond), AutosaveInterval: Duration(time.Minute), DeleteCharAfterDays: 3, MaxRunSpeed: 200}
-			g.Chat = Chat{GeneralRange: 900, MaxLength: 80}
+			g.Chat = Chat{GeneralRange: 900, Shout: ChatModeGlobal, Trade: ChatModeOff, MaxLength: 80}
 			g.NPCs = NPCs{SpawnCustom: true, MaxFreeTeleportLevel: 20, InteractionRange: 150}
 			g.Geodata = Geodata{Dir: "/srv/geo"}
 		}},
@@ -210,7 +216,7 @@ func TestDefaultGameSections(t *testing.T) {
 	if gs.World != want {
 		t.Errorf("World = %+v, want %+v", gs.World, want)
 	}
-	if want := (Chat{GeneralRange: 1250, GlobalShout: true, GlobalTrade: true, MaxLength: 105}); gs.Chat != want {
+	if want := (Chat{GeneralRange: 1250, Shout: ChatModeOn, Trade: ChatModeOn, MaxLength: 105}); gs.Chat != want {
 		t.Errorf("Chat = %+v, want %+v", gs.Chat, want)
 	}
 	if want := (NPCs{MaxFreeTeleportLevel: 40, InteractionRange: 250}); gs.NPCs != want {
@@ -278,6 +284,11 @@ func TestValidate(t *testing.T) {
 		{"zero run speed", func(c *Config) { c.GameServers[0].World.MaxRunSpeed = 0 }, "world.maxRunSpeed"},
 		{"zero chat range", func(c *Config) { c.GameServers[0].Chat.GeneralRange = 0 }, "chat.generalRange"},
 		{"negative chat length", func(c *Config) { c.GameServers[0].Chat.MaxLength = -5 }, "chat.maxLength"},
+		{"global shout", func(c *Config) { c.GameServers[0].Chat.Shout = ChatModeGlobal }, ""},
+		{"trade for GMs", func(c *Config) { c.GameServers[0].Chat.Trade = ChatModeGM }, ""},
+		{"shout off", func(c *Config) { c.GameServers[0].Chat.Shout = ChatModeOff }, ""},
+		{"unknown shout mode", func(c *Config) { c.GameServers[0].Chat.Shout = "everyone" }, "chat.shout"},
+		{"no trade mode", func(c *Config) { c.GameServers[0].Chat.Trade = "" }, "chat.trade"},
 		{"no free teleports", func(c *Config) { c.GameServers[0].NPCs.MaxFreeTeleportLevel = 0 }, ""},
 		{"negative free teleport level", func(c *Config) {
 			c.GameServers[0].NPCs.MaxFreeTeleportLevel = -1

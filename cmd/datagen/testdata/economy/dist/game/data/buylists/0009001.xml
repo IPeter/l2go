@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Cut-down real list: a GM shop. Without <npcs>, CorrectPrices leaves
+     the price of 0 alone. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/buylist.xsd">
+	<item id="1" price="0" /> <!-- Short Sword -->
+	<item id="2" price="0" /> <!-- Long Sword -->
+</list>

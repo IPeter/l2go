@@ -1,0 +1,16 @@
+[
+{"id":9001,"products":[
+{"itemId":1,"price":0},
+{"itemId":2,"price":0}
+]},
+{"id":3000199,"npcIds":[30001],"products":[
+{"itemId":1,"price":100},
+{"itemId":2,"price":70000},
+{"itemId":17,"price":2,"count":5,"restockDelay":60},
+{"itemId":1835,"price":3}
+]},
+{"id":3000400,"npcIds":[30004],"products":[
+{"itemId":1835,"price":7},
+{"itemId":17,"price":2}
+]}
+]

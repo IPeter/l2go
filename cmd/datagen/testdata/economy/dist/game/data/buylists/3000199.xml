@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not Mobius data: made up to cover the price, stock and NPC rules of
+     Mobius's BuyListData. -->
+<list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/buylist.xsd">
+	<!-- Before <npcs>: CorrectPrices does not look at it, so 100 stays. -->
+	<item id="1" price="100" />
+	<npcs>
+		<npc>30001</npc> <!-- Lector -->
+		<npc>39999</npc> <!-- not in the NPC data: left out -->
+		<npc>30001</npc> <!-- given twice: kept once -->
+	</npcs>
+	<!-- Below the sell price of 68000: raised to it. -->
+	<item id="2" price="60000" />
+	<!-- A stock of 5, refilled an hour after the first sale. -->
+	<item id="17" count="5" restock_delay="60" />
+	<!-- At the sell price of 3 (7 / 2): kept. -->
+	<item id="1835" price="3" />
+	<!-- Listed again: keeps the first place, takes these values. -->
+	<item id="2" price="70000" />
+</list>

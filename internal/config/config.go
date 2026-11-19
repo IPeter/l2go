@@ -176,24 +176,57 @@ type Chat struct {
 	Comment string `json:"_comment,omitempty"`
 	// GeneralRange is how far normal chat is heard, in game units (3D).
 	GeneralRange int `json:"generalRange"`
-	// GlobalShout sends shout chat (!) to every player in the world. When
-	// false, only the players in the speaker's map region hear it, which is
-	// Mobius's GlobalChat = ON.
-	GlobalShout bool `json:"globalShout"`
-	// GlobalTrade does the same for trade chat (+), Mobius TradeChat.
-	GlobalTrade bool `json:"globalTrade"`
+	// Shout says who hears shout chat (!), Mobius GlobalChat.
+	Shout ChatMode `json:"shout"`
+	// Trade says who hears trade chat (+), Mobius TradeChat. Mobius also
+	// lets only players of level 20 and up trade-chat.
+	Trade ChatMode `json:"trade"`
 	// MaxLength is the longest message in characters; longer ones from
 	// players below GM level are refused (Mobius Say2).
 	MaxLength int `json:"maxLength"`
 }
 
+// ChatMode says who hears shout or trade chat: Mobius's ChatBroadcastType,
+// written in lower case. The file may use any case.
+type ChatMode string
+
+// The chat modes.
+const (
+	// ChatModeOn sends the message to the players in the speaker's map
+	// region (the town area of /loc) and instance. It is Mobius's default.
+	ChatModeOn ChatMode = "on"
+	// ChatModeGlobal sends the message to every player in the game. Players
+	// below GM level may then speak at most every 500 ms (Mobius
+	// FloodProtectorGlobalChatInterval).
+	ChatModeGlobal ChatMode = "global"
+	// ChatModeGM is ChatModeOn for GMs; other players are not heard.
+	ChatModeGM ChatMode = "gm"
+	// ChatModeOff turns the channel off.
+	ChatModeOff ChatMode = "off"
+)
+
+// Valid reports whether m is one of the chat modes.
+func (m ChatMode) Valid() bool {
+	switch m {
+	case ChatModeOn, ChatModeGlobal, ChatModeGM, ChatModeOff:
+		return true
+	}
+	return false
+}
+
+// UnmarshalText reads a mode in any case, so Mobius's "ON" works too.
+func (m *ChatMode) UnmarshalText(b []byte) error {
+	*m = ChatMode(strings.ToLower(strings.TrimSpace(string(b))))
+	return nil
+}
+
 // DefaultChat returns the defaults: Mobius's ranges and limits, with shout
-// and trade chat heard in the whole world.
+// and trade chat heard in the speaker's map region.
 func DefaultChat() Chat {
 	return Chat{
 		GeneralRange: DefaultChatGeneralRange,
-		GlobalShout:  true,
-		GlobalTrade:  true,
+		Shout:        ChatModeOn,
+		Trade:        ChatModeOn,
 		MaxLength:    DefaultChatMaxLength,
 	}
 }
@@ -552,6 +585,12 @@ func (g GameServer) validateGame() []error {
 	}
 	if g.Chat.GeneralRange <= 0 {
 		add("chat.generalRange: %d is not positive", g.Chat.GeneralRange)
+	}
+	if !g.Chat.Shout.Valid() {
+		add("chat.shout: %q is not one of on, global, gm, off", g.Chat.Shout)
+	}
+	if !g.Chat.Trade.Valid() {
+		add("chat.trade: %q is not one of on, global, gm, off", g.Chat.Trade)
 	}
 	if g.Chat.MaxLength <= 0 {
 		add("chat.maxLength: %d is not positive", g.Chat.MaxLength)

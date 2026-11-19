@@ -1,0 +1,13 @@
+[
+{"id":1004,"applyTaxes":true,"npcIds":[30283],"entries":[
+{"id":1,"ingredients":[{"itemId":2135,"count":1,"maintainIngredient":true},{"itemId":1864,"count":5},{"itemId":57,"count":500}],"products":[{"itemId":1878,"count":1}]}
+]},
+{"id":90001,"entries":[
+{"id":1,"ingredients":[{"itemId":57,"count":68000}],"products":[{"itemId":2,"count":1}]},
+{"id":2,"ingredients":[{"itemId":57,"count":100}],"products":[{"itemId":17,"count":100}]},
+{"id":4,"ingredients":[{"itemId":1,"count":1},{"itemId":57,"count":1000}],"products":[{"itemId":2,"count":1}]}
+]},
+{"id":90002,"maintainEnchantment":true,"npcIds":[-1],"entries":[
+{"id":1,"ingredients":[{"itemId":1,"count":1,"enchant":3},{"itemId":-200,"count":3480},{"itemId":57,"count":1000,"taxIngredient":true}],"products":[{"itemId":2,"count":1,"enchant":3}]}
+]}
+]
