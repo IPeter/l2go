@@ -43,6 +43,7 @@ Run with Docker Compose
 
 ```sh
 make up        # docker compose up --build: MongoDB, the login server and game server 1
+make up PUBLIC_IP=203.0.113.7   # announce the game server at another address
 make logs      # follow the logs (docker compose logs -f)
 make down      # stop; accounts and characters stay in the mongo-data volume
 
@@ -59,14 +60,15 @@ Ports on the host:
 
 The login ↔ game server link (port 9413) stays on the compose network. The servers read `deploy/compose/server.json`, which uses the compose service names (`mongo`, `login`) as host names.
 
-Inside Docker the login server sees clients coming from the Docker gateway, not `127.0.0.1`, so they get the game server's `externalIP`. In the compose config both `internalIP` and `externalIP` are `127.0.0.1`, which works for a client on the same machine. For players on other machines, set `externalIP` to the host's address.
+Clients can connect from any machine. After login, the server list tells the client which IPv4 address to use for the game server, so that address must be reachable from every client. `make up` detects this machine's LAN IP and passes it as `L2GO_PUBLIC_IP`, which `deploy/compose/server.json` uses for `internalIP` and `externalIP` (config values can use `${NAME}` and `${NAME:-default}`). Every machine on the network, and this machine itself, can reach that address. With plain `docker compose up` the address is `127.0.0.1`, which only works for a client on this machine. For players on the internet, use `make up PUBLIC_IP=<public IP>` and forward ports 2106 and 7777 on the router.
 
 ### Connecting an Interlude client
 
-1. Point the client at the login server. The client reads the login server address from `ServerAddr` in `system/l2.ini`. Either set it to `127.0.0.1` (the retail `l2.ini` is encrypted, so this needs an `l2.ini` editor or a patched `system` folder), or keep the host name and map it in your hosts file, for example `127.0.0.1 l2authd.lineage2.com`.
-2. Use a `system` folder with GameGuard disabled. L2Go answers the GameGuard handshake but does not run or check GameGuard.
+1. Point the client at the login server without changing the client: map the login host name from `ServerAddr` in the client's `system/l2.ini` to the server machine in the hosts file of the client machine (on Windows `C:\Windows\System32\drivers\etc\hosts`), for example `192.168.1.87 l2authd.lineage2.com`. The host name is the usual retail one; check your client if it differs.
+2. L2Go answers the GameGuard step of the login handshake but does not run GameGuard itself.
 3. Log in with any user name and password. The first login creates the account (`autoCreate`). Account names are case-insensitive.
-4. The server list shows server 1 as up and sends the client to `127.0.0.1:7777`.
+4. The server list shows server 1 as up and sends the client to the announced address (the server machine's LAN IP with `make up`), port 7777.
+5. If the game server log shows a wrong protocol version, add the client's version to `allowedProtocols` (Interlude clients use 746; some builds use 737, 740 or 744).
 
 To make an account an admin (sees and joins testing servers) or to ban it:
 
@@ -76,7 +78,7 @@ docker compose exec mongo mongosh l2go-login --eval 'db.accounts.updateOne({user
 
 ### Smoke test
 
-With the stack running, `make smoke` walks a fake client through the whole flow (login, server list, character list, creation, logging in again, wrong password) with a new random account and character each time. `L2GO_LOGIN_ADDR` (default `127.0.0.1:2106`) and `L2GO_GAME_ADDR` (default `127.0.0.1:7777`) point it at another stack.
+With the stack running, `make smoke` walks a fake client through the whole flow (login, server list, character list, creation, logging in again, wrong password) with a new random account and character each time. Like a real client, it connects to the game server at the address the server list announces. `L2GO_LOGIN_ADDR` (default `127.0.0.1:2106`) points it at another login server; `L2GO_GAME_ADDR` overrides the announced game server address.
 
 Build and run without Docker
 ----

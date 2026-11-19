@@ -4,7 +4,11 @@
 #   make down
 #   L2GO_LOG_LEVEL=debug make up    for packet dumps
 #
-# The client connects to 127.0.0.1:2106 (login) and 127.0.0.1:7777 (game).
+# Clients connect to port 2106 (login) and 7777 (game) of this machine, from
+# this machine or any other on the network. The server list announces the
+# game server at L2GO_PUBLIC_IP, which `make up` sets to this machine's LAN
+# IP (override: make up PUBLIC_IP=1.2.3.4). With plain `docker compose up`
+# it is 127.0.0.1, which only works for a client on this machine.
 # Servers read deploy/compose/server.json, which uses the service names
 # below as host names.
 #
@@ -18,6 +22,10 @@ x-l2go: &l2go
   build: .
   image: l2go:dev
   restart: on-failure
+  environment:
+    # The game server address in the server list (see deploy/compose/server.json).
+    # `make up` sets it to this machine's LAN IP.
+    L2GO_PUBLIC_IP: ${L2GO_PUBLIC_IP:-127.0.0.1}
   volumes:
     - ./deploy/compose/server.json:/etc/l2go/server.json:ro
 

@@ -3,6 +3,10 @@ TOOL     := $(GO) tool -modfile=tools/go.mod
 FUZZTIME ?= 60s
 MONGO_URI ?= mongodb://127.0.0.1:27017
 
+# This machine's LAN IP: macOS (Wi-Fi or Ethernet), then Linux. Empty if none.
+PUBLIC_IP ?= $(shell ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | cut -d' ' -f1)
+PUBLIC_IP_OR_LOCAL = $(or $(strip $(PUBLIC_IP)),127.0.0.1)
+
 .PHONY: all build test race cover fuzz lint vuln scripts-check integration smoke up down logs reload-scripts clean
 
 all: build test
@@ -60,13 +64,18 @@ integration:
 	L2GO_MONGO_URI=$(MONGO_URI) $(GO) test -tags integration -count=1 ./internal/storage/...
 
 ## smoke: run the full client flow against the running stack (make up first;
-## L2GO_LOGIN_ADDR and L2GO_GAME_ADDR change the addresses)
+## L2GO_LOGIN_ADDR changes the login address; the game address comes from
+## the server list unless L2GO_GAME_ADDR is set)
 smoke:
 	$(GO) test -tags smoke -count=1 ./internal/e2e/
 
-## up: build the image and run MongoDB, the login server and game server 1
+## up: build the image and run MongoDB, the login server and game server 1.
+## The server list announces the game server at PUBLIC_IP: this machine's LAN
+## IP by default, so clients on any machine of the network can connect.
+## Override with make up PUBLIC_IP=1.2.3.4 (e.g. a public IP).
 up:
-	docker compose up --build
+	@echo "Game server announced at $(PUBLIC_IP_OR_LOCAL)"
+	L2GO_PUBLIC_IP=$(PUBLIC_IP_OR_LOCAL) docker compose up --build
 
 ## down: stop the compose stack (data stays in the mongo-data volume)
 down:

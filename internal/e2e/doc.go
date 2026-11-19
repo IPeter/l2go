@@ -13,9 +13,11 @@
 //	make up
 //	make smoke
 //
-// L2GO_LOGIN_ADDR (default 127.0.0.1:2106) and L2GO_GAME_ADDR (default
-// 127.0.0.1:7777) set the addresses. Every run uses a new account and
-// character name, so it can run again and again against the same database.
+// L2GO_LOGIN_ADDR (default 127.0.0.1:2106) sets the login server address.
+// Like a real client, it connects to the game server at the address the
+// server list announces; L2GO_GAME_ADDR overrides that. Every run uses a new
+// account and character name, so it can run again and again against the
+// same database.
 //
 // The package has no non-test code.
 package e2e

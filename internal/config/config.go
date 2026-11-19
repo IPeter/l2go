@@ -254,7 +254,20 @@ func Load(path string) (Config, error) {
 // Parse decodes a config file. Fields left out of the file stay at their
 // zero value, except the listen addresses, internal networks, scripts
 // folder and event timeout, which get their defaults.
+//
+// Before decoding, ${NAME} and ${NAME:-default} are replaced with the
+// environment variable NAME (or default when NAME is unset or empty). A
+// variable that is unset and has no default is an error. Use them inside
+// JSON strings, for example "externalIP": "${L2GO_PUBLIC_IP:-127.0.0.1}".
 func Parse(data []byte) (Config, error) {
+	return parse(data, os.LookupEnv)
+}
+
+func parse(data []byte, lookup func(string) (string, bool)) (Config, error) {
+	data, err := expandEnv(data, lookup)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse: %w", err)
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	var cfg Config
