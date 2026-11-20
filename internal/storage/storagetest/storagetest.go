@@ -15,7 +15,7 @@ import (
 func TestAccountStore(t *testing.T, newStore func(t *testing.T) storage.AccountStore) {
 	t.Run("CreateThenFind", func(t *testing.T) {
 		s := newStore(t)
-		want := storage.Account{Username: "alice", Password: "hash", AccessLevel: storage.AccessLevelAdmin}
+		want := storage.Account{Username: "alice", Password: "hash", AccessLevel: storage.AccessLevelAdmin, LastServer: 3}
 		if err := s.Create(t.Context(), want); err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -29,6 +29,33 @@ func TestAccountStore(t *testing.T, newStore func(t *testing.T) storage.AccountS
 		got.ID = ""
 		if got != want {
 			t.Errorf("FindByUsername = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("LastServer", func(t *testing.T) {
+		s := newStore(t)
+		if err := s.Create(t.Context(), storage.Account{Username: "erin"}); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		got, err := s.FindByUsername(t.Context(), "erin")
+		if err != nil {
+			t.Fatalf("FindByUsername: %v", err)
+		}
+		if got.LastServer != storage.DefaultLastServer {
+			t.Errorf("new account LastServer = %d, want %d", got.LastServer, storage.DefaultLastServer)
+		}
+		if err := s.SetLastServer(t.Context(), "erin", 7); err != nil {
+			t.Fatalf("SetLastServer: %v", err)
+		}
+		got, err = s.FindByUsername(t.Context(), "erin")
+		if err != nil {
+			t.Fatalf("FindByUsername: %v", err)
+		}
+		if got.Username != "erin" || got.LastServer != 7 {
+			t.Errorf("after SetLastServer: %+v, want erin with LastServer 7", got)
+		}
+		if err := s.SetLastServer(t.Context(), "nobody", 7); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("SetLastServer(nobody) error = %v, want ErrNotFound", err)
 		}
 	})
 

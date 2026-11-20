@@ -54,6 +54,25 @@ func (s *Accounts) Create(ctx context.Context, acc storage.Account) error {
 	}
 	s.nextID++
 	acc.ID = strconv.Itoa(s.nextID)
+	if acc.LastServer == 0 {
+		acc.LastServer = storage.DefaultLastServer
+	}
 	s.byName[acc.Username] = acc
+	return nil
+}
+
+// SetLastServer implements storage.AccountStore.
+func (s *Accounts) SetLastServer(ctx context.Context, username string, serverID int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	acc, ok := s.byName[username]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	acc.LastServer = serverID
+	s.byName[username] = acc
 	return nil
 }

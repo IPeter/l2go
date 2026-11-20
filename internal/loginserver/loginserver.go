@@ -290,7 +290,7 @@ func (s *Server) handlePacket(ctx context.Context, c *client, opcode byte, data 
 	case opcode == clientpackets.OpRequestServerList && c.state == stateAuthedLogin:
 		return s.handleServerList(c, data)
 	case opcode == clientpackets.OpRequestServerLogin && c.state == stateAuthedLogin:
-		return s.handleServerLogin(c, data)
+		return s.handleServerLogin(ctx, c, data)
 	default:
 		c.logger.Debug("ignoring packet", "opcode", opcode, "state", c.state.String())
 		return nil
@@ -415,7 +415,7 @@ func (s *Server) createAccount(ctx context.Context, username, password string) (
 		s.stats.accountCreateFailures.Add(1)
 		return storage.Account{}, fmt.Errorf("hash password: %w", err)
 	}
-	acc := storage.Account{Username: username, Password: string(hash), AccessLevel: storage.AccessLevelPlayer}
+	acc := storage.Account{Username: username, Password: string(hash), AccessLevel: storage.AccessLevelPlayer, LastServer: storage.DefaultLastServer}
 	err = s.store.Create(ctx, acc)
 	if errors.Is(err, storage.ErrExists) {
 		// A concurrent login created it first; check against that account.
@@ -450,10 +450,19 @@ func (s *Server) handleServerList(c *client, data []byte) error {
 		return c.reject(serverpackets.NewLoginFail(serverpackets.LoginFailAccessFailed), "RequestServerList with wrong session keys")
 	}
 	list := s.serverList(netutil.RemoteIP(c.conn), c.accessLevel())
-	return c.send(serverpackets.NewServerList(0, list))
+	return c.send(serverpackets.NewServerList(lastServerByte(c.account.LastServer), list))
 }
 
-func (s *Server) handleServerLogin(c *client, data []byte) error {
+// lastServerByte returns the last server ID as ServerList carries it, or 0
+// (none) if it does not fit.
+func lastServerByte(id int) uint8 {
+	if id < 0 || id > 0xff {
+		return 0
+	}
+	return uint8(id)
+}
+
+func (s *Server) handleServerLogin(ctx context.Context, c *client, data []byte) error {
 	req, err := clientpackets.ParseRequestServerLogin(data)
 	if err != nil {
 		return c.ignore(err)
@@ -466,7 +475,22 @@ func (s *Server) handleServerLogin(c *client, data []byte) error {
 	if why := s.canPlay(int(req.ServerID), c.accessLevel()); why != "" {
 		return c.reject(serverpackets.NewPlayFail(serverpackets.PlayFailServerOverloaded), "server %d: %s", req.ServerID, why)
 	}
+	s.saveLastServer(ctx, c, int(req.ServerID))
 	return c.send(serverpackets.NewPlayOk(c.keys.PlayOK1, c.keys.PlayOK2))
+}
+
+// saveLastServer stores the server the client is about to join as its
+// account's last server, as Mobius LoginController.isLoginPossible does once
+// the server accepts the login. Like Mobius, it compares with the value read
+// at login and leaves that value as it is, so the server list of this
+// connection keeps showing it. A failed write is logged; the login goes on.
+func (s *Server) saveLastServer(ctx context.Context, c *client, id int) {
+	if c.account.LastServer == id {
+		return
+	}
+	if err := s.store.SetLastServer(ctx, c.account.Username, id); err != nil {
+		c.logger.Warn("cannot store the last server", "server", id, "err", err)
+	}
 }
 
 // canPlay checks whether an account with the given access level may join

@@ -563,8 +563,8 @@ func TestE2EServerListLiveStatus(t *testing.T) {
 		if len(list.Servers) != 1 {
 			t.Fatalf("list has %d servers, want 1", len(list.Servers))
 		}
-		if list.Unknown != 0 || len(list.Characters) != 0 || list.LastServer != 0 {
-			t.Errorf("trailer = %d, %+v, last %d; want 0, no character data, 0", list.Unknown, list.Characters, list.LastServer)
+		if list.Unknown != 0 || len(list.Characters) != 0 || list.LastServer != storage.DefaultLastServer {
+			t.Errorf("trailer = %d, %+v, last %d; want 0, no character data, 1", list.Unknown, list.Characters, list.LastServer)
 		}
 		return list.Servers[0]
 	}
@@ -639,6 +639,84 @@ func TestE2EPlayKeysReachGameServer(t *testing.T) {
 		t.Error("the right keys were refused after the failed attempts")
 	}
 }
+
+// The server list preselects the account's last server: 1 for a new
+// account, as the Mobius column default, then the server it last joined.
+// As in Mobius, the last server is stored when RequestServerLogin is
+// accepted, and the connection that joined keeps the value it read at login.
+func TestE2ELastServer(t *testing.T) {
+	e := startE2E(t, e2eConfig(true), nil)
+	e.addAccount("gm", "pw", storage.AccessLevelAdmin)
+	e.gameServer(1, secret1, 100)
+	e.gameServer(7, secret7, 100)
+	ctx := testContext(t)
+
+	lastServer := func(t *testing.T, c *testclient.LoginConn) byte {
+		t.Helper()
+		list, err := c.ServerList(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return list.LastServer
+	}
+	stored := func(t *testing.T) int {
+		t.Helper()
+		acc, err := e.store.FindByUsername(ctx, "gm")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return acc.LastServer
+	}
+
+	c := e.loggedIn(t, ctx, "gm", "pw")
+	if got := lastServer(t, c); got != storage.DefaultLastServer {
+		t.Errorf("new account: LastServer = %d, want %d", got, storage.DefaultLastServer)
+	}
+	if res, err := c.ServerLogin(ctx, 7); err != nil || res.Ok == nil {
+		t.Fatalf("ServerLogin(7) = %v, %v; want PlayOk", res, err)
+	}
+	if got := stored(t); got != 7 {
+		t.Errorf("stored LastServer = %d, want 7", got)
+	}
+	if got := lastServer(t, c); got != storage.DefaultLastServer {
+		t.Errorf("same connection after joining 7: LastServer = %d, want the value read at login", got)
+	}
+
+	c = e.loggedIn(t, ctx, "gm", "pw")
+	if got := lastServer(t, c); got != 7 {
+		t.Errorf("next login: LastServer = %d, want 7", got)
+	}
+
+	// A refused server login keeps the last server.
+	player := e.loggedIn(t, ctx, "player", "pw")
+	if res, err := player.ServerLogin(ctx, 7); err != nil || res.Fail == nil {
+		t.Fatalf("player on the testing server = %v, %v; want PlayFail", res, err)
+	}
+	if acc, err := e.store.FindByUsername(ctx, "player"); err != nil || acc.LastServer != storage.DefaultLastServer {
+		t.Errorf("after PlayFail: %+v, %v; want LastServer %d", acc, err, storage.DefaultLastServer)
+	}
+}
+
+// A last server that cannot be stored is logged; the client still gets
+// PlayOk, as in Mobius.
+func TestE2ELastServerWriteFails(t *testing.T) {
+	e := startE2E(t, e2eConfig(true), lastServerFails{memstore.NewAccounts(), errors.New("database down")})
+	e.addAccount("gm", "pw", storage.AccessLevelAdmin)
+	e.gameServer(7, secret7, 100)
+	ctx := testContext(t)
+
+	c := e.loggedIn(t, ctx, "gm", "pw")
+	if res, err := c.ServerLogin(ctx, 7); err != nil || res.Ok == nil {
+		t.Fatalf("ServerLogin(7) = %v, %v; want PlayOk", res, err)
+	}
+}
+
+type lastServerFails struct {
+	*memstore.Accounts
+	err error
+}
+
+func (l lastServerFails) SetLastServer(context.Context, string, int) error { return l.err }
 
 // After PlayOk the connection stays open, as in Mobius; the client closes
 // it. A second RequestServerLogin is answered again.

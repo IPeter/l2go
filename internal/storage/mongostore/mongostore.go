@@ -264,6 +264,24 @@ type accountDoc struct {
 	Username    string        `bson:"username"`
 	Password    string        `bson:"password"`
 	AccessLevel int8          `bson:"access_level"`
+	// LastServer is missing from documents written before L2Go stored it;
+	// those read as storage.DefaultLastServer.
+	LastServer int32 `bson:"last_server,omitempty"`
+}
+
+// account returns the account d stores.
+func (d accountDoc) account() storage.Account {
+	last := int(d.LastServer)
+	if last == 0 {
+		last = storage.DefaultLastServer
+	}
+	return storage.Account{
+		ID:          d.ID.Hex(),
+		Username:    d.Username,
+		Password:    d.Password,
+		AccessLevel: storage.AccessLevel(d.AccessLevel),
+		LastServer:  last,
+	}
 }
 
 // FindByUsername implements storage.AccountStore.
@@ -278,29 +296,45 @@ func (a *Accounts) FindByUsername(ctx context.Context, username string) (storage
 	if err != nil {
 		return storage.Account{}, fmt.Errorf("mongostore: find account: %w", err)
 	}
-	return storage.Account{
-		ID:          doc.ID.Hex(),
-		Username:    doc.Username,
-		Password:    doc.Password,
-		AccessLevel: storage.AccessLevel(doc.AccessLevel),
-	}, nil
+	return doc.account(), nil
 }
 
 // Create implements storage.AccountStore.
 func (a *Accounts) Create(ctx context.Context, acc storage.Account) error {
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
+	if acc.LastServer == 0 {
+		acc.LastServer = storage.DefaultLastServer
+	}
 	_, err := a.coll.InsertOne(ctx, accountDoc{
 		ID:          bson.NewObjectID(),
 		Username:    acc.Username,
 		Password:    acc.Password,
 		AccessLevel: int8(acc.AccessLevel),
+		LastServer:  int32(acc.LastServer), //nolint:gosec // server IDs are 1-255
 	})
 	if mongo.IsDuplicateKeyError(err) {
 		return storage.ErrExists
 	}
 	if err != nil {
 		return fmt.Errorf("mongostore: create account: %w", err)
+	}
+	return nil
+}
+
+// SetLastServer implements storage.AccountStore.
+func (a *Accounts) SetLastServer(ctx context.Context, username string, serverID int) error {
+	ctx, cancel := context.WithTimeout(ctx, a.timeout)
+	defer cancel()
+	res, err := a.coll.UpdateOne(ctx,
+		bson.D{{Key: "username", Value: username}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "last_server", Value: int32(serverID)}}}}, //nolint:gosec // server IDs are 1-255
+	)
+	if err != nil {
+		return fmt.Errorf("mongostore: set last server: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return storage.ErrNotFound
 	}
 	return nil
 }
