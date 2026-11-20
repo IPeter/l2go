@@ -2,24 +2,42 @@
 // and its game server (L2Go, or the Mobius reference for comparison).
 //
 // Each bot logs in with its own account (the prefix and its number, such
-// as bot0007; both servers create unknown accounts), creates a Human
-// Fighter when the account has none, enters the world and then, every few
-// seconds, reports its position and either walks to a random point around
-// where it started, says something in general chat, or targets and talks
-// to the nearest NPC. A failed bot tries again after a backoff. Ctrl+C or
-// the end of -duration logs every bot out.
+// as bot0007; both servers create unknown accounts), creates its character
+// when the account has none (a Human Fighter Bot0007, or with -class
+// mystic a Human Mystic Bot0007M), enters the world and then acts every few
+// seconds (-step). A failed bot tries again after a backoff. Ctrl+C or the
+// end of -duration logs every bot out.
+//
+// The mode (-mode) says what a bot does:
+//
+//   - wander (the default): it reports its position and either walks to a
+//     random point around where it started, says something in general
+//     chat, or targets and talks to the nearest NPC.
+//   - hunt: it attacks the monsters within -hunt-range of where it
+//     started, one after the other, casts its attack skill (-skill; Wind
+//     Strike for the default Human Mystic) every -cast, holds -buffs buffs
+//     (given with the GM command //buff, so the characters need GM rights),
+//     and when it dies it restarts in the village and walks back. With 500
+//     hunting bots, the server's "game world ticks" log line (every
+//     minute) gives the tick percentiles of the load test (Plan 09, Plan
+//     10).
 //
 // Every -report interval and at the end, bots prints the bots in the
-// world, the errors by kind, the packets per second in both directions and
-// the latency percentiles of each request and its expected answer: move
-// (MoveToLocation and the character's MoveToLocation back), say (Say2 and
-// the CreatureSay echo), target (Action and MyTargetSelected), talk (the
-// second Action and NpcHtmlMessage, including the walk to the NPC), login
-// and enter.
+// world, the errors by kind, the game events (kill, death, cast), the
+// packets per second in both directions and the latency percentiles of
+// each request and its expected answer: move (MoveToLocation and the
+// character's MoveToLocation back), say (Say2 and the CreatureSay echo),
+// target (Action and MyTargetSelected), talk (the second Action and
+// NpcHtmlMessage, including the walk to the NPC), attack (AttackRequest
+// and the first Attack that hits), cast (RequestMagicSkillUse and
+// MagicSkillLaunched), buff (the //buff commands and the icons), restart
+// (RequestRestartPoint and the UserInfo after the teleport), kill (from
+// choosing a monster to its death), login and enter.
 //
 // Usage:
 //
 //	bots [-n 50] [-login 127.0.0.1:2106] [-server 1] [-game addr] [-prefix bot] [-rate 10] [-duration 5m] [-seed N] ...
+//	bots -mode hunt [-class mystic|fighter] [-skill id] [-cast 5s] [-buffs 10] [-hunt-range 3000] ...
 package main
 
 import (
@@ -29,6 +47,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"os/signal"
 	"sync"
@@ -56,6 +75,17 @@ type config struct {
 	timeout   time.Duration
 	queue     int
 	logLevel  slog.Level
+
+	// mode is modeWander or modeHunt, class classFighter or classMystic.
+	mode  string
+	class string
+	// The hunt: the attack skill (0: none) cast every cast (0: never), the
+	// number of huntBuffs held, and how far from the start point monsters
+	// are hunted.
+	skill     int32
+	cast      time.Duration
+	buffs     int
+	huntRange float64
 }
 
 // maxAccountLength is the longest account name the login packet holds.
@@ -68,6 +98,7 @@ func parseFlags(args []string, output io.Writer) (config, error) {
 		cfg      config
 		serverID int
 		level    string
+		skill    int
 	)
 	fs := flag.NewFlagSet("bots", flag.ContinueOnError)
 	fs.SetOutput(output)
@@ -89,9 +120,20 @@ func parseFlags(args []string, output io.Writer) (config, error) {
 	fs.DurationVar(&cfg.timeout, "timeout", 15*time.Second, "time limit of each request and its answer")
 	fs.IntVar(&cfg.queue, "queue", 64, "packets each bot keeps unread at most (older ones are dropped)")
 	fs.StringVar(&level, "log-level", "warn", "log level: debug, info, warn or error")
+	fs.StringVar(&cfg.mode, "mode", modeWander, "what the bots do: wander (walk, chat, talk to NPCs) or hunt (fight monsters, cast, hold buffs, die and restart)")
+	fs.StringVar(&cfg.class, "class", "", "character class: fighter or mystic (default: fighter to wander, mystic to hunt)")
+	fs.IntVar(&skill, "skill", 0, "attack skill ID a hunter casts (default: Wind Strike for a mystic, none for a fighter)")
+	fs.DurationVar(&cfg.cast, "cast", 5*time.Second, "time between two attack skill casts of a hunter (0: no casts)")
+	fs.IntVar(&cfg.buffs, "buffs", 0, fmt.Sprintf("buffs a hunter holds, 0 to %d, given with //buff (needs GM rights)", len(huntBuffs)))
+	fs.Float64Var(&cfg.huntRange, "hunt-range", 3000, "how far from its start point a hunter looks for monsters")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
+	if skill < 0 || skill > math.MaxInt32 {
+		return config{}, fmt.Errorf("-skill %d is not a skill ID", skill)
+	}
+	cfg.skill = int32(skill)
+	cfg.resolve()
 	if fs.NArg() > 0 {
 		return config{}, fmt.Errorf("unexpected arguments: %v", fs.Args())
 	}
@@ -136,8 +178,33 @@ func (c config) validate() error {
 		return errors.New("-talk-range must not be negative")
 	case c.queue < 1:
 		return errors.New("-queue must be at least 1")
+	case c.mode != modeWander && c.mode != modeHunt:
+		return fmt.Errorf("-mode %q: use %s or %s", c.mode, modeWander, modeHunt)
+	case c.class != classFighter && c.class != classMystic:
+		return fmt.Errorf("-class %q: use %s or %s", c.class, classFighter, classMystic)
+	case c.cast < 0:
+		return errors.New("-cast must not be negative")
+	case c.buffs < 0 || c.buffs > len(huntBuffs):
+		return fmt.Errorf("-buffs must be between 0 and %d", len(huntBuffs))
+	case c.huntRange <= 0:
+		return errors.New("-hunt-range must be positive")
 	}
 	return nil
+}
+
+// resolve fills in the defaults that depend on other flags: the class (a
+// fighter wanders, a mystic hunts) and a mystic's attack skill (Wind
+// Strike).
+func (c *config) resolve() {
+	if c.class == "" {
+		c.class = classFighter
+		if c.mode == modeHunt {
+			c.class = classMystic
+		}
+	}
+	if c.skill == 0 && c.class == classMystic {
+		c.skill = skillWindStrike
+	}
 }
 
 // validPrefix reports whether p is a lower-case letter followed by
@@ -188,8 +255,12 @@ func main() {
 func run(ctx context.Context, cfg config, out io.Writer, logger *slog.Logger) error {
 	start := time.Now()
 	stats := NewStats(cfg.n, start, uint64(cfg.seed)) //nolint:gosec // a seed, any bits do
-	fmt.Fprintf(out, "bots: %d bots (%s...) against %s, server %d, ramp-up %g/s, seed %d\n",
-		cfg.n, cfg.prefix, cfg.login, cfg.serverID, cfg.rate, cfg.seed)
+	fmt.Fprintf(out, "bots: %d %s bots (%s %s...) against %s, server %d, ramp-up %g/s, seed %d\n",
+		cfg.n, cfg.mode, cfg.class, cfg.prefix, cfg.login, cfg.serverID, cfg.rate, cfg.seed)
+	if cfg.mode == modeHunt {
+		fmt.Fprintf(out, "bots: hunting within %g of the start, skill %d every %v, %d buffs\n",
+			cfg.huntRange, cfg.skill, cfg.cast, cfg.buffs)
+	}
 
 	reportDone := make(chan struct{})
 	stopReports := make(chan struct{})

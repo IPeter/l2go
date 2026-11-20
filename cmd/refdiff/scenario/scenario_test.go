@@ -25,11 +25,15 @@ func TestScenariosAreRegistered(t *testing.T) {
 		"login-create-enter", "enter-two-players", "chat", "restart", "npc-talk",
 		"items-equip", "items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private",
 		"kill-monster", "pvp-death-restart", "sample-sword", "sample-unarmed",
+		"cast-wind-strike", "learn-skill", "buff-stack", "potion", "soulshot", "newbie-buffs",
 	}
 	if !slices.Equal(names, want) {
 		t.Errorf("scenarios = %v, want %v", names, want)
 	}
-	gm := []string{"items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private"}
+	gm := []string{
+		"items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private",
+		"cast-wind-strike", "learn-skill", "buff-stack", "potion", "soulshot", "newbie-buffs",
+	}
 	for _, sc := range All() {
 		if sc.GM != slices.Contains(gm, sc.Name) {
 			t.Errorf("scenario %s: GM = %v", sc.Name, sc.GM)
@@ -229,32 +233,47 @@ func TestFindLink(t *testing.T) {
 	}
 }
 
-func TestPickMonster(t *testing.T) {
-	me := testclient.Position{}
-	mob := func(id, npcID, x int32) testclient.Object {
-		return testclient.Object{ObjectID: id, Kind: testclient.KindNpc, NpcID: npcID, Attackable: true,
-			Motion: testclient.Motion{Pos: testclient.Position{X: x}}}
+func TestPlayerTemplate(t *testing.T) {
+	s := newSession(Target{}, Options{Rand: rand.New(rand.NewPCG(5, 6))})
+	a, b := s.Player("alice"), s.Player("bob")
+	b.Template = HumanMystic
+	if r := a.createRequest(); r.ClassID != 0 || r.Name != a.Char || r.STR != 40 {
+		t.Errorf("default template = %+v, want a Human Fighter named %s", r, a.Char)
 	}
-	dead := mob(1, npcBeardedKeltir, 10)
-	dead.Dead = true
-	guard := mob(2, npcBeardedKeltir, 20)
-	guard.Attackable = false
-	objs := []testclient.Object{
-		dead, guard,
-		mob(3, 20432, 30), // an Elpy, nearer than any keltir
-		mob(5, npcBeardedKeltir, 400),
-		mob(4, npcBeardedKeltir, -400),
-		mob(6, npcBeardedKeltir, 900),
+	r := b.createRequest()
+	want := testclient.CreateRequest{Name: b.Char, ClassID: 10, INT: 41, STR: 22, CON: 27, MEN: 39, DEX: 21, WIT: 20,
+		HairStyle: 1, HairColor: 2, Face: 1}
+	if r != want {
+		t.Errorf("mystic template = %+v, want %+v", r, want)
 	}
-	o, d, ok := PickMonster(me, objs, npcBeardedKeltir)
-	if !ok || o.ObjectID != 4 || d != 400 {
-		t.Errorf("PickMonster(keltir) = %d at %v, %v; want object 4 (the nearest living keltir, lower ID on a tie)", o.ObjectID, d, ok)
+}
+
+func TestReuseWait(t *testing.T) {
+	c := testclient.Cast{Use: testclient.MagicSkillUse{ReuseDelay: 4000}}
+	if got := reuseWait(c); got != 4*time.Second+settle {
+		t.Errorf("reuseWait(4000 ms) = %v", got)
 	}
-	if o, _, ok := PickMonster(me, objs, 0); !ok || o.ObjectID != 3 {
-		t.Errorf("PickMonster(any) = %d, %v; want the Elpy", o.ObjectID, ok)
+	if got := reuseWait(testclient.Cast{Use: testclient.MagicSkillUse{ReuseDelay: -1}}); got != settle {
+		t.Errorf("reuseWait(-1) = %v, want settle", got)
 	}
-	if _, _, ok := PickMonster(me, objs[:2], 0); ok {
-		t.Error("a dead monster or a guard was picked")
+}
+
+// TestSkillScenariosUseFixedSpots checks the spots next to the NPCs of the
+// skill scenarios against their Mobius spawns: a few steps away, within
+// talking reach after the walk.
+func TestSkillScenariosUseFixedSpots(t *testing.T) {
+	spawns := []struct {
+		name  string
+		spot  testclient.Position
+		spawn testclient.Position
+	}{
+		{"Baulro", spotBaulro, testclient.Position{X: -84729, Y: 245001, Z: -3720}},
+		{"Newbie Guide", spotGuide, testclient.Position{X: -84081, Y: 243227, Z: -3728}},
+	}
+	for _, sp := range spawns {
+		if d := sp.spot.DistanceTo(sp.spawn); d > 2*talkRange {
+			t.Errorf("the spot of %s is %.0f units from its spawn", sp.name, d)
+		}
 	}
 }
 

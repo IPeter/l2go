@@ -148,7 +148,7 @@ func swingAtMonsters(ctx context.Context, s *Session, p *Player, n int) error {
 		more, err := fightUntilDead(ctx, p, target.ObjectID)
 		swings += more
 		switch {
-		case errors.Is(err, errDied):
+		case errors.Is(err, testclient.ErrDied):
 			deaths++
 			if err := sleep(ctx, 2*time.Second); err != nil {
 				return err

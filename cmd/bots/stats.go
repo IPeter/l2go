@@ -115,6 +115,8 @@ type Stats struct {
 	last            time.Time
 	errInterval     map[string]int64
 	errTotal        map[string]int64
+	evInterval      map[string]int64
+	evTotal         map[string]int64
 	latInterval     map[string]*reservoir
 	latTotal        map[string]*reservoir
 	rng             *rand.Rand
@@ -130,6 +132,8 @@ func NewStats(target int, start time.Time, seed uint64) *Stats {
 		conns:       make(map[counter]struct{}),
 		errInterval: make(map[string]int64),
 		errTotal:    make(map[string]int64),
+		evInterval:  make(map[string]int64),
+		evTotal:     make(map[string]int64),
 		latInterval: make(map[string]*reservoir),
 		latTotal:    make(map[string]*reservoir),
 		rng:         rand.New(rand.NewPCG(seed, 0x5eed)), //nolint:gosec // sampling, not security
@@ -153,6 +157,14 @@ func (s *Stats) Error(kind string) {
 	defer s.mu.Unlock()
 	s.errInterval[kind]++
 	s.errTotal[kind]++
+}
+
+// Count counts an event of the game, such as "kill", "death" or "cast".
+func (s *Stats) Count(event string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.evInterval[event]++
+	s.evTotal[event]++
 }
 
 // Observe records the latency d of the operation op.
@@ -218,6 +230,8 @@ type Report struct {
 	In, Out         int64
 	Latency         []LatencyRow
 	Errors          []ErrorCount
+	// Events counts the game events (kills, deaths, casts), by kind.
+	Events []ErrorCount
 }
 
 // Report returns a snapshot at now. A periodic report (final false) covers
@@ -240,10 +254,10 @@ func (s *Stats) Report(now time.Time, final bool) Report {
 		In:       in,
 		Out:      out,
 	}
-	lat, errs := s.latInterval, s.errInterval
+	lat, errs, evs := s.latInterval, s.errInterval, s.evInterval
 	if final {
 		r.InRate, r.OutRate = rate(in, r.Elapsed), rate(out, r.Elapsed)
-		lat, errs = s.latTotal, s.errTotal
+		lat, errs, evs = s.latTotal, s.errTotal, s.evTotal
 	} else {
 		r.InRate, r.OutRate = rate(in-s.lastIn, r.Interval), rate(out-s.lastOut, r.Interval)
 	}
@@ -255,10 +269,15 @@ func (s *Stats) Report(now time.Time, final bool) Report {
 		r.Errors = append(r.Errors, ErrorCount{Kind: kind, N: n})
 	}
 	slices.SortFunc(r.Errors, func(a, b ErrorCount) int { return cmp.Compare(a.Kind, b.Kind) })
+	for kind, n := range evs {
+		r.Events = append(r.Events, ErrorCount{Kind: kind, N: n})
+	}
+	slices.SortFunc(r.Events, func(a, b ErrorCount) int { return cmp.Compare(a.Kind, b.Kind) })
 	if !final {
 		s.lastIn, s.lastOut, s.last = in, out, now
 		s.latInterval = make(map[string]*reservoir)
 		s.errInterval = make(map[string]int64)
+		s.evInterval = make(map[string]int64)
 	}
 	return r
 }
@@ -280,6 +299,13 @@ func (r Report) Write(w io.Writer) error {
 		for _, l := range r.Latency {
 			fmt.Fprintf(&b, "  %-8s %8d %10s %10s %10s %10s\n", l.Op, l.N, fmtDur(l.P50), fmtDur(l.P90), fmtDur(l.P99), fmtDur(l.Max))
 		}
+	}
+	if len(r.Events) > 0 {
+		parts := make([]string, len(r.Events))
+		for i, e := range r.Events {
+			parts[i] = fmt.Sprintf("%s=%d", e.Kind, e.N)
+		}
+		fmt.Fprintf(&b, "events: %s\n", strings.Join(parts, " "))
 	}
 	if len(r.Errors) == 0 {
 		b.WriteString("errors: none\n")
@@ -321,7 +347,7 @@ func fmtDur(d time.Duration) string {
 
 // stageError is an error of one stage of a bot's life: "login",
 // "connect", "auth", "create", "select", "enter", "move", "say",
-// "target", "talk", "logout".
+// "target", "talk", "attack", "cast", "buff", "restart", "logout".
 type stageError struct {
 	stage string
 	err   error

@@ -22,6 +22,37 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if cfg.seed == 0 {
 		t.Error("seed 0 was not replaced by a random one")
 	}
+	if cfg.mode != modeWander || cfg.class != classFighter || cfg.skill != 0 || cfg.cast != 5*time.Second || cfg.buffs != 0 || cfg.huntRange != 3000 {
+		t.Errorf("mode %q, class %q, skill %d, cast %v, buffs %d, hunt range %v", cfg.mode, cfg.class, cfg.skill, cfg.cast, cfg.buffs, cfg.huntRange)
+	}
+}
+
+func TestParseFlagsHunt(t *testing.T) {
+	tests := []struct {
+		args  []string
+		class string
+		skill int32
+	}{
+		{[]string{"-mode", "hunt"}, classMystic, skillWindStrike},
+		{[]string{"-mode", "hunt", "-class", "fighter"}, classFighter, 0},
+		{[]string{"-mode", "hunt", "-class", "fighter", "-skill", "3"}, classFighter, 3},
+		{[]string{"-mode", "hunt", "-skill", "1184"}, classMystic, 1184},
+		{[]string{"-class", "mystic"}, classMystic, skillWindStrike},
+	}
+	for _, tt := range tests {
+		cfg, err := parseFlags(tt.args, io.Discard)
+		if err != nil {
+			t.Errorf("parseFlags(%q): %v", tt.args, err)
+			continue
+		}
+		if cfg.class != tt.class || cfg.skill != tt.skill {
+			t.Errorf("parseFlags(%q): class %q, skill %d; want %q, %d", tt.args, cfg.class, cfg.skill, tt.class, tt.skill)
+		}
+	}
+	cfg, err := parseFlags([]string{"-mode", "hunt", "-buffs", "10", "-cast", "3s", "-hunt-range", "1500"}, io.Discard)
+	if err != nil || cfg.mode != modeHunt || cfg.buffs != 10 || cfg.cast != 3*time.Second || cfg.huntRange != 1500 {
+		t.Errorf("hunt flags: %+v, %v", cfg, err)
+	}
 }
 
 func TestParseFlags(t *testing.T) {
@@ -57,6 +88,14 @@ func TestParseFlagsErrors(t *testing.T) {
 		{"-duration", "-1s"},
 		{"-log-level", "loud"},
 		{"extra"},
+		{"-mode", "fight"},
+		{"-class", "archer"},
+		{"-skill", "-1"},
+		{"-skill", "3000000000"},
+		{"-cast", "-1s"},
+		{"-buffs", "-1"},
+		{"-buffs", "11"},
+		{"-hunt-range", "0"},
 	}
 	for _, args := range tests {
 		if _, err := parseFlags(args, io.Discard); err == nil {

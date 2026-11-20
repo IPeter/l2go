@@ -2,9 +2,7 @@ package scenario
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -18,10 +16,15 @@ const (
 	itemBow           int32 = 14
 	itemWoodenArrow   int32 = 17
 	itemHealingPotion int32 = 1060 // Lesser Healing Potion
-	itemSquirePants   int32 = 1147
-	itemCrystalD      int32 = 1458
-	itemCrystalC      int32 = 1459
-	itemSquireSword   int32 = 2369
+	// itemHealingPotionM is the Healing Potion: skill 2032, HP over 15 s,
+	// a 10 s reuse.
+	itemHealingPotionM int32 = 1061
+	itemSquirePants    int32 = 1147
+	itemCrystalD       int32 = 1458
+	itemCrystalC       int32 = 1459
+	// itemSoulshotNG is Soulshot: No Grade.
+	itemSoulshotNG  int32 = 1835
+	itemSquireSword int32 = 2369
 )
 
 // NPC templates the scenarios use (Mobius NPC IDs).
@@ -35,6 +38,11 @@ const (
 	// npcBeardedKeltir is the level 1 monster of the fields around the
 	// Human Fighter's start point.
 	npcBeardedKeltir int32 = 20481
+	// npcBaulro is the Human Mystic trainer of Talking Island village.
+	npcBaulro int32 = 30033
+	// npcNewbieGuide is the Newbie Guide of Talking Island village, who
+	// gives the support magic of the newbie buffer.
+	npcNewbieGuide int32 = 30598
 )
 
 // Fixed spots the GM setups move characters to, so that both servers start
@@ -45,6 +53,8 @@ var (
 	spotKaterina   = testclient.Position{X: -84124, Y: 240403, Z: -3720}
 	spotWilford    = testclient.Position{X: -81432, Y: 243424, Z: -3712}
 	spotGalladucci = testclient.Position{X: 79679, Y: 145522, Z: -3494}
+	spotBaulro     = testclient.Position{X: -84700, Y: 244950, Z: -3720}
+	spotGuide      = testclient.Position{X: -84050, Y: 243270, Z: -3728}
 	spotDropAlice  = testclient.Position{X: -71000, Y: 258100, Z: -3104}
 	spotDropBob    = testclient.Position{X: -70900, Y: 258100, Z: -3104}
 	// keltirField is the middle of the Bearded Keltir territory south-west
@@ -180,86 +190,18 @@ func FindLink(html, part string) (Link, bool) {
 	return Link{}, false
 }
 
-// PickMonster returns the monster of objs to attack and its distance from
-// me: a living attackable NPC of template npcID (any template when npcID is
-// 0), the nearest one, the lower object ID on a tie. Monsters stand at
-// random points of their territory, so the template is what keeps both
-// servers on the same kind of fight.
-func PickMonster(me testclient.Position, objs []testclient.Object, npcID int32) (testclient.Object, float64, bool) {
-	var (
-		best     testclient.Object
-		bestDist = math.Inf(1)
-		found    bool
-	)
-	for _, o := range objs {
-		if o.Kind != testclient.KindNpc || !o.Attackable || o.Dead || (npcID != 0 && o.NpcID != npcID) {
-			continue
-		}
-		d := o.Pos.DistanceTo(me)
-		if !found || d < bestDist || (d == bestDist && o.ObjectID < best.ObjectID) {
-			best, bestDist, found = o, d, true
-		}
-	}
-	return best, bestDist, found
-}
-
-// huntMonster returns a monster of template npcID for p to attack. When
-// none is in sight, p walks towards field until one shows up.
+// huntMonster returns a monster of template npcID for p to attack
+// (testclient.HuntMonster): monsters stand at random points of their
+// territory, so the template is what keeps both servers on the same kind of
+// fight. When none is in sight, p walks towards field until one shows up.
 func huntMonster(ctx context.Context, p *Player, npcID int32, field testclient.Position) (testclient.Object, error) {
-	w := p.Game().World()
-	pick := func() (testclient.Object, bool) {
-		o, _, ok := PickMonster(w.Me().Pos, w.Npcs(), npcID)
-		return o, ok
-	}
-	if o, ok := pick(); ok {
-		return o, nil
-	}
-	if _, err := p.Game().MoveTo(ctx, field.X, field.Y, field.Z); err != nil {
-		return testclient.Object{}, err
-	}
-	var o testclient.Object
-	err := poll(ctx, func() bool {
-		var ok bool
-		o, ok = pick()
-		return ok
-	})
-	if err != nil {
-		return o, fmt.Errorf("no monster %d in sight on the way to %d %d: %w", npcID, field.X, field.Y, err)
-	}
-	return o, nil
+	return p.Game().HuntMonster(ctx, npcID, field)
 }
-
-// errDied ends a fight in which the player died.
-var errDied = errors.New("the character died")
 
 // fightUntilDead waits until the monster or player targetID that p attacks
-// dies, and returns how many swings p made meanwhile. Mobius keeps
-// swinging on its own after the first AttackRequest. A death of p ends it
-// with errDied.
+// dies, and returns how many swings p made meanwhile
+// (testclient.FightUntilDead). A death of p ends it with
+// testclient.ErrDied.
 func fightUntilDead(ctx context.Context, p *Player, targetID int32) (int, error) {
-	me := p.ObjectID()
-	swings := 0
-	for {
-		pk, err := p.Game().WaitFor(ctx, func(pk testclient.Packet) bool {
-			switch v := pk.(type) {
-			case testclient.Attack:
-				return v.AttackerID == me
-			case testclient.Die:
-				return v.ObjectID == targetID || v.ObjectID == me
-			}
-			return false
-		})
-		if err != nil {
-			return swings, err
-		}
-		switch v := pk.(type) {
-		case testclient.Attack:
-			swings++
-		case testclient.Die:
-			if v.ObjectID == me {
-				return swings, errDied
-			}
-			return swings, nil
-		}
-	}
+	return p.Game().FightUntilDead(ctx, targetID)
 }

@@ -73,7 +73,8 @@ type Scenario struct {
 	// patterns to them.
 	Ignore []string
 	// GM marks a scenario whose setup uses GM commands (//create_item,
-	// //move_to, //kill): its characters need GM rights on both servers.
+	// //move_to, //set_level, //add_skill, //buff, ...): its characters need
+	// GM rights on both servers.
 	// Run fails at the first GM step otherwise.
 	GM bool
 	// Sample marks a scenario made for refdiff -sample: it swings at

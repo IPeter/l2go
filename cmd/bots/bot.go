@@ -55,10 +55,18 @@ type bot struct {
 	departed time.Time
 	speed    float64
 	reported testclient.Position
+
+	// The hunt (modeHunt): the monster hunted since fightStart, the one the
+	// bot attacks (0 after a cast, which ends the auto-attack), a monster it
+	// could not attack, the last cast and when to try the GM buffs again.
+	target, attacking, avoid int32
+	fightStart, lastCast     time.Time
+	buffRetryAt              time.Time
 }
 
 func newBot(id int, cfg config, stats *Stats, logger *slog.Logger) *bot {
 	account, char := botNames(cfg.prefix, id, cfg.n)
+	char += classSuffix(cfg.class)
 	return &bot{
 		id:      id,
 		account: account,
@@ -77,6 +85,16 @@ func newBot(id int, cfg config, stats *Stats, logger *slog.Logger) *bot {
 func botNames(prefix string, id, n int) (account, char string) {
 	num := fmt.Sprintf("%0*d", nameDigits(n), id)
 	return prefix + num, strings.ToUpper(prefix[:min(1, len(prefix))]) + prefix[min(1, len(prefix)):] + num
+}
+
+// classSuffix is added to the character name of a class other than the
+// Human Fighter, so that the fighter and the mystic of a bot account are
+// two characters: Bot0007M.
+func classSuffix(class string) string {
+	if class == classMystic {
+		return "M"
+	}
+	return ""
 }
 
 // nameDigits is the number width for n bots.
@@ -183,7 +201,7 @@ func (b *bot) enter(ctx context.Context, gc *testclient.GameConn, keys session.K
 			if _, err := gc.NewCharacter(ctx); err != nil {
 				return err
 			}
-			res, err := gc.CreateCharacter(ctx, humanFighter(b.char))
+			res, err := gc.CreateCharacter(ctx, createRequest(b.cfg.class, b.char))
 			if err != nil {
 				return err
 			}
@@ -220,6 +238,7 @@ func (b *bot) enter(ctx context.Context, gc *testclient.GameConn, keys session.K
 	b.from, b.to, b.reported = b.start, b.start, b.start
 	b.departed = time.Now()
 	b.speed = moveSpeed(me.UserInfo)
+	b.target, b.attacking, b.avoid = 0, 0, 0
 	return nil
 }
 
@@ -250,6 +269,11 @@ func (b *bot) act(ctx context.Context, gc *testclient.GameConn) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.timeout)
 	defer cancel()
+	if b.cfg.mode == modeHunt {
+		// The server moves a fighting character (chases, restarts), which
+		// the walk estimate does not follow, so a hunter reports nothing.
+		return b.hunt(ctx, gc)
+	}
 	if err := b.reportPosition(ctx, gc); err != nil {
 		return staged("validate", err)
 	}
@@ -485,12 +509,31 @@ func serverAddr(list testclient.ServerListResult, id byte) (string, error) {
 	return "", fmt.Errorf("game server %d is not in the server list", id)
 }
 
+// createRequest is the CharacterCreate of a bot of class (classFighter or
+// classMystic).
+func createRequest(class, name string) testclient.CreateRequest {
+	if class == classMystic {
+		return humanMystic(name)
+	}
+	return humanFighter(name)
+}
+
 // humanFighter is the CharacterCreate of a male Human Fighter with the
 // template's stats, as the client sends it.
 func humanFighter(name string) testclient.CreateRequest {
 	return testclient.CreateRequest{
 		Name: name, Race: 0, Sex: 0, ClassID: 0,
 		INT: 21, STR: 40, CON: 43, MEN: 25, DEX: 30, WIT: 11,
+		HairStyle: 1, HairColor: 2, Face: 1,
+	}
+}
+
+// humanMystic is the CharacterCreate of a male Human Mystic (class 10) with
+// the template's stats; a new one knows Wind Strike.
+func humanMystic(name string) testclient.CreateRequest {
+	return testclient.CreateRequest{
+		Name: name, Race: 0, Sex: 0, ClassID: 10,
+		INT: 41, STR: 22, CON: 27, MEN: 39, DEX: 21, WIT: 20,
 		HairStyle: 1, HairColor: 2, Face: 1,
 	}
 }

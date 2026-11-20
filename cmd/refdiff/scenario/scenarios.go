@@ -142,6 +142,55 @@ var scenarios = []Scenario{
 		Ignore:      fightNoise,
 		Sample:      true,
 	},
+	// Milestone 7: skills.
+	{
+		Name:        "cast-wind-strike",
+		Description: "GM setup: a Human Mystic in the Bearded Keltir field; cast Wind Strike at a keltir until it dies (at most 5 casts, with the reuse between them)",
+		Roles:       []string{"alice"},
+		Run:         castWindStrike,
+		Ignore:      fightNoise,
+		GM:          true,
+	},
+	{
+		Name:        "learn-skill",
+		Description: "GM setup: a level 7 Human Mystic with 1,000 SP next to Baulro (Talking Island); open the skills to learn, learn Wind Strike 2",
+		Roles:       []string{"alice"},
+		Run:         learnSkill,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "buff-stack",
+		Description: "GM setup: a level 10 Human Mystic with Might 1 and Shield 1; cast both on herself, a GM //buff puts Might 3 over Might 1, cast Might 1 again (level 3 stays)",
+		Roles:       []string{"alice"},
+		Run:         buffStack,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "potion",
+		Description: "GM setup: 3 Healing Potions; drink one (short buff, HP ticks), a second within the 10 s reuse is refused, wait until the effect ends",
+		Roles:       []string{"alice"},
+		Run:         potion,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "soulshot",
+		Description: "GM setup: 100 no-grade soulshots in the Bearded Keltir field; use one, turn on automatic soulshots, kill a keltir, turn them off",
+		Roles:       []string{"alice"},
+		Run:         soulshot,
+		Ignore:      fightNoise,
+		GM:          true,
+	},
+	{
+		Name:        "newbie-buffs",
+		Description: "GM setup: a level 8 Human Mystic (the account's first character) next to the Newbie Guide (Talking Island); ask for support magic and get the buffs",
+		Roles:       []string{"alice"},
+		Run:         newbieBuffs,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
 }
 
 func loginCreateEnter(ctx context.Context, s *Session) error {

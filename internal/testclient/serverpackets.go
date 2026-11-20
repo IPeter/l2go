@@ -95,8 +95,10 @@ const (
 
 // Ex server packet sub-opcodes.
 const (
-	ExOpAutoSoulShot    uint16 = 0x12
-	ExOpStorageMaxCount uint16 = 0x2e
+	ExOpRegenMax           uint16 = 0x01
+	ExOpAutoSoulShot       uint16 = 0x12
+	ExOpStorageMaxCount    uint16 = 0x2e
+	ExOpUseSharedGroupItem uint16 = 0x49
 )
 
 // npcTypeOffset is what Mobius adds to an NPC's display ID in NpcInfo,
@@ -210,14 +212,15 @@ var serverPackets = map[byte]serverPacket{
 
 // exServerPackets lists the Ex server packets by sub-opcode.
 var exServerPackets = map[uint16]serverPacket{
-	0x01:                {name: "ExRegenMax"},
-	ExOpAutoSoulShot:    {"ExAutoSoulShot", readExAutoSoulShot},
-	0x1a:                {"ExShowQuestMark", readExShowQuestMark},
-	0x1b:                {name: "ExSendManorList"},
-	ExOpStorageMaxCount: {"ExStorageMaxCount", readExStorageMaxCount},
-	0x31:                {name: "ExPCCafePointInfo"},
-	0x32:                {name: "ExSetCompassZoneCode"},
-	0x38:                {"ExShowScreenMessage", readExShowScreenMessage},
+	ExOpRegenMax:           {"ExRegenMax", readExRegenMax},
+	ExOpAutoSoulShot:       {"ExAutoSoulShot", readExAutoSoulShot},
+	0x1a:                   {"ExShowQuestMark", readExShowQuestMark},
+	0x1b:                   {name: "ExSendManorList"},
+	ExOpStorageMaxCount:    {"ExStorageMaxCount", readExStorageMaxCount},
+	0x31:                   {name: "ExPCCafePointInfo"},
+	0x32:                   {name: "ExSetCompassZoneCode"},
+	0x38:                   {"ExShowScreenMessage", readExShowScreenMessage},
+	ExOpUseSharedGroupItem: {"ExUseSharedGroupItem", readExUseSharedGroupItem},
 }
 
 // serverPacketName returns the Mobius name of a raw server packet (opcode

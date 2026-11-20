@@ -157,6 +157,14 @@ func newWorld() *World {
 	}
 }
 
+// NewWorld returns an empty world model, for tests of the code that reads
+// one (bots, scenarios); a connection keeps its own (GameConn.World).
+func NewWorld() *World { return newWorld() }
+
+// Apply updates the world from one server packet, as the connection's
+// reader does with every packet it reads.
+func (w *World) Apply(p Packet) { w.apply(p) }
+
 // Me returns the character's state.
 func (w *World) Me() Me {
 	w.mu.Lock()

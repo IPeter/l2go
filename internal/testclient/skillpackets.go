@@ -326,3 +326,52 @@ func readShortBuffStatusUpdate(f *fields) Packet {
 	p.Duration = f.i32()
 	return p
 }
+
+// ExRegenMax shows the HP regeneration of a heal over time, such as a
+// healing potion (Ex 0x01). Mobius sends it from HealOverTime.onStart as
+// ExRegenMax(abnormal time, ticks, power).
+type ExRegenMax struct {
+	// One is a word Mobius always writes as 1.
+	One int32
+	// Duration is the effect's abnormal time in seconds (Mobius "count").
+	Duration int32
+	// Ticks is the effect's tick period (Mobius "time").
+	Ticks int32
+	// Amount is 90 % of the HP healed per tick (Mobius hpRegen * 0.90).
+	Amount float64
+}
+
+// PacketName implements Packet.
+func (ExRegenMax) PacketName() string { return "ExRegenMax" }
+
+func readExRegenMax(f *fields) Packet {
+	var p ExRegenMax
+	p.One = f.i32()
+	p.Duration = f.i32()
+	p.Ticks = f.i32()
+	p.Amount = f.f64()
+	return p
+}
+
+// ExUseSharedGroupItem greys out every item of a shared reuse group (Ex
+// 0x49), such as all healing potions after one was used.
+type ExUseSharedGroupItem struct {
+	ItemID  int32
+	GroupID int32
+	// Remaining and Total are the reuse time left and the whole reuse time,
+	// in seconds (Mobius divides the milliseconds by 1000).
+	Remaining int32
+	Total     int32
+}
+
+// PacketName implements Packet.
+func (ExUseSharedGroupItem) PacketName() string { return "ExUseSharedGroupItem" }
+
+func readExUseSharedGroupItem(f *fields) Packet {
+	var p ExUseSharedGroupItem
+	p.ItemID = f.i32()
+	p.GroupID = f.i32()
+	p.Remaining = f.i32()
+	p.Total = f.i32()
+	return p
+}

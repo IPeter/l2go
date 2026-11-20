@@ -18,6 +18,11 @@ import (
 // context and returns an error, so a scenario can pass them to Session.Do.
 type Player struct {
 	Identity
+	// Template makes the CharacterCreate of the player's character from its
+	// name; nil means HumanFighter. Set it before the first Enter or
+	// Prepare.
+	Template func(name string) testclient.CreateRequest
+
 	s *Session
 
 	keys     session.Keys
@@ -230,8 +235,8 @@ func (p *Player) Connect(ctx context.Context) error {
 }
 
 // Create opens the character creation screen (NewCharacter) and creates a
-// Human Fighter with the player's character name, unless the list already
-// has it.
+// character of p's Template (a Human Fighter by default) with the player's
+// character name, unless the list already has it.
 func (p *Player) Create(ctx context.Context) error {
 	if p.game == nil {
 		return errors.New("create before connect")
@@ -242,7 +247,7 @@ func (p *Player) Create(ctx context.Context) error {
 	if _, err := p.game.NewCharacter(ctx); err != nil {
 		return err
 	}
-	res, err := p.game.CreateCharacter(ctx, HumanFighter(p.Char))
+	res, err := p.game.CreateCharacter(ctx, p.createRequest())
 	if err != nil {
 		return err
 	}
@@ -315,12 +320,32 @@ func (p *Player) Logout(ctx context.Context) error {
 	return p.game.Logout(ctx)
 }
 
+// createRequest is the CharacterCreate of p's character.
+func (p *Player) createRequest() testclient.CreateRequest {
+	if p.Template != nil {
+		return p.Template(p.Char)
+	}
+	return HumanFighter(p.Char)
+}
+
 // HumanFighter is the CharacterCreate of a male Human Fighter (class 0)
 // with the template's stats, as the client sends it.
 func HumanFighter(name string) testclient.CreateRequest {
 	return testclient.CreateRequest{
 		Name: name, Race: 0, Sex: 0, ClassID: 0,
 		INT: 21, STR: 40, CON: 43, MEN: 25, DEX: 30, WIT: 11,
+		HairStyle: 1, HairColor: 2, Face: 1,
+	}
+}
+
+// HumanMystic is the CharacterCreate of a male Human Mystic (class 10)
+// with the template's stats (Mobius templates/StartingClass/HumanMystic.xml),
+// as the client sends it. A new Human Mystic knows Wind Strike and Self
+// Heal.
+func HumanMystic(name string) testclient.CreateRequest {
+	return testclient.CreateRequest{
+		Name: name, Race: 0, Sex: 0, ClassID: 10,
+		INT: 41, STR: 22, CON: 27, MEN: 39, DEX: 21, WIT: 20,
 		HairStyle: 1, HairColor: 2, Face: 1,
 	}
 }

@@ -27,7 +27,10 @@
 // (UseItem, DropItem, PickUp, ...), shops and the warehouse (BuyItems,
 // SellItems, MultiSellChoose, DepositItems, WithdrawItems), combat (Attack,
 // RestartPoint) and skills (CastSkill, AcquireSkill, RegisterShortcut,
-// AutoSoulShot). A method whose request Mobius may refuse without a clear
+// AutoSoulShot). Helpers build on them: HuntMonster and FightUntilDead for
+// a fight, CastOn for a cast until it takes effect, LearnableSkills and
+// LearnSkill at a trainer, and the GM steps LevelTo and AddSP. A method
+// whose request Mobius may refuse without a clear
 // answer waits for success only, so a refusal ends with the context; the
 // send-only variants (RequestBuyItem, RequestMagicSkillUse, ...) serve the
 // negative tests.
