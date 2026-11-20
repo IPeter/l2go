@@ -123,18 +123,24 @@ func TestNpcRegen(t *testing.T) {
 	cfg := DefaultCombatConfig()
 	cfg.RaidHPRegenMultiplier, cfg.RaidMPRegenMultiplier = 0.5, 3
 	c := testCombat(t, cfg)
-	if got := c.NpcRegen(n, 2, 0.9, false); got != (Regen{HP: 2, MP: 1}) {
+	if got := c.NpcRegen(n, false); got != (Regen{HP: 2, MP: 1}) {
 		t.Errorf("NpcRegen = %+v, want HP 2, MP max(1, 0.9) = 1", got)
 	}
-	if got := c.NpcRegen(n, 2, 0.9, true); got != (Regen{HP: 1, MP: 3}) {
+	if got := c.NpcRegen(n, true); got != (Regen{HP: 1, MP: 3}) {
 		t.Errorf("raid NpcRegen = %+v, want HP 2 × 0.5, MP 1 × 3", got)
 	}
 	cfg.HPRegenMultiplier = 2
-	if got := testCombat(t, cfg).NpcRegen(n, 2, 0.9, false); got.HP != 4 {
+	if got := testCombat(t, cfg).NpcRegen(n, false); got.HP != 4 {
 		t.Errorf("NpcRegen with HpRegenMultiplier 200 = %+v, want HP 4", got)
 	}
 	// Mobius keeps the template values in floats: 7.7f = 7.69999980926513671875.
-	if got := c.NpcRegen(n, 7.7, 0, false); got.HP != 7.69999980926513671875 {
+	tmpl := gremlin()
+	tmpl.HPRegen = 7.7
+	n, err = NewNpc(r, tmpl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.NpcRegen(n, false); got.HP != 7.69999980926513671875 {
 		t.Errorf("NpcRegen of 7.7 = %v, want 7.69999980926513671875", got.HP)
 	}
 }

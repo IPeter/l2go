@@ -114,17 +114,18 @@ func (c *CombatRules) PlayerRegen(p *Player, act Activity, zone RegenZone) Regen
 }
 
 // NpcRegen returns what an NPC regenerates per tick: the template's vitals
-// hpRegen and mpRegen (Java floats), at least 1, through the regHp and regMp
-// modifiers, × the raid multipliers for raids. Other NPCs use the player
-// multipliers HPRegenMultiplier and MPRegenMultiplier, as in Mobius. No
-// level modifier, stat bonus or activity applies. CP is 0.
-func (c *CombatRules) NpcRegen(n *Npc, hpRegen, mpRegen float64, raid bool) Regen {
+// hpRegen and mpRegen (NpcTemplate.HPRegen and MPRegen, Java floats), at
+// least 1, through the regHp and regMp modifiers, × the raid multipliers for
+// raids. Other NPCs use the player multipliers HPRegenMultiplier and
+// MPRegenMultiplier, as in Mobius. No level modifier, stat bonus or activity
+// applies. CP is 0.
+func (c *CombatRules) NpcRegen(n *Npc, raid bool) Regen {
 	hpMul, mpMul := c.cfg.HPRegenMultiplier, c.cfg.MPRegenMultiplier
 	if raid {
 		hpMul, mpMul = c.cfg.RaidHPRegenMultiplier, c.cfg.RaidMPRegenMultiplier
 	}
 	return Regen{
-		HP: mul(n.Calc(RegHP, math.Max(1, f32(hpRegen))), hpMul),
-		MP: mul(n.Calc(RegMP, math.Max(1, f32(mpRegen))), mpMul),
+		HP: mul(n.Calc(RegHP, math.Max(1, f32(n.tmpl.HPRegen))), hpMul),
+		MP: mul(n.Calc(RegMP, math.Max(1, f32(n.tmpl.MPRegen))), mpMul),
 	}
 }

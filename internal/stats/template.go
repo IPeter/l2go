@@ -64,7 +64,8 @@ type ClassTemplate struct {
 	MAtkSpd int
 	// CritRate is baseCritRate.
 	CritRate int
-	// AttackRange is baseAtkRange, the reach without a weapon.
+	// AttackRange is baseAtkRange. Mobius never uses it for players: they
+	// always have an active weapon (PhysicalAttackRange).
 	AttackRange int
 	PDef        ArmorDefs
 	MDef        JewelDefs
@@ -147,6 +148,10 @@ type NpcTemplate struct {
 	// the CON and MEN bonus; the formulas multiply it back. They are used
 	// at float32 precision (Mobius float fields).
 	HP, MP float64
+	// HPRegen and MPRegen are vitals hpRegen and mpRegen, the regeneration
+	// per tick before modifiers (NpcRegen). Mobius keeps them in float
+	// fields, so they are used at float32 precision.
+	HPRegen, MPRegen float64
 	// PAtk and MAtk are attack physical and magical; PDef and MDef are
 	// defence physical and magical. Mobius keeps them in int fields, so the
 	// fractions are dropped.

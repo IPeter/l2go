@@ -69,6 +69,15 @@ type CombatConfig struct {
 	// and bonusSp stats (MaxExpBonus and MaxSpBonus, 3.5); 0 or less means
 	// no cap.
 	MaxExpBonus, MaxSPBonus float64
+	// RateKarmaLost divides the experience that burns karma (Rates.ini
+	// RateKarmaLost, -1, which means RateXP). A Java float.
+	RateKarmaLost float64
+	// RateKarmaExpLost multiplies the experience a player with karma loses
+	// on death (Rates.ini RateKarmaExpLost, 1). A Java float.
+	RateKarmaExpLost float64
+	// DeathPenaltyChance is the chance in percent that a death raises the
+	// Death Penalty level (Player.ini DeathPenaltyChance, 20).
+	DeathPenaltyChance int
 }
 
 // DefaultCombatConfig returns the Mobius defaults.
@@ -90,6 +99,9 @@ func DefaultCombatConfig() CombatConfig {
 		MonsterExpMaxLevelDifference: 11,
 		MaxExpBonus:                  3.5,
 		MaxSPBonus:                   3.5,
+		RateKarmaLost:                -1,
+		RateKarmaExpLost:             1,
+		DeathPenaltyChance:           20,
 	}
 }
 
@@ -105,6 +117,7 @@ func (c *CombatConfig) validate() error {
 		{"RaidMPRegenMultiplier", c.RaidMPRegenMultiplier},
 		{"RateXP", c.RateXP},
 		{"RateSP", c.RateSP},
+		{"RateKarmaExpLost", c.RateKarmaExpLost},
 	} {
 		if !(f.v >= 0) || math.IsInf(f.v, 0) {
 			return fmt.Errorf("stats: %w: combat config %s is %v, want 0 or more", ErrInvalid, f.name, f.v)
@@ -117,6 +130,10 @@ func (c *CombatConfig) validate() error {
 		return fmt.Errorf("stats: %w: combat config MonsterExpMaxLevelDifference is %d, want 0 or more", ErrInvalid, c.MonsterExpMaxLevelDifference)
 	case math.IsNaN(c.MaxExpBonus) || math.IsNaN(c.MaxSPBonus):
 		return fmt.Errorf("stats: %w: combat config MaxExpBonus %v, MaxSPBonus %v: want numbers", ErrInvalid, c.MaxExpBonus, c.MaxSPBonus)
+	case c.RateKarmaLost != -1 && !(c.RateKarmaLost > 0 && !math.IsInf(c.RateKarmaLost, 0)):
+		return fmt.Errorf("stats: %w: combat config RateKarmaLost is %v, want -1 or more than 0", ErrInvalid, c.RateKarmaLost)
+	case c.DeathPenaltyChance < 0:
+		return fmt.Errorf("stats: %w: combat config DeathPenaltyChance is %d, want 0 or more", ErrInvalid, c.DeathPenaltyChance)
 	}
 	return nil
 }

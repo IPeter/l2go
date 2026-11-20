@@ -454,8 +454,8 @@ func TestEquipment(t *testing.T) {
 		if got := p.Calc(MCritRate, 1); got != 1 {
 			t.Errorf("magic crit without weapon = %v, want 1 (no WIT bonus)", got)
 		}
-		if got := p.PhysicalAttackRange(); got != 20 {
-			t.Errorf("reach without weapon = %d, want the template's 20", got)
+		if got := p.PhysicalAttackRange(); got != 0 {
+			t.Errorf("reach without weapon = %d, want 0: the fists are the active weapon", got)
 		}
 		if err := p.Equip(SlotRHand, ItemOwner(1), squiresSword); err != nil {
 			t.Fatal(err)

@@ -159,6 +159,8 @@ func gremlin() *NpcTemplate {
 		Base:        BaseStats{STR: 40, INT: 21, DEX: 30, WIT: 20, CON: 43, MEN: 10},
 		HP:          39.74519,
 		MP:          40,
+		HPRegen:     2,
+		MPRegen:     0.9,
 		PAtk:        8.47458,
 		MAtk:        5.78704,
 		PDef:        44.44444,

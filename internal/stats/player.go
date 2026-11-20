@@ -455,14 +455,14 @@ func (p *Player) Crit() int {
 	return int(javaInt(v + .5))
 }
 
-// PhysicalAttackRange returns the attack reach: the weapon's pAtkRange, or
-// the template's range without a weapon.
+// PhysicalAttackRange returns the attack reach (getPhysicalAttackRange):
+// the pAtkRange modifiers on 0, which an equipped weapon sets. Mobius starts
+// from the template range only without an active weapon, and a player
+// always has one: without a weapon it holds its class fists, which are not
+// equipped and add no stats. So an unarmed player's reach is 0, and the
+// collision radii alone bring it to its target.
 func (p *Player) PhysicalAttackRange() int {
-	base := p.tmpl.AttackRange
-	if p.slots[SlotRHand].used {
-		base = 0
-	}
-	return int(javaInt(p.Calc(PAtkRange, float64(base))))
+	return int(javaInt(p.Calc(PAtkRange, 0)))
 }
 
 // WeightLimit returns the maximum load: CON bonus × 69000 × the config
