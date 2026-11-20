@@ -109,6 +109,7 @@ type Loop struct {
 	endHooks  []tickHook
 	lastHook  HookID
 	nextTick  time.Time
+	ticks     tickRecorder
 }
 
 // NewLoop returns a loop ready to Run. The first tick is due one interval

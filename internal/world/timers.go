@@ -138,8 +138,10 @@ func (l *Loop) RemoveHook(id HookID) bool {
 	return false
 }
 
-// runTick runs the hooks of the tick scheduled at at.
+// runTick runs the hooks of the tick scheduled at at and records how long
+// they took (TakeTickStats).
 func (l *Loop) runTick(at time.Time) {
+	began := l.clock.Now()
 	l.now = at
 	l.inEvent = true
 	for _, h := range l.hooks {
@@ -149,6 +151,7 @@ func (l *Loop) runTick(at time.Time) {
 		l.callHook(h.fn, at)
 	}
 	l.inEvent = false
+	l.ticks.add(l.clock.Now().Sub(began), began.Sub(at), l.tick)
 }
 
 func (l *Loop) callHook(fn func(time.Time), at time.Time) {

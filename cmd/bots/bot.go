@@ -362,25 +362,31 @@ func (b *bot) say(ctx context.Context, gc *testclient.GameConn) error {
 
 // talk targets the nearest NPC in range and opens its dialog. The server
 // walks the character to it first, so "talk" includes the walk; "target"
-// is the plain round trip.
+// is the plain round trip. An NPC that is the target already (the bot
+// talked to it before and stayed near) is not clicked to target it: the
+// server answers a click on the current target by talking, never with
+// MyTargetSelected.
 func (b *bot) talk(ctx context.Context, gc *testclient.GameConn) error {
 	w := gc.World()
-	npc, ok := nearestNpc(w.Me().Pos, w.Npcs(), b.cfg.talkRange)
+	me := w.Me()
+	npc, ok := nearestNpc(me.Pos, w.Npcs(), b.cfg.talkRange)
 	if !ok {
 		return b.walk(ctx, gc)
 	}
-	t0 := time.Now()
-	if _, err := gc.Target(ctx, npc.ObjectID); err != nil {
-		return staged("target", err)
+	if me.TargetID != npc.ObjectID {
+		t0 := time.Now()
+		if _, err := gc.Target(ctx, npc.ObjectID); err != nil {
+			return staged("target", err)
+		}
+		b.stats.Observe("target", time.Since(t0))
 	}
-	b.stats.Observe("target", time.Since(t0))
 	t1 := time.Now()
 	if _, err := gc.Talk(ctx, npc.ObjectID); err != nil {
 		return staged("talk", err)
 	}
 	b.stats.Observe("talk", time.Since(t1))
 	// The character walked up to the NPC.
-	me := gc.World().Me()
+	me = gc.World().Me()
 	pos := me.Pos
 	if me.Moving {
 		pos = me.Dest
