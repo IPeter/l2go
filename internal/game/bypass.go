@@ -1,6 +1,8 @@
 package game
 
 import (
+	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -72,7 +74,13 @@ func (s *Server) handleBypass(p *Player, body []byte) {
 		var ok bool
 		origin, ok = p.HTML.Validate(command)
 		if !ok {
-			s.log.Debug("game: bypass not offered by a page, dropped", append(p.logArgs(), "bypass", command)...)
+			level := slog.LevelDebug
+			if p.IsGM() {
+				// A GM's dropped click is worth seeing: it shows what the
+				// client sent for a button that did nothing.
+				level = slog.LevelInfo
+			}
+			s.log.Log(context.Background(), level, "game: bypass not offered by a page, dropped", append(p.logArgs(), "bypass", command)...)
 			return
 		}
 		if origin > 0 && !s.inInteractionRange(p, origin) {
