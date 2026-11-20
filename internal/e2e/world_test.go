@@ -135,8 +135,11 @@ func (w *walk) enterWorld(t *testing.T) {
 			u.HP, u.MP, u.Exp, u.SP, u.GM, u.PAtkSpd, u.PAtkSpd2, newFighter.MaxHP, newFighter.MaxMP)
 	}
 	checkStartingItems(t, res.Items, u)
-	if len(res.Quests.Quests)+len(res.Skills.Skills) != 0 {
-		t.Errorf("a new character has quests %+v, skills %+v", res.Quests, res.Skills)
+	// A new Human Fighter knows its level 1 auto-get skills (Mobius
+	// SkillTreesData): Lucky (passive) and Common Craft.
+	wantSkills := []testclient.Skill{{Passive: true, Level: 1, ID: 194}, {Level: 1, ID: 1322}}
+	if len(res.Quests.Quests) != 0 || !slices.Equal(res.Skills.Skills, wantSkills) {
+		t.Errorf("a new character has quests %+v, skills %+v, want no quests and skills %+v", res.Quests, res.Skills, wantSkills)
 	}
 	// Mobius initialShortcuts.xml: Attack, Pick Up, Sit/Stand and the
 	// Tutorial Guide for every class (Human Fighters have no class bar).
