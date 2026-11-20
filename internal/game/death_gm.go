@@ -15,7 +15,7 @@ import (
 // The GM commands of death, levels and karma (Mobius AdminKill, AdminRes,
 // AdminLevel, AdminExpSp and AdminEditChar): //kill, //res, //set_level,
 // //add_level, //add_exp_sp, //remove_exp_sp, //setkarma and
-// //set_pvp_flag. Mobius's admin HTML panels are left out.
+// //set_pvp_flag. The exp/SP panel is in admin_char.go.
 
 // gmSysMsgIncorrectTarget is "That is the incorrect target." (Mobius
 // THAT_IS_THE_INCORRECT_TARGET).
@@ -260,13 +260,10 @@ func (s *Server) gmRemoveExpSP(p *Player, args []string) {
 	p.SendMessage(fmt.Sprintf("Removed %d xp and %d sp from %s.", exp, sp, t.Name()))
 }
 
-// gmExpSPPanel stands in for Mobius's exp/SP panel after //add_exp_sp and
-// //remove_exp_sp: the panel is left out, but its "Invalid target." stays.
-func (s *Server) gmExpSPPanel(p *Player) {
-	if _, ok := gmTargetPlayer(p); !ok {
-		p.SendSystemMessage(gmSysMsgInvalidTarget)
-	}
-}
+// gmExpSPPanel is Mobius's exp/SP panel after //add_exp_sp and
+// //remove_exp_sp (AdminExpSp.addExpSp, admin_char.go), or its "Invalid
+// target.".
+func (s *Server) gmExpSPPanel(p *Player) { s.adminExpSPPage(p) }
 
 // gmExpSPArgs parses "<exp> <sp>" as two longs.
 func gmExpSPArgs(args []string) (exp, sp int64, ok bool) {
