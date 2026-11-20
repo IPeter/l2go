@@ -143,6 +143,76 @@ type QuestActions interface {
 	AddSpawn(npcID int, loc Location, randomOffset bool, despawn time.Duration, summon bool) NpcRef
 }
 
+// NpcActions are what quests make NPCs do beyond QuestActions: their AI
+// and hate list, movement, death, spawn and skills (Mobius Npc, Attackable
+// and their AI). A QuestWorld may implement it; without it these calls
+// raise a Lua error saying so. A target is a PlayerRef or an NpcRef.
+type NpcActions interface {
+	// NpcAttack is Mobius npc.getAI().setIntention(ATTACK, target).
+	NpcAttack(npc NpcRef, target any)
+	// NpcAddDamageHate is Mobius Attackable.addDamageHate(target, damage,
+	// hate).
+	NpcAddDamageHate(npc NpcRef, target any, damage, hate int64)
+	// NpcRemoveAttacker is Mobius npc.getAttackByList().remove(target).
+	NpcRemoveAttacker(npc NpcRef, target any)
+	// NpcAbortAttack is Mobius abortAttack.
+	NpcAbortAttack(npc NpcRef)
+	// NpcMoveTo is Mobius npc.getAI().setIntention(MOVE_TO, loc).
+	NpcMoveTo(npc NpcRef, loc Location)
+	// NpcSetRunning is Mobius setRunning.
+	NpcSetRunning(npc NpcRef)
+	// NpcDie is Mobius doDie(killer); killer is a PlayerRef or NpcRef.
+	NpcDie(npc NpcRef, killer any)
+	// NpcSetRespawn is Mobius npc.getSpawn().startRespawn() (on) and
+	// stopRespawn() (off).
+	NpcSetRespawn(npc NpcRef, on bool)
+	// NpcCast is Mobius doCast(skill): at target, or at the NPC's current
+	// target when target is nil.
+	NpcCast(npc NpcRef, skill Skill, target any)
+	// MagicSkillUse broadcasts MagicSkillUse of caster on target (Mobius
+	// broadcastPacket(new MagicSkillUse(caster, target, id, level, hitTime,
+	// reuseDelay))).
+	MagicSkillUse(caster, target any, skillID, level int, hitTime, reuseDelay time.Duration)
+	// NpcSetTarget is Mobius npc.setTarget(target); target may be nil.
+	NpcSetTarget(npc NpcRef, target any)
+	// NpcTeleport is Mobius npc.teleToLocation(x, y, z).
+	NpcTeleport(npc NpcRef, loc Location)
+	// NpcDropItem is Mobius npc.dropItem(player, id, count): the item falls
+	// around the NPC, kept for the player for a while.
+	NpcDropItem(npc NpcRef, p PlayerRef, itemID int, count int64)
+	// NpcExists reports whether an NPC of the template is in the world
+	// (Mobius World.getVisibleObjects() anyMatch getId() == npcID).
+	NpcExists(npcID int) bool
+}
+
+// QuestSkills is the skill data and the effects as quests see them. A
+// QuestWorld may implement it.
+type QuestSkills interface {
+	// SkillExists reports whether the level of the skill exists (Mobius
+	// SkillData.getSkill(id, level) != null).
+	SkillExists(id, level int) bool
+	// IsAffectedBySkill is Mobius isAffectedBySkill on a PlayerRef or
+	// NpcRef.
+	IsAffectedBySkill(obj any, skillID int) bool
+	// ApplyEffects is Mobius skill.applyEffects(effector, effected).
+	ApplyEffects(skill Skill, effector, effected any)
+}
+
+// QuestItems is the item data as quests see it. A QuestWorld may implement
+// it.
+type QuestItems interface {
+	// ItemTemplate returns an item template (Mobius
+	// ItemData.getTemplate(id)), false for an unknown ID.
+	ItemTemplate(id int) (ItemTemplate, bool)
+}
+
+// ItemTemplate is an item template as items.get returns it.
+type ItemTemplate struct {
+	ID        int
+	Name      string
+	Stackable bool
+}
+
 // TutorialOp selects the packet of QuestActions.Tutorial.
 type TutorialOp int
 
@@ -212,6 +282,48 @@ type NpcDetails interface {
 	// IsType reports whether the NPC is of a Mobius NPC class such as
 	// "Monster" or "VillageMasterPriest" (Mobius instanceof).
 	IsType(class string) bool
+}
+
+// NpcStatus is the part of an NpcRef behind npc:level(), npc:hp() and
+// npc:max_hp().
+type NpcStatus interface {
+	// Level is the template level (Mobius getLevel).
+	Level() int
+	// CurrentHP and MaxHP are Mobius getCurrentHp and getMaxHp.
+	CurrentHP() float64
+	MaxHP() float64
+}
+
+// PlayerCombat is the part of a PlayerRef behind player:active_weapon()
+// and player:target().
+type PlayerCombat interface {
+	// ActiveWeaponID is the item ID of the weapon in the right hand, 0 for
+	// none (Mobius getActiveWeaponItem().getId(), without the fists).
+	ActiveWeaponID() int
+	// TargetObject is the player's target: a PlayerRef, an NpcRef or nil
+	// (Mobius getTarget).
+	TargetObject() any
+}
+
+// PlayerStatus is the part of a PlayerRef behind player:pk_kills(),
+// set_pk_kills(), update_user_info() and active_quests().
+type PlayerStatus interface {
+	// PkKills and SetPkKills are Mobius getPkKills and setPkKills.
+	PkKills() int
+	SetPkKills(n int)
+	// UpdateUserInfo is Mobius updateUserInfo (UserInfo to the player).
+	UpdateUserInfo()
+	// ActiveQuests returns the IDs of the started quests with an ID from 1
+	// to 19999 (Mobius getAllActiveQuests).
+	ActiveQuests() []int
+}
+
+// PlayerNoble is the part of a PlayerRef behind player:is_noble() and
+// player:set_noble().
+type PlayerNoble interface {
+	IsNoble() bool
+	// SetNoble is Mobius setNoble: the flag and the noble skills.
+	SetNoble(noble bool)
 }
 
 // Item is an item as on_item_talk sees it.

@@ -114,6 +114,11 @@ func (v *vm) worldFuncs() map[string]lua.LGFunction {
 			}
 			return 1
 		},
+		"npc_exists": func(L *lua.LState) int {
+			id := int(checkInt(L, 1, "world.npc_exists"))
+			L.Push(lua.LBool(worldAs[NpcActions](v, L, "world.npc_exists").NpcExists(id)))
+			return 1
+		},
 	}
 }
 

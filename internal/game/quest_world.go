@@ -400,8 +400,8 @@ func (o *ScriptOutput) DeleteNpc(npc scripting.NpcRef) {
 	}
 }
 
-// AddSpawn is Mobius addSpawn: a random offset of 50 to 100 each way, and
-// a despawn after despawn when it is positive.
+// AddSpawn is Mobius addSpawn: a random offset of 50 to 100 each way, a
+// random heading for -1, and a despawn after despawn when it is positive.
 func (o *ScriptOutput) AddSpawn(npcID int, loc scripting.Location, randomOffset bool, despawn time.Duration, _ bool) scripting.NpcRef {
 	s := o.srv.Load()
 	if s == nil {
@@ -417,6 +417,9 @@ func (o *ScriptOutput) AddSpawn(npcID int, loc scripting.Location, randomOffset 
 		}
 		loc.X += off()
 		loc.Y += off()
+	}
+	if loc.Heading == -1 { // Mobius Spawn.initializeNpc: a random heading
+		loc.Heading = s.rnd.Get(spawnRandomHeading)
 	}
 	pos := world.Position{X: int32(loc.X), Y: int32(loc.Y), Z: int32(loc.Z), Heading: int32(loc.Heading)} //nolint:gosec // coordinates fit in int32
 	n, err := s.SpawnNpc(npcID, pos)

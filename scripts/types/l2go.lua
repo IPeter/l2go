@@ -436,17 +436,19 @@ function Script:show_html_file(player, file, npc) end
 
 ---Gives items with the "You have earned" messages (Mobius giveItems): the
 ---quest item drop multiplier for quest items, enchant for all but adena.
----Counts below 1 and unknown items are ignored.
+---Counts below 1 and unknown items are ignored. The item may also be given
+---as one table {id =, count =} (Mobius's ItemHolder), the enchant after it.
 ---@param player Player
----@param item_id integer
----@param count integer
+---@param item_id integer|{id: integer, count: integer}
+---@param count? integer
 ---@param enchant? integer
 function Script:give_items(player, item_id, count, enchant) end
 
----Gives items with the quest reward rates (Mobius rewardItems).
+---Gives items with the quest reward rates (Mobius rewardItems). The item
+---may also be given as one table {id =, count =}.
 ---@param player Player
----@param item_id integer
----@param count integer
+---@param item_id integer|{id: integer, count: integer}
+---@param count? integer
 function Script:reward_items(player, item_id, count) end
 
 ---Gives adena, with the quest reward rate when apply_rates is set.
@@ -456,10 +458,11 @@ function Script:reward_items(player, item_id, count) end
 function Script:give_adena(player, count, apply_rates) end
 
 ---Takes count items (-1: all of them); a worn item comes off first.
----Returns true, as Mobius does.
+---Returns true, as Mobius does. The item may also be given as one table
+---{id =, count =} (Mobius takeItem(player, ItemHolder)).
 ---@param player Player
----@param item_id integer
----@param count integer
+---@param item_id integer|{id: integer, count: integer}
+---@param count? integer
 ---@return boolean
 function Script:take_items(player, item_id, count) end
 
@@ -585,7 +588,8 @@ function Script:get_random_party_member_state(player, state_or_cond, chance, npc
 ---@param include_command_channel boolean
 function Script:execute_for_each_player(player, npc, is_summon, include_party, include_command_channel) end
 
----Spawns an NPC (Mobius addSpawn) and returns it.
+---Spawns an NPC (Mobius addSpawn) and returns it. A heading of -1 is a
+---random heading.
 ---@param npc_id integer
 ---@param pos {x: integer, y: integer, z: integer, heading?: integer}|Player|Npc
 ---@param random_offset? boolean
@@ -819,7 +823,8 @@ function Zone:id() end
 ---@return string
 function Zone:type() end
 
----A skill, as the attack and skill handlers get it.
+---A skill, as the attack and skill handlers get it and skills.get returns
+---it.
 ---@class Skill
 local Skill = {}
 
@@ -963,9 +968,56 @@ function Player:is_clan_leader() end
 ---@return boolean
 function Player:is_sub_class_active() end
 
----Always false until noblesse exists.
+---Whether the player is a noble.
 ---@return boolean
 function Player:is_noble() end
+
+---Makes the player a noble or not (Mobius setNoble): the flag and the
+---noble skills, then the skill list.
+---@param noble boolean
+function Player:set_noble(noble) end
+
+---Whether a skill's effects are on the player (Mobius isAffectedBySkill).
+---@param skill integer|Skill a skill ID or a skill
+---@return boolean
+function Player:is_affected_by_skill(skill) end
+
+---The item ID of the weapon in the right hand, nil without one (Mobius
+---getActiveWeaponItem().getId(); Mobius gives a player without a weapon its
+---fists, which this leaves out).
+---@return integer?
+function Player:active_weapon() end
+
+---The player's target, nil without one (Mobius getTarget).
+---@return Player|Npc|nil
+function Player:target() end
+
+---Shows a skill animation of the player on target to the players around,
+---the player included (Mobius broadcastPacket(new MagicSkillUse(player,
+---target, skill_id, level, hit_time, reuse_delay))). It only shows; nothing
+---is cast.
+---@param target Player|Npc
+---@param skill_id integer
+---@param level integer
+---@param hit_time? integer milliseconds, 0 when left out
+---@param reuse_delay? integer milliseconds, 0 when left out
+function Player:magic_skill_use(target, skill_id, level, hit_time, reuse_delay) end
+
+---The player's PK count (Mobius getPkKills).
+---@return integer
+function Player:pk_kills() end
+
+---Sets the PK count (Mobius setPkKills); player:update_user_info() shows
+---it.
+---@param count integer
+function Player:set_pk_kills(count) end
+
+---Sends the player its UserInfo (Mobius updateUserInfo).
+function Player:update_user_info() end
+
+---The IDs of the player's started quests (Mobius getAllActiveQuests).
+---@return integer[]
+function Player:active_quests() end
 
 ---Shows a social action to the players around.
 ---@param action integer
@@ -1086,6 +1138,94 @@ function Npc:is_inside_radius_2d(other, radius) end
 ---@return boolean
 function Npc:is_inside_radius_3d(other, radius) end
 
+---The NPC's level (Mobius getLevel).
+---@return integer
+function Npc:level() end
+
+---The current HP (Mobius getCurrentHp).
+---@return number
+function Npc:hp() end
+
+---The maximum HP (Mobius getMaxHp).
+---@return number
+function Npc:max_hp() end
+
+---Makes a monster attack target (Mobius
+---getAI().setIntention(ATTACK, target)). NPCs that cannot fight ignore it.
+---@param target Player|Npc
+function Npc:attack(target) end
+
+---Adds damage and hate for target to a monster's hate list (Mobius
+---Attackable.addDamageHate). NPCs that cannot fight ignore it.
+---@param target Player|Npc
+---@param damage integer
+---@param hate integer
+function Npc:add_damage_hate(target, damage, hate) end
+
+---Takes target off the NPC's attack-by list (Mobius
+---getAttackByList().remove(target)).
+---@param target Player|Npc
+function Npc:remove_attacker(target) end
+
+---Stops the NPC's swing (Mobius abortAttack).
+function Npc:abort_attack() end
+
+---Makes the NPC run instead of walk (Mobius setRunning).
+function Npc:set_running() end
+
+---Walks the NPC to a place (Mobius getAI().setIntention(MOVE_TO, loc)).
+---@param x integer|{x: integer, y: integer, z: integer}|Player|Npc
+---@param y? integer
+---@param z? integer
+function Npc:move_to(x, y, z) end
+
+---Kills the NPC (Mobius doDie(killer)).
+---@param killer? Player|Npc the NPC itself when left out
+function Npc:die(killer) end
+
+---Stops the NPC's spawn from bringing it back (Mobius
+---getSpawn().stopRespawn()).
+function Npc:stop_respawn() end
+
+---Makes the NPC's spawn bring it back once it is gone (Mobius
+---getSpawn().startRespawn()); an NPC from q:add_spawn comes back at once,
+---where it was spawned.
+function Npc:start_respawn() end
+
+---Casts a skill (Mobius doCast(skill)) at target, or at the NPC's current
+---target. A nil skill does nothing.
+---@param skill Skill? from skills.get
+---@param target? Player|Npc
+function Npc:cast(skill, target) end
+
+---Shows a skill animation of the NPC on target to the players around
+---(Mobius broadcastPacket(new MagicSkillUse(npc, target, skill_id, level,
+---hit_time, reuse_delay))). It only shows; nothing is cast.
+---@param target Player|Npc
+---@param skill_id integer
+---@param level integer
+---@param hit_time? integer milliseconds, 0 when left out
+---@param reuse_delay? integer milliseconds, 0 when left out
+function Npc:magic_skill_use(target, skill_id, level, hit_time, reuse_delay) end
+
+---Sets the NPC's target, which npc:cast without a target casts at (Mobius
+---setTarget).
+---@param target Player|Npc|nil
+function Npc:set_target(target) end
+
+---Teleports the NPC (Mobius teleToLocation).
+---@param x integer|{x: integer, y: integer, z: integer}|Player|Npc
+---@param y? integer
+---@param z? integer
+function Npc:teleport(x, y, z) end
+
+---Drops items on the ground around the NPC, kept for player for 15 s
+---(Mobius dropItem(player, item_id, count)).
+---@param player Player
+---@param item_id integer
+---@param count? integer 1 when left out
+function Npc:drop_item(player, item_id, count) end
+
 -------------------------------------------------------------------------------
 -- rnd, time, world, globals, util
 -------------------------------------------------------------------------------
@@ -1138,6 +1278,44 @@ function world.find_object(object_id) end
 ---@param object_id integer
 ---@return Player?
 function world.get_player(object_id) end
+
+---Whether an NPC of the template is in the world (Mobius
+---World.getVisibleObjects() with anyMatch on getId()).
+---@param npc_id integer
+---@return boolean
+function world.npc_exists(npc_id) end
+
+---The skill data and effects (Mobius SkillData, Skill).
+skills = {}
+
+---A level of a skill, nil when it does not exist (Mobius
+---SkillData.getSkill(id, level)).
+---@param id integer
+---@param level? integer 1 when left out
+---@return Skill?
+function skills.get(id, level) end
+
+---Applies the skill's effects of effector on effected (Mobius
+---skill.applyEffects(effector, effected)). A nil skill does nothing.
+---@param skill Skill? from skills.get
+---@param effector Player|Npc
+---@param effected Player|Npc
+function skills.apply_effects(skill, effector, effected) end
+
+---An item template, as items.get returns it.
+---@class ItemTemplate
+---@field id integer
+---@field name string
+---@field stackable boolean
+
+---The item data (Mobius ItemData).
+items = {}
+
+---An item template, nil for an unknown ID (Mobius
+---ItemData.getTemplate(id)).
+---@param id integer
+---@return ItemTemplate?
+function items.get(id) end
 
 ---Server-wide variables, saved (Mobius GlobalVariablesManager). Values are
 ---strings.

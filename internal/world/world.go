@@ -196,6 +196,21 @@ func (w *World) Find(id ObjectID) (Object, bool) {
 // Len returns the number of objects in the world.
 func (w *World) Len() int { return len(w.objects) }
 
+// Objects returns every object in the world, in no order (Mobius
+// World.getVisibleObjects()). The world must not change while it runs.
+func (w *World) Objects() iter.Seq[Object] {
+	return func(yield func(Object) bool) {
+		if !w.loop.owned("World.Objects") {
+			return
+		}
+		for _, b := range w.objects {
+			if !yield(b.self) {
+				return
+			}
+		}
+	}
+}
+
 // Regions returns the number of regions created so far.
 func (w *World) Regions() int { return len(w.regions) }
 

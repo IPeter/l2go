@@ -4,6 +4,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/IPeter/l2go/internal/scripting"
@@ -41,11 +42,23 @@ type World struct {
 	// Custom lists the quests set_custom(true) made custom, as the game
 	// tells its model.
 	Custom map[string]bool
+
+	// ItemNames are the item names items.get returns; an item without one
+	// is "Item <id>". Every item ID exists.
+	ItemNames map[int]string
+	// StackableItems lists the item IDs items.get calls stackable.
+	StackableItems []int
+	// MissingSkills lists the skill IDs skills.get finds no level of; every
+	// other skill has every level.
+	MissingSkills []int
 }
 
 var (
 	_ scripting.QuestWorld   = (*World)(nil)
 	_ scripting.QuestActions = (*World)(nil)
+	_ scripting.NpcActions   = (*World)(nil)
+	_ scripting.QuestSkills  = (*World)(nil)
+	_ scripting.QuestItems   = (*World)(nil)
 )
 
 // NewWorld returns an empty world at Start.
@@ -58,6 +71,7 @@ func NewWorld() *World {
 		pages:      make(map[string]string),
 		QuestLists: make(map[int32]int),
 		Custom:     make(map[string]bool),
+		ItemNames:  make(map[int]string),
 		nextID:     0x70000000,
 	}
 }
@@ -75,14 +89,30 @@ type ShownReply struct {
 	Reply  scripting.Reply
 }
 
-// Action is one thing QuestActions did, e.g. {Kind: "social", Object: id,
-// Value: 3}.
+// Action is one thing QuestActions or NpcActions did, e.g. {Kind:
+// "social", Object: id, Value: 3}.
+//
+// Kinds: social, teleport, radar, tutorial, chat_window, delete, say,
+// screen; and of NpcActions (Object the NPC, Target the other object):
+// attack, hate (Value the hate, Damage the damage), remove_attacker,
+// abort_attack, move (Loc), run, die (Target the killer), respawn (Value 1
+// on, 0 off), cast (Value the skill ID, Level its level; Target 0 for the
+// current target), magic_skill_use (Object the caster, Value the skill ID,
+// Level, HitTime), apply_effects (Object the effector, Value the skill ID),
+// set_target (Target 0 for none), npc_teleport (Loc), drop_item (Target the
+// player, Value the item ID, Count).
 type Action struct {
-	Kind   string // social, teleport, radar, tutorial, chat_window, delete, say
+	Kind   string
 	Object int32
+	Target int32
 	Value  int
+	Level  int
+	Damage int64
+	Count  int64
 	Text   string
 	Loc    scripting.Location
+	// HitTime is the hit time of magic_skill_use.
+	HitTime time.Duration
 }
 
 // Message is a text or system message sent to a player.
@@ -424,11 +454,145 @@ func (w *World) DeleteNpc(npc scripting.NpcRef) {
 	w.act(Action{Kind: "delete", Object: npc.ObjectID()})
 }
 
-// AddSpawn makes a new fake NPC.
+// AddSpawn makes a new fake NPC. A heading of -1 (random) stays -1.
 func (w *World) AddSpawn(npcID int, loc scripting.Location, _ bool, _ time.Duration, _ bool) scripting.NpcRef {
 	w.nextID++
 	n := &Npc{ObjectID: w.nextID, ID: npcID, X: loc.X, Y: loc.Y, Z: loc.Z, Heading: loc.Heading}
 	w.npcs[n.ObjectID] = n
 	w.Spawned = append(w.Spawned, n)
 	return n.Ref()
+}
+
+// --- NpcActions ---
+
+// NpcAttack records an attack order.
+func (w *World) NpcAttack(npc scripting.NpcRef, target any) {
+	w.act(Action{Kind: "attack", Object: npc.ObjectID(), Target: objectID(target)})
+}
+
+// NpcAddDamageHate records hate.
+func (w *World) NpcAddDamageHate(npc scripting.NpcRef, target any, damage, hate int64) {
+	w.act(Action{Kind: "hate", Object: npc.ObjectID(), Target: objectID(target), Value: int(hate), Damage: damage})
+}
+
+// NpcRemoveAttacker records the removal.
+func (w *World) NpcRemoveAttacker(npc scripting.NpcRef, target any) {
+	w.act(Action{Kind: "remove_attacker", Object: npc.ObjectID(), Target: objectID(target)})
+}
+
+// NpcAbortAttack records the abort.
+func (w *World) NpcAbortAttack(npc scripting.NpcRef) {
+	w.act(Action{Kind: "abort_attack", Object: npc.ObjectID()})
+}
+
+// NpcMoveTo records the walk; the NPC stays where it is.
+func (w *World) NpcMoveTo(npc scripting.NpcRef, loc scripting.Location) {
+	w.act(Action{Kind: "move", Object: npc.ObjectID(), Loc: loc})
+}
+
+// NpcSetRunning sets Running.
+func (w *World) NpcSetRunning(npc scripting.NpcRef) {
+	if n := npcOf(npc); n != nil {
+		n.Running = true
+	}
+	w.act(Action{Kind: "run", Object: npc.ObjectID()})
+}
+
+// NpcDie sets Dead. It runs no kill handlers; Harness.Kill does.
+func (w *World) NpcDie(npc scripting.NpcRef, killer any) {
+	if n := npcOf(npc); n != nil {
+		n.Dead = true
+		n.HP = 0
+	}
+	w.act(Action{Kind: "die", Object: npc.ObjectID(), Target: objectID(killer)})
+}
+
+// NpcSetRespawn sets Respawn.
+func (w *World) NpcSetRespawn(npc scripting.NpcRef, on bool) {
+	v := 0
+	if n := npcOf(npc); n != nil {
+		n.Respawn = on
+	}
+	if on {
+		v = 1
+	}
+	w.act(Action{Kind: "respawn", Object: npc.ObjectID(), Value: v})
+}
+
+// NpcCast records the cast.
+func (w *World) NpcCast(npc scripting.NpcRef, skill scripting.Skill, target any) {
+	w.act(Action{Kind: "cast", Object: npc.ObjectID(), Target: objectID(target), Value: skill.ID, Level: skill.Level})
+}
+
+// MagicSkillUse records the animation.
+func (w *World) MagicSkillUse(caster, target any, skillID, level int, hitTime, _ time.Duration) {
+	w.act(Action{Kind: "magic_skill_use", Object: objectID(caster), Target: objectID(target), Value: skillID, Level: level, HitTime: hitTime})
+}
+
+// NpcSetTarget records the target.
+func (w *World) NpcSetTarget(npc scripting.NpcRef, target any) {
+	w.act(Action{Kind: "set_target", Object: npc.ObjectID(), Target: objectID(target)})
+}
+
+// NpcTeleport moves the NPC.
+func (w *World) NpcTeleport(npc scripting.NpcRef, loc scripting.Location) {
+	if n := npcOf(npc); n != nil {
+		n.X, n.Y, n.Z = loc.X, loc.Y, loc.Z
+	}
+	w.act(Action{Kind: "npc_teleport", Object: npc.ObjectID(), Loc: loc})
+}
+
+// NpcDropItem records the drop; nothing lands anywhere.
+func (w *World) NpcDropItem(npc scripting.NpcRef, p scripting.PlayerRef, itemID int, count int64) {
+	w.act(Action{Kind: "drop_item", Object: npc.ObjectID(), Target: p.ObjectID(), Value: itemID, Count: count})
+}
+
+// NpcExists reports whether an NPC of the template was added to the world
+// (Add, the harness calls, q:add_spawn) and not deleted.
+func (w *World) NpcExists(npcID int) bool {
+	for _, n := range w.npcs {
+		if n.ID == npcID && !n.Deleted {
+			return true
+		}
+	}
+	return false
+}
+
+// --- QuestSkills and QuestItems ---
+
+// SkillExists is true but for MissingSkills.
+func (w *World) SkillExists(id, _ int) bool { return !slices.Contains(w.MissingSkills, id) }
+
+// effectsOf returns the Effects list of a fake player or NPC.
+func effectsOf(obj any) *[]int {
+	switch x := obj.(type) {
+	case playerRef:
+		return &x.p.Effects
+	case npcRef:
+		return &x.n.Effects
+	}
+	return nil
+}
+
+// IsAffectedBySkill looks in the object's Effects.
+func (w *World) IsAffectedBySkill(obj any, skillID int) bool {
+	e := effectsOf(obj)
+	return e != nil && slices.Contains(*e, skillID)
+}
+
+// ApplyEffects adds the skill to the effected's Effects and records it.
+func (w *World) ApplyEffects(skill scripting.Skill, effector, effected any) {
+	if e := effectsOf(effected); e != nil && !slices.Contains(*e, skill.ID) {
+		*e = append(*e, skill.ID)
+	}
+	w.act(Action{Kind: "apply_effects", Object: objectID(effector), Target: objectID(effected), Value: skill.ID, Level: skill.Level})
+}
+
+// ItemTemplate returns the item with its ItemNames name.
+func (w *World) ItemTemplate(id int) (scripting.ItemTemplate, bool) {
+	name, ok := w.ItemNames[id]
+	if !ok {
+		name = "Item " + strconv.Itoa(id)
+	}
+	return scripting.ItemTemplate{ID: id, Name: name, Stackable: slices.Contains(w.StackableItems, id)}, true
 }

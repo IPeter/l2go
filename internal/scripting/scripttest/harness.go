@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -326,8 +328,27 @@ type Player struct {
 	// Vars are the player variables (player:var).
 	Vars map[string]string
 
+	// Noble is player:is_noble(); player:set_noble sets it.
+	Noble bool
+	// Weapon is the item ID of player:active_weapon(); 0 takes the item in
+	// Equipped[Paperdoll.RHAND], if any.
+	Weapon int
+	// Target is player:target(): a *Player, a *Npc or nil.
+	Target any
+	// Effects are the IDs of the skills whose effects are on the player
+	// (player:is_affected_by_skill); skills.apply_effects adds to them.
+	Effects []int
+	// UserInfos counts player:broadcast_user_info() and
+	// player:update_user_info() calls.
+	UserInfos int
+	// PkKills is player:pk_kills(); player:set_pk_kills sets it.
+	PkKills int
+
 	quests map[string]*QuestState
 }
+
+// paperdollRHand is Mobius Paperdoll.RHAND.
+const paperdollRHand = 7
 
 // Quest returns the player's state of a quest in the fake world, or nil.
 func (p *Player) Quest(name string) *QuestState { return p.quests[name] }
@@ -369,8 +390,81 @@ var (
 	_ scripting.PlayerItems   = playerRef{}
 	_ scripting.PlayerDetails = playerRef{}
 	_ scripting.PlayerVars    = playerRef{}
+	_ scripting.PlayerClasses = playerRef{}
+	_ scripting.PlayerCombat  = playerRef{}
+	_ scripting.PlayerNoble   = playerRef{}
+	_ scripting.PlayerStatus  = playerRef{}
 	_ scripting.Located       = playerRef{}
 )
+
+func (r playerRef) PkKills() int     { return r.p.PkKills }
+func (r playerRef) SetPkKills(n int) { r.p.PkKills = n }
+func (r playerRef) UpdateUserInfo()  { r.p.UserInfos++ }
+
+// ActiveQuests returns the IDs of the player's started quests, read from
+// their names ("Q00001_LettersOfLove" is 1), sorted.
+func (r playerRef) ActiveQuests() []int {
+	var ids []int
+	for name, st := range r.p.quests {
+		if st.state != scripting.StateStarted || st.exited {
+			continue
+		}
+		if id := questIDOf(name); id >= 1 && id <= 19999 {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// questIDOf returns the number after the Q of a quest name, 0 if none.
+func questIDOf(name string) int {
+	if !strings.HasPrefix(name, "Q") {
+		return 0
+	}
+	digits := name[1:]
+	if i := strings.IndexFunc(digits, func(c rune) bool { return c < '0' || c > '9' }); i >= 0 {
+		digits = digits[:i]
+	}
+	id, err := strconv.Atoi(digits)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+// SetClassID changes the class; tests read ClassID.
+func (r playerRef) SetClassID(id int) { r.p.ClassID = id }
+
+// SetBaseClassID sets BaseClass.
+func (r playerRef) SetBaseClassID(id int) { r.p.BaseClass = id }
+
+// BroadcastUserInfo counts in UserInfos.
+func (r playerRef) BroadcastUserInfo() { r.p.UserInfos++ }
+
+func (r playerRef) IsNoble() bool       { return r.p.Noble }
+func (r playerRef) SetNoble(noble bool) { r.p.Noble = noble }
+
+func (r playerRef) ActiveWeaponID() int {
+	if r.p.Weapon != 0 {
+		return r.p.Weapon
+	}
+	return r.p.Equipped[paperdollRHand]
+}
+
+func (r playerRef) TargetObject() any {
+	switch t := r.p.Target.(type) {
+	case *Player:
+		if t != nil {
+			return t.Ref()
+		}
+	case *Npc:
+		if t != nil {
+			return t.Ref()
+		}
+	}
+	return nil
+}
 
 func (r playerRef) ObjectID() int32 { return r.p.ObjectID }
 func (r playerRef) Name() string    { return r.p.Name }
@@ -433,6 +527,18 @@ type Npc struct {
 	Types []string
 	// Deleted is set by npc:delete().
 	Deleted bool
+
+	// Level, HP and MaxHP are npc:level(), npc:hp() and npc:max_hp().
+	Level     int
+	HP, MaxHP float64
+	// Running is set by npc:set_running().
+	Running bool
+	// Respawn is set by npc:start_respawn() and cleared by
+	// npc:stop_respawn().
+	Respawn bool
+	// Effects are the IDs of the skills whose effects are on the NPC;
+	// skills.apply_effects adds to them.
+	Effects []int
 }
 
 // Ref returns the NPC as the engine sees it; nil for a nil Npc.
@@ -447,8 +553,13 @@ type npcRef struct{ n *Npc }
 
 var (
 	_ scripting.NpcDetails = npcRef{}
+	_ scripting.NpcStatus  = npcRef{}
 	_ scripting.Located    = npcRef{}
 )
+
+func (r npcRef) Level() int         { return r.n.Level }
+func (r npcRef) CurrentHP() float64 { return r.n.HP }
+func (r npcRef) MaxHP() float64     { return r.n.MaxHP }
 
 func (r npcRef) ObjectID() int32 { return r.n.ObjectID }
 func (r npcRef) ID() int         { return r.n.ID }

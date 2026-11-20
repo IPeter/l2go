@@ -286,13 +286,29 @@ func (v *vm) validItem(L *lua.LState, fn string, id int, count int64) bool {
 	return true
 }
 
-// qGiveItems is q:give_items(player, id, count[, enchant]).
+// itemArgs reads the item of q:give_items and the like from argument 3: an
+// item ID and a count (arguments 3 and 4), or an item {id =, count =}
+// (Mobius's ItemHolder overloads). next is the argument after them.
+func itemArgs(L *lua.LState, fn string) (id int, count int64, next int) {
+	if t, ok := L.Get(3).(*lua.LTable); ok {
+		idv, okID := t.RawGetString("id").(lua.LNumber)
+		cv, okCount := t.RawGetString("count").(lua.LNumber)
+		if !okID || !okCount || float64(idv) != math.Trunc(float64(idv)) || float64(cv) != math.Trunc(float64(cv)) ||
+			math.Abs(float64(idv)) > math.MaxInt32 || math.Abs(float64(cv)) > 1<<53 {
+			L.ArgError(3, fn+": an item {id = integer, count = integer} expected")
+		}
+		return int(idv), int64(cv), 4
+	}
+	return int(checkInt(L, 3, fn)), checkInt(L, 4, fn), 5
+}
+
+// qGiveItems is q:give_items(player, id, count[, enchant]) or
+// q:give_items(player, {id =, count =}[, enchant]).
 func (v *vm) qGiveItems(L *lua.LState) int {
 	checkScript(L, "give_items")
 	p := checkPlayerArg(L, 2, "q:give_items")
-	id := int(checkInt(L, 3, "q:give_items"))
-	count := checkInt(L, 4, "q:give_items")
-	enchant := int(optInt(L, 5, "q:give_items", 0))
+	id, count, next := itemArgs(L, "q:give_items")
+	enchant := int(optInt(L, next, "q:give_items", 0))
 	w := v.needWorld(L, "q:give_items")
 	if v.validItem(L, "q:give_items", id, count) {
 		w.GiveItems(p, id, count, enchant)
@@ -300,12 +316,12 @@ func (v *vm) qGiveItems(L *lua.LState) int {
 	return 0
 }
 
-// qRewardItems is q:reward_items(player, id, count).
+// qRewardItems is q:reward_items(player, id, count) or
+// q:reward_items(player, {id =, count =}).
 func (v *vm) qRewardItems(L *lua.LState) int {
 	checkScript(L, "reward_items")
 	p := checkPlayerArg(L, 2, "q:reward_items")
-	id := int(checkInt(L, 3, "q:reward_items"))
-	count := checkInt(L, 4, "q:reward_items")
+	id, count, _ := itemArgs(L, "q:reward_items")
 	w := v.needWorld(L, "q:reward_items")
 	if v.validItem(L, "q:reward_items", id, count) {
 		w.RewardItems(p, id, count)
@@ -332,12 +348,12 @@ func (v *vm) qGiveAdena(L *lua.LState) int {
 }
 
 // qTakeItems is q:take_items(player, id, count): count items, -1 all of
-// them. Returns true, as Mobius does.
+// them; or q:take_items(player, {id =, count =}). Returns true, as Mobius
+// does.
 func (v *vm) qTakeItems(L *lua.LState) int {
 	checkScript(L, "take_items")
 	p := checkPlayerArg(L, 2, "q:take_items")
-	id := int(checkInt(L, 3, "q:take_items"))
-	count := checkInt(L, 4, "q:take_items")
+	id, count, _ := itemArgs(L, "q:take_items")
 	w := v.needWorld(L, "q:take_items")
 	if id > 0 && count != 0 {
 		w.TakeItems(p, id, count)

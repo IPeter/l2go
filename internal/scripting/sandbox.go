@@ -69,6 +69,8 @@ func (v *vm) modules() []module {
 		{name: "world", funcs: v.worldFuncs()},
 		{name: "globals", funcs: v.globalsFuncs()},
 		{name: "util", funcs: v.utilFuncs()},
+		{name: "skills", funcs: v.skillsFuncs()},
+		{name: "items", funcs: v.itemsFuncs()},
 		{name: "ClassId", funcs: v.classFuncs()},
 	}
 }

@@ -172,6 +172,8 @@ Every link a page offers is remembered for the player; a link that the last page
 | `npcs/asamah/` | `Asamah` | Asamah (32115) | Mobius's `ai/others/Asamah`: the Elroki pages and the capture skill explanations. |
 | `npcs/kier/` | `Kier` | Kierre's statue (32022) | Mobius's `ai/others/Kier`. |
 
+`village_master/` holds Mobius's 16 village master scripts, ported by hand with the same names: the first and second class changes (`ElfHumanFighterChange1`, `ElfHumanWizardChange1`, `DarkElfChange1`, `OrcChange1`, `DwarfBlacksmithChange1`, `DwarfWarehouseChange1` and their `...Change2`, plus `ElfHumanClericChange2`), the newbie village headmasters (`FirstClassTransferTalk`) and the clan and alliance pages (`ClanMaster`, `AllianceMaster`; nobody has a clan until clans exist, and the game answers the clan actions as not available yet). `lib/class_master.lua` holds their shared class change step. Their pages are Mobius's, in `data/html/scripts/village_master/`.
+
 The Mobius ports keep their page names and links. Where Mobius asks for quest states or items, which the Lua API does not have yet, the scripts take the branch of a player who never took the quest (marked in the code).
 
 ### Quests: `quest`
@@ -234,7 +236,7 @@ end)
 
 **Quest state.** `q:get_quest_state(player, create)` returns the player's `QuestState` (nil when there is none and `create` is false). The state lives in the server and is saved with the character, so it survives reloads and restarts; keep progress there, never in Lua variables. Its methods: `get_state()` / `is_created()` / `is_started()` / `is_completed()` / `set_state(State.X)`, `start_quest()`, `get_cond()` (0 unless started), `is_cond(n)` (whatever the state, as Mobius), `set_cond(n, play_middle)`, `set` / `get` / `get_int` / `unset` / `is_set` (string values; names up to 20 characters, values up to 255), the memo states, `exit_quest(repeatable, play_finish)` (true deletes the state, false keeps it COMPLETED; or a `QuestType`), `is_now_available()` / `set_restart_time()` (daily quests, 06:30 server time), `get_player()`, and the tutorial methods.
 
-**Helpers** (Mobius `Quest` methods): `give_items`, `reward_items` (quest rates), `give_adena`, `take_items` (-1 takes all), `take_items_ids`, `get_quest_items_count`, `has_quest_items`, `has_at_least_one_quest_item`, `give_item_randomly(player, npc, id, min, max, limit, chance, play_sound)`, `add_exp_and_sp`, `play_sound(player, QuestSound.X)`, `get_item_equipped(player, Paperdoll.RHAND)`, `get_enchant_level`, `get_no_quest_msg`, `get_already_completed_msg`, `get_htm`, `show_html_file`, `add_spawn`, `add_radar` / `remove_radar` / `clear_radar`, `show_on_screen_msg`, and the party helpers `get_random_party_member`, `get_random_party_member_state`, `execute_for_each_player` (each player is alone until parties exist).
+**Helpers** (Mobius `Quest` methods): `give_items`, `reward_items` (quest rates), `give_adena`, `take_items` (-1 takes all; these three also take Mobius's `ItemHolder` as `{id = , count = }`), `take_items_ids`, `get_quest_items_count`, `has_quest_items`, `has_at_least_one_quest_item`, `give_item_randomly(player, npc, id, min, max, limit, chance, play_sound)`, `add_exp_and_sp`, `play_sound(player, QuestSound.X)`, `get_item_equipped(player, Paperdoll.RHAND)`, `get_enchant_level`, `get_no_quest_msg`, `get_already_completed_msg`, `get_htm`, `show_html_file`, `add_spawn` (heading -1 is random), `add_radar` / `remove_radar` / `clear_radar`, `show_on_screen_msg`, and the party helpers `get_random_party_member`, `get_random_party_member_state`, `execute_for_each_player` (each player is alone until parties exist).
 
 **Timers.** `q:start_quest_timer(name, ms, npc, player, repeating)` runs `on_event(name, npc, player)` later; a reply goes to the timer's player. A timer is known by its name, NPC and player (nil matches only nil); starting one that runs already does nothing. A one-shot timer is gone before its handler runs, so the handler may start it again. `get_quest_timer`, `cancel_quest_timer`, `cancel_quest_timers(name)`. Timers stop when their NPC or player leaves the world and on reload; they are not saved.
 
@@ -246,7 +248,9 @@ end)
 |---|---|
 | `rnd` | `rnd(n)` → [0, n) (0 for n ≤ 0); `rnd(a, b)` → [a, b]; `rnd.bool()`, `rnd.double([max])`, `rnd.entry(list)`. Mobius `Rnd` rules from the server's one random source; `math.random` uses it too (still [1, n]), and `math.randomseed` is gone. |
 | `time` | `time.now_ms()`: the world clock. |
-| `world` | `world.find_object(id)`, `world.get_player(id)`. |
+| `world` | `world.find_object(id)`, `world.get_player(id)`, `world.npc_exists(npc_id)`. |
+| `skills` | `skills.get(id, level)` → Skill or nil; `skills.apply_effects(skill, effector, effected)`. |
+| `items` | `items.get(id)` → `{id, name, stackable}` or nil. |
 | `globals` | `get(name, default)`, `get_int`, `get_long`, `get_bool`, `set(name, value)`: saved server-wide variables. |
 | `util` | `util.in_range(range, a, b, include_z)`. |
 
@@ -254,7 +258,7 @@ end)
 
 **Java helpers.** `local J = require("lib.java")` gives translated code Java's library behaviour (0-based `J.substring`, `J.idiv`, `J.split`, sorted `J.spairs`, ...); see `lib/java.lua`.
 
-The world is only there in handlers: a quest helper, `time`, `world` or `globals` called while the scripts load is an error (use `on_start`).
+The world is only there in handlers: a quest helper, `time`, `world`, `globals`, `skills` or `items` called while the scripts load is an error (use `on_start`).
 
 ### `Player` and `Npc`
 
@@ -269,13 +273,21 @@ Handlers get players and NPCs as values with methods. They are valid only while 
 | `player:sex()`, `player:base_class()`, `player:is_mage_class()`, `player:is_newbie()`, `player:is_dead()`, `player:is_in_category(Category.X)` | |
 | `player:var(name, default)`, `var_int`, `var_bool`, `set_var(name, value)` | player variables, saved with the character |
 | `player:set_class_id(ClassId.X)`, `player:set_base_class(id)`, `player:broadcast_user_info()` | the class change (effect, message, skill list) |
-| `player:is_in_party()`, `party_members()`, `clan()`, `is_clan_leader()`, `is_sub_class_active()`, `is_noble()` | alone, no clan, until those features exist |
+| `player:is_in_party()`, `party_members()`, `clan()`, `is_clan_leader()`, `is_sub_class_active()` | alone, no clan, until those features exist |
+| `player:is_noble()`, `set_noble(bool)` | noblesse (the flag and the noble skills) |
+| `player:active_weapon()`, `player:target()` | the right-hand weapon's item ID (nil without one), the target (Player, Npc or nil) |
+| `player:is_affected_by_skill(id)`, `player:magic_skill_use(target, id, level, hit_ms, reuse_ms)` | a skill's effects on the player; the skill animation (shown only) |
+| `player:pk_kills()`, `set_pk_kills(n)`, `update_user_info()`, `active_quests()` | PK count, UserInfo, the IDs of the started quests |
 | `player:social_action(n)`, `teleport(x, y, z)`, `send_message(text)`, `send_system_message(SystemMessageId.X, ...)` | |
 | `x()`, `y()`, `z()`, `heading()`, `is_inside_radius_2d(other, r)`, `is_inside_radius_3d(other, r)` | players and NPCs |
 | `npc:object_id()`, `npc:id()`, `npc:name()` | integer, integer (the template ID), string |
 | `npc:say(text)` | Says `text` in normal NPC chat to the players around. |
 | `npc:broadcast_say(ChatType.X, text)`, `npc:show_chat_window(player)`, `npc:social_action(n)`, `npc:delete()` | |
 | `npc:is_dead()`, `npc:get_script_value()`, `set_script_value(n)`, `is_script_value(n)`, `npc:is_type("Monster")` | |
+| `npc:level()`, `npc:hp()`, `npc:max_hp()` | |
+| `npc:set_running()`, `add_damage_hate(target, damage, hate)`, `attack(target)`, `remove_attacker(target)`, `abort_attack()`, `move_to(x, y, z)`, `teleport(x, y, z)`, `die(killer)` | the monster AI and the NPC as Mobius quests drive them |
+| `npc:stop_respawn()`, `start_respawn()` | the NPC's spawn (a `q:add_spawn` NPC comes back where it was spawned) |
+| `npc:set_target(target)`, `cast(skills.get(id, level)[, target])`, `magic_skill_use(target, id, level, hit_ms, reuse_ms)`, `drop_item(player, id, count)` | skills and drops |
 
 ### `html`
 

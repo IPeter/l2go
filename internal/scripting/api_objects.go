@@ -207,14 +207,13 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 			pv.SetVar(L.CheckString(2), valueString(L, 3, "player:set_var"))
 			return 0
 		},
-		// Parties, clans, subclasses and noblesse come in later milestones;
-		// until then every player is alone, without a clan.
+		// Parties, clans and subclasses come in later milestones; until then
+		// every player is alone, without a clan.
 		"is_in_party":         solo("is_in_party", lua.LFalse),
 		"party":               solo("party", lua.LNil),
 		"clan":                solo("clan", lua.LNil),
 		"is_clan_leader":      solo("is_clan_leader", lua.LFalse),
 		"is_sub_class_active": solo("is_sub_class_active", lua.LFalse),
-		"is_noble":            solo("is_noble", lua.LFalse),
 		"party_members": func(L *lua.LState) int {
 			p := checkPlayer(L, "party_members")
 			t := L.CreateTable(1, 0)
@@ -256,6 +255,9 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 		},
 	}
 	for name, fn := range locationMethods("player", self) {
+		m[name] = fn
+	}
+	for name, fn := range v.playerAIMethods() {
 		m[name] = fn
 	}
 	return m
@@ -314,6 +316,9 @@ func (v *vm) npcQuestMethods() map[string]lua.LGFunction {
 		},
 	}
 	for name, fn := range locationMethods("npc", self) {
+		m[name] = fn
+	}
+	for name, fn := range v.npcAIMethods() {
 		m[name] = fn
 	}
 	return m
