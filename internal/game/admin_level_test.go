@@ -68,6 +68,12 @@ func TestAdminLevelMenu(t *testing.T) {
 	if l := levelOf(pl); l != 33 {
 		t.Errorf("after Set 33: target level %d", l)
 	}
+	// Give all skills runs //give_all_skills on the target, then shows the
+	// page again (the skills it gives are covered by the learning tests).
+	if !strings.Contains(html, "admin_level_menu skills") {
+		t.Errorf("level page has no Give all skills button: %q", html)
+	}
+	adminLevelShown(t, "Give all skills", onePage(t, e.bypass(gs, "admin_level_menu skills")).HTML, "Player", "33")
 	// Beyond the max level: refused, the page shows again.
 	top := e.srv.MaxLevel() - 1
 	e.bypass(gs, "admin_level_menu set "+strconv.Itoa(top))

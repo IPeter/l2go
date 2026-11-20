@@ -37,7 +37,8 @@ func adminAddLevelButton(content string) string {
 
 // gmAdminLevelMenu is //level_menu: the level page. //level_menu set <level>
 // and //level_menu add <n> first run //set_level and //add_level on the GM's
-// player target, or on the GM without one.
+// player target, or on the GM without one; //level_menu skills gives it all
+// its missing class skills (//give_all_skills).
 func (s *Server) gmAdminLevelMenu(p *Player, args []string) {
 	t, ok := gmTargetPlayer(p)
 	if !ok {
@@ -60,6 +61,12 @@ func (s *Server) gmAdminLevelMenu(p *Player, args []string) {
 			default:
 				s.AddLevel(t, n)
 			}
+		case "skills":
+			// //give_all_skills on the target or the GM: every class skill
+			// missing at the current level.
+			n := s.giveAvailableSkills(t, false, false)
+			gmSysMessage(p, "You gave "+strconv.Itoa(n)+" skills to "+t.Name())
+			t.SendSkillList()
 		}
 	}
 	s.sendPage(p, newPage(0, s.adminLevelPage(p, t)))
@@ -101,6 +108,7 @@ func (s *Server) adminLevelPage(p, t *Player) string {
 	b.WriteString(`</tr></table><br>`)
 	b.WriteString(`<table width=270><tr><td>Level</td><td><edit var="level" width=60 height=12></td>`)
 	b.WriteString(`<td>` + button("Set", "level_menu set $level", 60) + `</td></tr></table><br>`)
+	b.WriteString(button("Give all skills", "level_menu skills", 130) + `<br>`)
 	b.WriteString(button("Back", "admin", 65))
 	b.WriteString(`</center></body></html>`)
 	return b.String()
