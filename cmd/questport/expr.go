@@ -165,6 +165,11 @@ func (t *translator) staticField(class, name string, line int) lx {
 	case "PlayerVariables":
 		// Mobius names its variable keys after the constants.
 		return lx{code: luaQuote(name), prec: precAtom, t: tyString, pure: true, safe: true, strLit: true}
+	case "SevenSigns":
+		// CABAL_DAWN, SEAL_AVARICE...: the numbers of seven_signs.
+		t.requires("seven_signs")
+		t.useAPI("seven_signs.*")
+		return lx{code: "seven_signs." + name, prec: precAtom, t: tyInt, pure: true, safe: true}
 	case "Integer":
 		switch name {
 		case "MAX_VALUE":
@@ -179,6 +184,10 @@ func (t *translator) staticField(class, name string, line int) lx {
 		case "MIN_VALUE":
 			return lx{code: "-9223372036854775808", prec: precUnary, t: tyLong, pure: true, safe: true}
 		}
+	}
+	if name == "STATIC_PACKET" && packetClasses[class] {
+		// A packet without arguments, consumed by sendPacket.
+		return t.packetValue(line, class, nil)
 	}
 	if strings.HasSuffix(class, "Config") {
 		typ, ok := configFields[name]
@@ -207,18 +216,18 @@ var inheritedFields = map[string]struct {
 
 // configFields are the Mobius config values quests read, with types.
 var configFields = map[string]*jtype{
-	"ALT_PARTY_RANGE":                     tyInt,
-	"DISABLE_TUTORIAL":                    tyBool,
+	"ALT_PARTY_RANGE":                      tyInt,
+	"DISABLE_TUTORIAL":                     tyBool,
 	"ALT_VILLAGES_REPEATABLE_QUEST_REWARD": tyBool,
-	"RAID_MIN_RESPAWN_MULTIPLIER":         tyDouble,
-	"RAID_MAX_RESPAWN_MULTIPLIER":         tyDouble,
-	"RATE_QUEST_DROP":                     tyDouble,
-	"RATE_QUEST_REWARD":                   tyDouble,
-	"RATE_QUEST_REWARD_XP":                tyDouble,
-	"RATE_QUEST_REWARD_SP":                tyDouble,
-	"RATE_QUEST_REWARD_ADENA":             tyDouble,
-	"ALT_GAME_NEW_CHAR_ALWAYS_IS_NEWBIE":  tyBool,
-	"ALT_PARTY_RANGE2":                    tyInt,
+	"RAID_MIN_RESPAWN_MULTIPLIER":          tyDouble,
+	"RAID_MAX_RESPAWN_MULTIPLIER":          tyDouble,
+	"RATE_QUEST_DROP":                      tyDouble,
+	"RATE_QUEST_REWARD":                    tyDouble,
+	"RATE_QUEST_REWARD_XP":                 tyDouble,
+	"RATE_QUEST_REWARD_SP":                 tyDouble,
+	"RATE_QUEST_REWARD_ADENA":              tyDouble,
+	"ALT_GAME_NEW_CHAR_ALWAYS_IS_NEWBIE":   tyBool,
+	"ALT_PARTY_RANGE2":                     tyInt,
 }
 
 func (t *translator) fieldAccess(v *fieldExpr) lx {

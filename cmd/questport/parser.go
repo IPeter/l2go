@@ -74,10 +74,10 @@ func (p *parser) failAt(line int, format string, args ...any) {
 
 func (p *parser) fail(format string, args ...any) { p.failAt(p.tok().line, format, args...) }
 
-func (p *parser) isOp(op string) bool   { return p.tok().is(tOp, op) }
-func (p *parser) isKw(kw string) bool   { return p.tok().is(tKeyword, kw) }
-func (p *parser) isIdent() bool         { return p.tok().kind == tIdent }
-func (p *parser) atEnd() bool           { return p.tok().kind == tEOF }
+func (p *parser) isOp(op string) bool { return p.tok().is(tOp, op) }
+func (p *parser) isKw(kw string) bool { return p.tok().is(tKeyword, kw) }
+func (p *parser) isIdent() bool       { return p.tok().kind == tIdent }
+func (p *parser) atEnd() bool         { return p.tok().kind == tEOF }
 func (p *parser) acceptOp(op string) bool {
 	if p.ok() && p.isOp(op) {
 		p.next()

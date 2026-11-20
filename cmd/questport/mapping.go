@@ -45,12 +45,12 @@ func m(recv, name, args, lua, ret string) *mapEntry {
 	return e
 }
 
-func (e *mapEntry) w() *mapEntry             { e.world = true; return e }
-func (e *mapEntry) feat(f string) *mapEntry  { e.feature = f; return e }
-func (e *mapEntry) k() *mapEntry             { e.keep = true; return e }
-func (e *mapEntry) st(s string) *mapEntry    { e.stmt = s; return e }
-func (e *mapEntry) or(alt string) *mapEntry  { e.alt = alt; return e }
-func (e *mapEntry) asView() *mapEntry        { e.view = true; return e }
+func (e *mapEntry) w() *mapEntry            { e.world = true; return e }
+func (e *mapEntry) feat(f string) *mapEntry { e.feature = f; return e }
+func (e *mapEntry) k() *mapEntry            { e.keep = true; return e }
+func (e *mapEntry) st(s string) *mapEntry   { e.stmt = s; return e }
+func (e *mapEntry) or(alt string) *mapEntry { e.alt = alt; return e }
+func (e *mapEntry) asView() *mapEntry       { e.view = true; return e }
 
 func fnm(recv, name, args, ret string, fn func(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx) *mapEntry {
 	e := m(recv, name, args, "", ret)
@@ -138,6 +138,19 @@ func tableOf(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
 	return lx{code: "{" + strings.Join(parts, ", ") + "}", prec: precAtom, t: classType("List", elemOf(args)), safe: true}
 }
 
+// asListFn is Arrays.asList. A single array of objects (Integer[],
+// String[]) is passed as the varargs array itself: the list is a view of
+// it, so shuffling the list shuffles the array. An array of primitives
+// is one element, as in Java.
+func asListFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
+	if len(args) == 1 && isArray(args[0].t) && args[0].t.elem != nil && args[0].t.elem.kind != tkPrim && !isUnknown(args[0].t.elem) {
+		r := args[0]
+		r.t = classType("List", args[0].t.elem)
+		return r
+	}
+	return tableOf(t, c, recv, args, asStmt)
+}
+
 func elemOf(args []lx) *jtype {
 	if len(args) > 0 {
 		return args[0].t
@@ -193,6 +206,8 @@ var mappings = []*mapEntry{
 	m("Quest", "takeItems", "Player,int,int", "q:take_items($1, $2, $3)", "boolean"),
 	m("Quest", "takeItems", "Player,int,int...", "q:take_items_ids($1, $2, $3*)", "boolean"),
 	m("Quest", "takeItems", "Player,ItemHolder", "q:take_items($1, $2)", "boolean"),
+	m("Quest", "takeItem", "Player,ItemHolder", "q:take_items($1, $2)", "boolean"),
+	m("Quest", "hasItem", "Player,ItemHolder", "q:get_quest_items_count($1, $2.id) >= $2.count", "boolean"),
 	m("Quest", "getQuestItemsCount", "Player,int...", "q:get_quest_items_count($1, $2*)", "long"),
 	m("Quest", "hasQuestItems", "Player,int...", "q:has_quest_items($1, $2*)", "boolean"),
 	m("Quest", "hasAtLeastOneQuestItem", "Player,int...", "q:has_at_least_one_quest_item($1, $2*)", "boolean"),
@@ -353,6 +368,14 @@ var mappings = []*mapEntry{
 	m("Player", "getRecomHave", "", "$r:recom_have()", "int"),
 	m("Player", "isHero", "", "$r:is_hero()", "boolean"),
 	m("Player", "getActiveWeaponItem", "", "$r:active_weapon()", "Weapon"),
+	m("Player", "setPkKills", "int", "$r:set_pk_kills($1)", ""),
+	m("Player", "updateUserInfo", "", "$r:update_user_info()", ""),
+	m("Player", "addNotifyQuestOfDeath", "QuestState", "$1:add_notify_of_death($r)", ""),
+	m("Player", "destroyItemByItemId", "any,int,int,any,bool", "q:take_items($r, $2, $3)", "boolean"),
+	m("Player", "getAllActiveQuests", "", "$r:active_quests()", "List"),
+	m("Player", "getSponsor", "", "$r:sponsor()", "int").feat("clans"),
+	m("Player", "getApprentice", "", "$r:apprentice()", "int").feat("clans"),
+	m("Player", "getPledgeType", "", "$r:pledge_type()", "int").feat("clans"),
 	m("Player", "getClassIndex", "", "$r:class_index()", "int").feat("subclass"),
 	m("Player", "getTotalSubClasses", "", "$r:total_sub_classes()", "int").feat("subclass"),
 	m("PlayerAppearance", "isFemale", "", "$b:sex() == 1", "boolean"),
@@ -386,6 +409,19 @@ var mappings = []*mapEntry{
 	m("Clan", "getHideoutId", "", "$r:hideout_id()", "int").feat("clan_halls"),
 	m("Clan", "getLeader", "", "$r:leader()", "ClanMember").feat("clans"),
 	m("ClanMember", "getPlayer", "", "$r:player()", "Player").feat("clans"),
+	fnm("Clan", "broadcastToOnlineMembers", "any", "", func(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
+		if args[0].packet != "PledgeShowInfoUpdate" {
+			return t.todo(c.line, "call Clan.broadcastToOnlineMembers", "Clan.broadcastToOnlineMembers of another packet")
+		}
+		t.consumePacket(args[0])
+		t.requires("clans")
+		t.useAPI("Clan:broadcast_pledge_info_update")
+		return lx{code: asAtom(recv) + ":broadcast_pledge_info_update()", prec: precAtom, t: tyVoid, call: true}
+	}),
+	m("static:CHSiegeManager", "getInstance", "", "clan_halls", "CHSiegeManager").asView().feat("clan_halls"),
+	m("CHSiegeManager", "getSiegableHall", "int", "clan_halls.get_siegable_hall($1)", "SiegableHall").feat("clan_halls"),
+	m("SiegableHall", "getSiege", "", "$r", "ClanHallSiege").asView(),
+	m("ClanHallSiege", "getAttackers", "", "$b:siege_attackers()", "List").feat("clan_halls"),
 	m("ClanMember", "isOnline", "", "$r:is_online()", "boolean").feat("clans"),
 
 	// --- Creatures and world objects ---
@@ -465,6 +501,7 @@ var mappings = []*mapEntry{
 	m("NpcTemplate", "getId", "", "$b:id()", "int"),
 	m("NpcTemplate", "getLevel", "", "$b:level()", "int"),
 	m("NpcTemplate", "getName", "", "$b:name()", "String"),
+	m("NpcTemplate", "getDisplayId", "", "$b:display_id()", "int"),
 	m("NpcVariables", "getInt", "str,int", "$b:var_int($1, $2)", "int"),
 	m("NpcVariables", "getInt", "str", "$b:var_int($1)", "int"),
 	m("NpcVariables", "getLong", "str,int", "$b:var_int($1, $2)", "long"),
@@ -482,6 +519,25 @@ var mappings = []*mapEntry{
 	m("Monster", "dropItem", "Player,int,int", "$r:drop_item($1, $2, $3)", "").w(),
 	m("Npc", "dropItem", "Player,int,int", "$r:drop_item($1, $2, $3)", "").w(),
 	m("Monster", "getMinionList", "", "$r", "MinionList").asView(),
+	m("Monster", "hasMinions", "", "$r:has_minions()", "boolean"),
+	m("MinionList", "getSpawnedMinions", "", "$b:spawned_minions()", "List<Monster>"),
+	m("Npc", "abortAttack", "", "$r:abort_attack()", ""),
+	m("Npc", "isSpawned", "", "$r:is_spawned()", "boolean"),
+	m("Npc", "isSweepActive", "", "$r:is_sweep_active()", "boolean"),
+	m("Attackable", "getSpoilerObjectId", "", "$r:spoiler_object_id()", "int"),
+	m("Npc", "getAttackByList", "", "$r", "AttackByList").asView(),
+	m("AttackByList", "remove", "any", "$b:remove_attacker($1)", "boolean"),
+	m("Summon", "getControlObjectId", "", "$r:control_object_id()", "int").feat("pets"),
+	m("AI", "setIntentionAttack", "Creature", "$b:attack($1)", ""),
+	m("AI", "setIntentionCast", "Skill,WorldObject", "$b:cast($1, $2)", "").w(),
+	m("Attackable", "setCanReturnToSpawnPoint", "bool", "$r:set_can_return_to_spawn_point($1)", ""),
+	m("Creature", "isCastingNow", "", "$r:is_casting_now()", "boolean"),
+	m("Creature", "isSkillDisabled", "Skill", "$r:is_skill_disabled($1)", "boolean"),
+	m("Creature", "setXYZ", "int,int,int", "$r:set_xyz($1, $2, $3)", "").w(),
+	m("Creature", "revalidateZone", "bool", "$r:revalidate_zone()", ""),
+	m("Creature", "getEffectList", "", "$r", "EffectList").asView(),
+	m("EffectList", "getBuffInfoByAbnormalType", "any", "$b:buff_info_by_abnormal_type($1)", "BuffInfo"),
+	fnm("Creature", "addStatFunc", "any", "", addStatFuncFn),
 	m("AI", "setIntention", "any", "$b:set_intention($1)", ""),
 	m("AI", "setIntention", "any,any", "$b:set_intention($1, $2)", ""),
 	m("AI", "setIntention", "any,any,any", "$b:set_intention($1, $2, $3)", ""),
@@ -507,6 +563,8 @@ var mappings = []*mapEntry{
 	m("SkillHolder", "getSkill", "", "$r", "Skill"),
 	m("Skill", "getId", "", "$r.id", "int"),
 	m("Skill", "getLevel", "", "$r.level", "int"),
+	m("Skill", "getMpConsume", "", "$r.mp_consume", "int"),
+	m("Skill", "getHpConsume", "", "$r.hp_consume", "int"),
 	m("Location", "getX", "", "$r.x", "int"),
 	m("Location", "getY", "", "$r.y", "int"),
 	m("Location", "getZ", "", "$r.z", "int"),
@@ -610,7 +668,16 @@ var mappings = []*mapEntry{
 	m("static:LocationUtil", "calculateDistance", "WorldObject,WorldObject,bool,bool", "util.distance($1, $2, $3)", "double"),
 
 	// --- Java: collections ---
-	fnm("static:Arrays", "asList", "any...", "List", tableOf),
+	fnm("static:Arrays", "asList", "any...", "List", asListFn),
+	fnm("static:Arrays", "copyOf", "seq,int", "Array", func(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
+		t.useAPI("J.copy_of")
+		return lx{code: "J.copy_of(" + args[0].code + ", " + args[1].code + ")", prec: precAtom, t: args[0].t, call: true, safe: true}
+	}),
+	fnm("static:String", "join", "str,seq", "String", func(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
+		t.useAPI("table.concat")
+		return lx{code: "table.concat(" + args[1].code + ", " + args[0].code + ")", prec: precAtom, t: tyString, call: true, safe: true}
+	}),
+	m("List", "toString", "", "J.list_to_string($r)", "String"),
 	fnm("static:List", "of", "any...", "List", tableOf),
 	fnm("static:Set", "of", "any...", "Set", setOf),
 	m("static:Arrays", "fill", "seq,any", "J.fill($1, $2)", ""),
@@ -754,6 +821,8 @@ var mappings = []*mapEntry{
 	m("ItemData", "getTemplate", "int", "items.get($1)", "ItemTemplate"),
 	m("ItemTemplate", "getName", "", "$r.name", "String"),
 	m("ItemTemplate", "getId", "", "$r.id", "int"),
+	m("ItemTemplate", "isStackable", "", "$r.stackable", "boolean"),
+	m("Skill", "applyEffects", "Creature,Creature", "skills.apply_effects($r, $1, $2)", "").w(),
 	m("static:SevenSigns", "getInstance", "", "seven_signs", "SevenSigns").asView().feat("seven_signs"),
 	m("SevenSigns", "getPlayerCabal", "int", "seven_signs.player_cabal($1)", "int").feat("seven_signs"),
 	m("SevenSigns", "getSealOwner", "int", "seven_signs.seal_owner($1)", "int").feat("seven_signs"),
@@ -873,7 +942,7 @@ func (e *mapEntry) matches(args []lx) bool {
 	return true
 }
 
-var apiPattern = regexp.MustCompile(`(q|J|rnd|util|world|globals|time|math|table|string|skills|items|ClassId|seven_signs|\$r|\$b|\$1|\$2)([.:])([a-z_0-9]+)\(`)
+var apiPattern = regexp.MustCompile(`(q|J|rnd|util|world|globals|time|math|table|string|skills|items|ClassId|seven_signs|clan_halls|\$r|\$b|\$1|\$2)([.:])([a-z_0-9]+)\(`)
 
 // apiName names the Lua function a template calls, for the report.
 func (e *mapEntry) apiName() string {
@@ -1137,12 +1206,12 @@ func (t *translator) apply(e *mapEntry, recv lx, args []lx, c *callExpr, asStmt 
 			res.base = ""
 		}
 	}
-	if !strings.HasSuffix(code, ")") || strings.HasPrefix(tmpl, "#") || strings.Contains(tmpl, " == ") || strings.Contains(tmpl, " ~= ") {
+	if !strings.HasSuffix(code, ")") || strings.HasPrefix(tmpl, "#") || isCmpTemplate(tmpl) {
 		res.call = false
 		switch {
 		case strings.HasPrefix(tmpl, "#"):
 			res.prec = precUnary
-		case strings.Contains(tmpl, " == ") || strings.Contains(tmpl, " ~= "):
+		case isCmpTemplate(tmpl):
 			res.prec = precCmp
 		case strings.Contains(tmpl, " .. "):
 			res.prec = precConcat
@@ -1152,6 +1221,16 @@ func (t *translator) apply(e *mapEntry, recv lx, args []lx, c *callExpr, asStmt 
 		res.safe = true
 	}
 	return res
+}
+
+// isCmpTemplate reports whether a template's top level is a comparison.
+func isCmpTemplate(tmpl string) bool {
+	for _, op := range []string{" == ", " ~= ", " >= ", " <= ", " < ", " > "} {
+		if strings.Contains(tmpl, op) {
+			return true
+		}
+	}
+	return false
 }
 
 // retType resolves an entry's result type name.
@@ -1191,6 +1270,8 @@ func (t *translator) retType(name string, recv lx, args []lx) *jtype {
 		return arrayOf(tyString)
 	case "List<Player>":
 		return classType("List", classType("Player"))
+	case "List<Monster>":
+		return classType("List", classType("Monster"))
 	case "List<K>":
 		return classType("List", recv.t.arg(0))
 	case "List<V>":
@@ -1272,7 +1353,12 @@ func (t *translator) expand(tmpl string, recv lx, args []lx, keep bool) (string,
 				continue
 			}
 			if n < len(args) {
-				b.WriteString(args[n].code)
+				if i+1 < len(tmpl) && (tmpl[i+1] == '.' || tmpl[i+1] == ':') {
+					// A field or method of the argument: $1.id, $1:name().
+					b.WriteString(asAtom(args[n]))
+				} else {
+					b.WriteString(args[n].code)
+				}
 			}
 		default:
 			b.WriteByte(ch)
@@ -1346,10 +1432,30 @@ func splitFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
 	return lx{code: "J.split(" + recv.code + ", " + luaQuote(pattern) + ")", prec: precAtom, t: arrayOf(tyString), call: true, safe: true}
 }
 
+// regexToLuaPattern maps the few Java regular expressions quests pass to
+// replaceAll (with an empty replacement) to equal Lua patterns. Keys are
+// the decoded string values.
+var regexToLuaPattern = map[string]string{
+	`\D`:      "%D",
+	`[^\d ]`:  "[^%d ]",
+	`[^0-9]`:  "%D",
+	`[^0-9 ]`: "[^%d ]",
+}
+
 // regexReplaceFn translates replaceAll/replaceFirst when the pattern is a
-// literal without regular expression characters.
+// literal without regular expression characters, or a known character
+// class removal (regexToLuaPattern).
 func regexReplaceFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
 	pat, ok := unparen(c.args[0]).(*literalExpr)
+	if ok && pat.kind == litString && c.name == "replaceAll" {
+		// Character class removals the quests use, as fixed Lua patterns.
+		if lp, known := regexToLuaPattern[pat.value]; known {
+			if rep, ok := unparen(c.args[1]).(*literalExpr); ok && rep.kind == litString && rep.value == "" {
+				t.useAPI("string.gsub")
+				return lx{code: "(string.gsub(" + recv.code + ", " + luaQuote(lp) + `, ""))`, prec: precAtom, t: tyString, call: true, safe: true}
+			}
+		}
+	}
 	if !ok || pat.kind != litString || regexMeta.MatchString(pat.value) {
 		return t.todo(c.line, "String."+c.name+" with a regex", "String."+c.name+" with a regular expression")
 	}
@@ -1506,6 +1612,11 @@ func broadcastPacketFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bo
 	case p.packet == "Earthquake" && len(pa) >= 5:
 		t.useAPI("Creature:earthquake")
 		code = r + ":earthquake(" + pa[3].code + ", " + pa[4].code + ")"
+	case p.packet == "TeleportToLocation" && len(pa) >= 4:
+		// The teleport animation of the object (first argument) to x, y, z;
+		// Mobius moves it with setXYZ right after.
+		t.useAPI("Creature:broadcast_teleport")
+		code = asAtom(pa[0]) + ":broadcast_teleport(" + joinCodes(pa[1:4]) + ")"
 	default:
 		if p.packet == "" {
 			return t.todo(c.line, "broadcastPacket", "broadcastPacket of a value that is not a known packet")
@@ -1547,6 +1658,9 @@ func sendPacketFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) l
 	case p.packet == "RadarControl" && len(pa) == 5:
 		t.useAPI("Player:radar_control")
 		code = r + ":radar_control(" + joinCodes(pa) + ")"
+	case p.packet == "ExShowSlideshowKamael" && len(pa) == 0:
+		t.useAPI("Player:show_slideshow_kamael")
+		code = r + ":show_slideshow_kamael()"
 	default:
 		if p.packet == "" {
 			return t.todo(c.line, "sendPacket", "sendPacket of a value that is not a known packet")
@@ -1555,6 +1669,16 @@ func sendPacketFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) l
 	}
 	t.consumePacket(p)
 	return lx{code: code, prec: precAtom, t: tyVoid, call: true}
+}
+
+// addStatFuncFn is creature.addStatFunc(new FuncSet(stat, order, owner,
+// value, null)): the stat is fixed at value from now on.
+func addStatFuncFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
+	if !isA(args[0].t, "FuncSet") || len(args[0].pargs) != 2 {
+		return t.todo(c.line, "call Creature.addStatFunc", "Creature.addStatFunc with a stat function other than FuncSet")
+	}
+	t.useAPI("Creature:set_stat")
+	return lx{code: asAtom(recv) + ":set_stat(" + joinCodes(args[0].pargs) + ")", prec: precAtom, t: tyVoid, call: true}
 }
 
 func joinCodes(xs []lx) string {
@@ -1637,6 +1761,12 @@ func (t *translator) newObject(v *newExpr) lx {
 		return args[0]
 	case "Object":
 		return lx{code: "{}", prec: precAtom, t: classType("Object"), safe: true}
+	case "FuncSet":
+		// new FuncSet(stat, order, owner, value, condition): a stat set to a
+		// fixed value. Only Creature.addStatFunc consumes it.
+		if len(args) == 5 && isNullLit(v.args[4]) {
+			return lx{code: "{stat = " + args[0].code + ", value = " + args[3].code + "}", prec: precAtom, t: classType("FuncSet"), safe: true, pargs: []lx{args[0], args[3]}}
+		}
 	case "StringBuilder":
 		if len(args) == 0 {
 			return lx{code: `""`, prec: precAtom, t: tyString, safe: true}

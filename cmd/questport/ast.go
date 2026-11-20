@@ -101,7 +101,7 @@ type stmtBase struct {
 	trail    []comment // comments after the statement on its last line
 }
 
-func (s *stmtBase) stmtLine() int        { return s.line }
+func (s *stmtBase) stmtLine() int       { return s.line }
 func (s *stmtBase) stmtInfo() *stmtBase { return s }
 
 type blockStmt struct {

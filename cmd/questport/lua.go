@@ -21,13 +21,13 @@ const (
 // lx is a translated Lua expression with what the translator knows
 // about it.
 type lx struct {
-	code string
-	prec int    // precedence of the outermost Lua operator
-	t    *jtype // static Java type
-	safe bool   // never nil or false, so "c and x or y" is exact
-	call bool   // a Lua function call, valid as a statement
-	pure bool   // no side effects and cheap: a name, literal or field
-	todo bool   // contains a J.todo marker
+	code  string
+	prec  int    // precedence of the outermost Lua operator
+	t     *jtype // static Java type
+	safe  bool   // never nil or false, so "c and x or y" is exact
+	call  bool   // a Lua function call, valid as a statement
+	pure  bool   // no side effects and cheap: a name, literal or field
+	todo  bool   // contains a J.todo marker
 	base  string // for views (player.getVariables()): the object they belong to
 	refID string // for fields keeping a world object: the stored object ID
 

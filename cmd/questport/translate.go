@@ -343,8 +343,10 @@ func (t *translator) popFunc() {
 	}
 }
 
-func (t *translator) pushScope() { t.fn.scope = &scope{parent: t.fn.scope, vars: map[string]*localVar{}} }
-func (t *translator) popScope()  { t.fn.scope = t.fn.scope.parent }
+func (t *translator) pushScope() {
+	t.fn.scope = &scope{parent: t.fn.scope, vars: map[string]*localVar{}}
+}
+func (t *translator) popScope() { t.fn.scope = t.fn.scope.parent }
 
 // declare adds a local variable and returns its Lua name.
 func (t *translator) declare(name string, typ *jtype) *localVar {
