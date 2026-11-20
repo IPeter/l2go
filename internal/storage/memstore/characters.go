@@ -98,6 +98,8 @@ func (s *Characters) Create(ctx context.Context, c *storage.Character) error {
 	stored := *c
 	stored.Items, stored.Quests = nil, nil
 	stored.Vars = cloneVars(c.Vars)
+	stored.Skills, stored.SavedSkills = cloneList(c.Skills), cloneList(c.SavedSkills)
+	stored.Shortcuts, stored.ItemReuse = cloneList(c.Shortcuts), cloneList(c.ItemReuse)
 	stored.CreatedAt = normalizeTime(stored.CreatedAt)
 	stored.DeleteTime = normalizeTime(stored.DeleteTime)
 	stored.LastAccess = normalizeTime(stored.LastAccess)
@@ -178,6 +180,8 @@ func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character
 func (s *Characters) load(c storage.Character) storage.Character {
 	c.Items = s.ownedItems(c.ObjectID)
 	c.Vars = cloneVars(c.Vars)
+	c.Skills, c.SavedSkills = cloneList(c.Skills), cloneList(c.SavedSkills)
+	c.Shortcuts, c.ItemReuse = cloneList(c.Shortcuts), cloneList(c.ItemReuse)
 	c.Quests = s.ownedQuests(c.ObjectID)
 	return c
 }
@@ -257,7 +261,10 @@ func (s *Characters) updateFields(c *storage.Character) error {
 	stored := *c
 	stored.Items, stored.Quests = nil, nil
 	stored.Vars = cloneVars(c.Vars)
+	stored.Skills, stored.SavedSkills = cloneList(c.Skills), cloneList(c.SavedSkills)
+	stored.Shortcuts, stored.ItemReuse = cloneList(c.Shortcuts), cloneList(c.ItemReuse)
 	stored.Account, stored.Name, stored.Race, stored.CreatedAt = old.Account, old.Name, old.Race, old.CreatedAt
+	stored.Newbie = old.Newbie
 	stored.DeleteTime = normalizeTime(stored.DeleteTime)
 	stored.LastAccess = normalizeTime(stored.LastAccess)
 	s.byID[c.ObjectID] = stored
@@ -379,6 +386,14 @@ func cloneVars(vars map[string]string) map[string]string {
 		return nil
 	}
 	return maps.Clone(vars)
+}
+
+// cloneList returns a copy of list, or nil if it is empty, as from MongoDB.
+func cloneList[T any](list []T) []T {
+	if len(list) == 0 {
+		return nil
+	}
+	return slices.Clone(list)
 }
 
 // normalizeTime returns t as MongoDB would store it: millisecond precision,

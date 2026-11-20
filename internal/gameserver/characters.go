@@ -123,16 +123,14 @@ func (s *Server) createCharacter(ctx context.Context, c *client, req clientpacke
 	unlock := s.accountLocks.lock(account)
 	defer unlock()
 
-	if limit := s.gs.MaxCharactersPerAccount; limit > 0 {
-		n, err := s.chars.CountByAccount(ctx, account)
-		if err != nil {
-			logger.Error("character creation failed: cannot count characters", "err", err)
-			return serverpackets.CharCreateFailCreationFailed, false
-		}
-		if n >= limit {
-			logger.Info("character creation refused: too many characters", "count", n, "limit", limit)
-			return serverpackets.CharCreateFailTooManyCharacters, false
-		}
+	n, err := s.chars.CountByAccount(ctx, account)
+	if err != nil {
+		logger.Error("character creation failed: cannot count characters", "err", err)
+		return serverpackets.CharCreateFailCreationFailed, false
+	}
+	if limit := s.gs.MaxCharactersPerAccount; limit > 0 && n >= limit {
+		logger.Info("character creation refused: too many characters", "count", n, "limit", limit)
+		return serverpackets.CharCreateFailTooManyCharacters, false
 	}
 	exists, err := s.chars.NameExists(ctx, req.Name)
 	if err != nil {
@@ -153,6 +151,10 @@ func (s *Server) createCharacter(ctx context.Context, c *client, req clientpacke
 		logger.Error("character creation failed", "err", err)
 		return serverpackets.CharCreateFailCreationFailed, false
 	}
+	// The account's first character is its newbie (Mobius
+	// Player.create: accountCharNumber == 0); AltNewCharAlwaysIsNewbie is
+	// applied by the game (Player.IsNewbie).
+	ch.Newbie = n == 0
 	if err := s.chars.Create(ctx, ch); err != nil {
 		if errors.Is(err, storage.ErrExists) {
 			logger.Info("character creation refused: name exists")
@@ -229,6 +231,59 @@ type vitalsGame interface {
 
 var _ vitalsGame = (*game.Server)(nil)
 
+// skillsGame is a game that knows the skills of new characters
+// (*game.Server).
+type skillsGame interface {
+	NewCharacterSkills(classID int) []storage.CharacterSkill
+}
+
+var _ skillsGame = (*game.Server)(nil)
+
+// startingSkills returns the skills a new character of the class starts
+// with (the level-1 skills of its tree, Mobius CharacterCreate), none when
+// the game has no skills.
+func (s *Server) startingSkills(classID int) []storage.CharacterSkill {
+	if g, ok := s.game.(skillsGame); ok {
+		return g.NewCharacterSkills(classID)
+	}
+	return nil
+}
+
+// shortcutGame is a game that knows the shortcut bar of new characters
+// (*game.Server).
+type shortcutGame interface {
+	NewCharacterShortcuts(c *storage.Character) []storage.Shortcut
+}
+
+var _ shortcutGame = (*game.Server)(nil)
+
+// startingShortcuts returns the shortcut bar of a new character with its
+// items and skills (Mobius InitialShortcutData.registerAllShortcuts), none
+// when the game has no initial shortcuts.
+func (s *Server) startingShortcuts(c *storage.Character) []storage.Shortcut {
+	if g, ok := s.game.(shortcutGame); ok {
+		return g.NewCharacterShortcuts(c)
+	}
+	return nil
+}
+
+// questGame is the optional part of the game that gives a new character its
+// starting quests (Mobius startTutorialQuest).
+type questGame interface {
+	NewCharacterQuests() []storage.Quest
+}
+
+var _ questGame = (*game.Server)(nil)
+
+// startingQuests returns the quests a new character starts with, none when
+// the game has no quests.
+func (s *Server) startingQuests() []storage.Quest {
+	if g, ok := s.game.(questGame); ok {
+		return g.NewCharacterQuests()
+	}
+	return nil
+}
+
 // startingVitals returns the HP, MP and CP of a new level 1 character of
 // class tmpl with items, the worn ones in their slots: full HP and MP and
 // CP 0, from the game's stats (with the CON and MEN bonuses, as Mobius
@@ -287,7 +342,7 @@ func (s *Server) newCharacter(ctx context.Context, account string, req clientpac
 	}
 
 	vitals := s.startingVitals(tmpl, items)
-	return &storage.Character{
+	c := &storage.Character{
 		ObjectID:    ids[0],
 		Account:     account,
 		Name:        req.Name,
@@ -310,10 +365,16 @@ func (s *Server) newCharacter(ctx context.Context, account string, req clientpac
 		Z:           int32(loc.Z), //nolint:gosec // world coordinates fit in int32
 		AccessLevel: storage.AccessLevelPlayer,
 		Items:       items,
+		Skills:      s.startingSkills(tmpl.ClassID),
+		Quests:      s.startingQuests(),
 		// Mobius stores lastAccess at creation, so the new character is
 		// the active one of the list until another is played.
 		LastAccess: s.now(),
-	}, nil
+	}
+	// The shortcuts point at the items and need the skills (Mobius
+	// registerAllShortcuts comes last).
+	c.Shortcuts = s.startingShortcuts(c)
+	return c, nil
 }
 
 // keyedMutex is a set of mutexes by key, created on demand and dropped when

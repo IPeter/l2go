@@ -366,8 +366,8 @@ func (s *Server) doPickUp(p *Player, g *GroundItem) {
 
 	t := it.Template()
 	if t.ExImmediateEffect && t.Etc != nil {
-		// Herbs take effect at once; they need the skill engine (M7).
-		s.log.Debug("game: herb picked up without effect", append(p.logArgs(), "item", it.ItemID())...)
+		// Herbs take effect at once and never enter the inventory.
+		s.useHerb(p, it) // item_skill.go
 		return
 	}
 	if t.Weapon != nil || t.Armor != nil {

@@ -50,6 +50,7 @@ const (
 	playerAttacking
 	playerMovingTo
 	playerInteracting
+	playerCasting // CAST, cast_player.go
 )
 
 // playerAI is a player's intention state (Mobius PlayerAI).
@@ -107,7 +108,7 @@ func (s *Server) AttackTarget(p *Player) Creature {
 
 // playerIntendAttack is Mobius CreatureAI.setIntentionAttack.
 func (s *Server) playerIntendAttack(p *Player, target Creature) {
-	if target == nil || p.Sitting {
+	if target == nil || p.Sitting || s.playerCastBusy(p) {
 		p.SendActionFailed()
 		return
 	}
@@ -136,7 +137,7 @@ func (s *Server) playerIntendIdle(p *Player) {
 // ends: no follow, intention MOVE_TO, the stance shown stays.
 func (s *Server) playerIntendMove(p *Player, dest world.Position) bool {
 	ai := s.playerAIOf(p)
-	if s.AttackingNow(p) {
+	if s.AttackingNow(p) || s.playerCastBusy(p) {
 		p.SendActionFailed()
 		ai.savedMove = &dest
 		return false
@@ -181,16 +182,21 @@ func (s *Server) playerStopMoving(p *Player) {
 	}
 }
 
-// playerThink is PlayerAI.notifyActionThink: only ATTACK thinks here.
+// playerThink is PlayerAI.notifyActionThink: ATTACK thinks here, CAST in
+// cast_player.go (a cast thinks even inside a think).
 func (s *Server) playerThink(p *Player) {
 	ai := s.playerAIOf(p)
-	if ai.thinking || p.state != stateInGame || !p.InWorld() {
+	if (ai.thinking && ai.intention != playerCasting) || p.state != stateInGame || !p.InWorld() {
 		return
 	}
+	was := ai.thinking
 	ai.thinking = true
-	defer func() { ai.thinking = false }()
-	if ai.intention == playerAttacking {
+	defer func() { ai.thinking = was }()
+	switch ai.intention {
+	case playerAttacking:
 		s.playerThinkAttack(p, ai)
+	case playerCasting:
+		s.playerThinkCast(p, ai)
 	}
 }
 
@@ -307,10 +313,10 @@ func (s *Server) playerFollow(p *Player) {
 			return
 		}
 		s.playerMoveToPawn(p, ai, t, ai.followRange)
-		if p.Move == nil && ai.intention == playerAttacking {
+		if p.Move == nil && (ai.intention == playerAttacking || ai.intention == playerCasting) {
 			s.playerArrived(p, ai)
 		}
-	} else if p.Move == nil && ai.intention == playerAttacking {
+	} else if p.Move == nil && (ai.intention == playerAttacking || ai.intention == playerCasting) {
 		s.playerArrived(p, ai)
 	}
 }
@@ -363,6 +369,9 @@ func (s *Server) attackArrived(p *Player) {
 // with StopMove (a walk that arrived on its own sent it already), MOVE_TO
 // becomes IDLE, and the intention thinks.
 func (s *Server) playerArrived(p *Player, ai *playerAI) {
+	if s.CastingNow(p) || s.CastingSimultaneouslyNow(p) {
+		return // Mobius notifyActionArrived ignores arrivals during a cast
+	}
 	if ai.pawnOffset > 0 {
 		if ai.pawnWalking || (p.Move == nil && !s.walkArrivingNow(p)) {
 			s.broadcastStop(p)
@@ -398,7 +407,9 @@ func (s *Server) playerReadyToAct(p *Player) {
 			}
 		}
 	}
-	s.playerThink(p)
+	if !s.CastingNow(p) && !s.CastingSimultaneouslyNow(p) {
+		s.playerThink(p)
+	}
 }
 
 // attackLeave is the OnPlayerLeave hook: p's swing, intention and stance

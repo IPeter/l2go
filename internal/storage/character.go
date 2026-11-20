@@ -158,6 +158,11 @@ type Character struct {
 	CreatedAt   time.Time
 	LastAccess  time.Time // creation or last save; zero if never set
 
+	// Newbie marks the first character of its account (Mobius
+	// characters.newbie): Create stores it, and like the identity fields
+	// Update keeps it as stored, since the game never changes it.
+	Newbie bool
+
 	// Items are all the character's items: the carried ones and those in
 	// its warehouse. The stores keep items apart from the character (one
 	// MongoDB document per item) and write a character together with its
@@ -177,6 +182,100 @@ type Character struct {
 	// the same transaction as the character and its items, and return them
 	// in name order, nil when there are none.
 	Quests []Quest
+
+	// Skills are the skills the character knows (Mobius character_skills),
+	// in the order they were learned. The stores keep them in the character
+	// document, in this order, and return nil when there are none.
+	Skills []CharacterSkill
+	// SavedSkills are the effects and skill reuse kept over a logout (Mobius
+	// character_skills_save), in buff_index order. The stores keep them in
+	// the character document, in this order, and return nil when there are
+	// none.
+	SavedSkills []SavedSkill
+	// Shortcuts are the slots of the shortcut bar (Mobius
+	// character_shortcuts), in the order the game gives them. The stores
+	// keep them in the character document, in this order, and return nil
+	// when there are none.
+	Shortcuts []Shortcut
+	// ItemReuse are the item reuse times kept over a logout (Mobius
+	// character_item_reuse_save). The stores keep them in the character
+	// document, in this order, and return nil when there are none.
+	ItemReuse []ItemReuse
+}
+
+// Shortcut types of a Shortcut (the ordinals of Mobius ShortcutType).
+const (
+	ShortcutItem   int32 = 1
+	ShortcutSkill  int32 = 2
+	ShortcutAction int32 = 3
+	ShortcutMacro  int32 = 4
+	ShortcutRecipe int32 = 5
+)
+
+// Shortcut is one slot of a character's shortcut bar (a row of Mobius
+// character_shortcuts).
+type Shortcut struct {
+	// ClassIndex is the class the shortcut belongs to, as CharacterSkill's.
+	ClassIndex int32
+	// Slot is 0-11 on its Page, 0-10.
+	Slot, Page int32
+	// Type is ShortcutItem, ShortcutSkill, ...
+	Type int32
+	// ID is the item object ID, or the skill, action, macro or recipe ID.
+	ID int32
+	// Level is the skill level of a skill shortcut; Mobius keeps -1 or 0 for
+	// the others.
+	Level int32
+}
+
+// ItemReuse is an item under reuse at logout (a row of Mobius
+// character_item_reuse_save).
+type ItemReuse struct {
+	ItemID   int32 // the item template
+	ObjectID int32 // the item object the reuse started on
+	// ReuseDelay is the item's full reuse delay in milliseconds, and ReuseEnd
+	// when the reuse ends in Unix milliseconds (Mobius reuseDelay and
+	// systime).
+	ReuseDelay int64
+	ReuseEnd   int64
+}
+
+// CharacterSkill is one known skill of a character (a row of Mobius
+// character_skills).
+type CharacterSkill struct {
+	// ClassIndex is the class the skill belongs to: 0 for the base class, 1
+	// to 3 for the subclasses (decision X3).
+	ClassIndex int32
+	ID         int32
+	Level      int32
+}
+
+// Restore types of a SavedSkill (Mobius character_skills_save.restore_type).
+const (
+	// RestoreEffect is an effect that was on the character, with its reuse
+	// if the skill was still under one.
+	RestoreEffect int32 = 0
+	// RestoreReuse is a skill that was only under reuse.
+	RestoreReuse int32 = 1
+)
+
+// SavedSkill is an effect or a skill reuse saved at logout (a row of Mobius
+// character_skills_save).
+type SavedSkill struct {
+	// ClassIndex is the class the row belongs to, as CharacterSkill's.
+	ClassIndex int32
+	SkillID    int32
+	SkillLevel int32
+	// RemainingTime is the seconds the effect had left (Mobius
+	// remaining_time), -1 for a RestoreReuse row.
+	RemainingTime int32
+	// ReuseDelay is the skill's full reuse delay in milliseconds, and
+	// ReuseEnd when the reuse ends in Unix milliseconds (Mobius reuse_delay
+	// and systime); both 0 without a reuse.
+	ReuseDelay int64
+	ReuseEnd   int64
+	// RestoreType is RestoreEffect or RestoreReuse.
+	RestoreType int32
 }
 
 // Quest is the stored state of one quest of a character: the rows of the
@@ -279,9 +378,9 @@ type CharacterStore interface {
 	// Update saves the state of the character with c.ObjectID: position and
 	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
 	// and kill counts, death penalty level and exp before death, clan, delete
-	// time, last access, access level and variables. The
-	// identity fields (account, name, race and creation time) are kept as
-	// stored. c.Items replaces the character's items: those it owned that
+	// time, last access, access level, variables, skills and saved skills. The
+	// identity fields (account, name, race and creation time) and the newbie
+	// flag are kept as stored. c.Items replaces the character's items: those it owned that
 	// c.Items does not list are deleted, and the listed ones are stored with
 	// c as their owner, also when another character owned them before. Of
 	// an object ID listed twice, the last one counts. c.Quests replaces the

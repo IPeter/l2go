@@ -77,6 +77,9 @@ func (s *Server) SelectCharacter(ctx context.Context, sess Session, slot int) er
 		s.bySession[sess] = p
 		s.byAccount[account] = p
 		sess.SetState(StateEntering)
+		s.loadWornItems(p) // item_skill.go: the worn items' skills come with the inventory
+		s.loadSkills(p)    // skill_persist.go: skills before the HP, as Mobius loads them
+		s.loadItemState(p) // item_skill.go: shortcuts, item reuse, grade penalty
 		p.Send(s.charSelected(p, sess))
 	}); err != nil {
 		return fmt.Errorf("game: select a character: %w", err)
@@ -167,7 +170,7 @@ func (s *Server) EnterWorld(sess Session) {
 //  1. UserInfo
 //  2. SendMacroList (empty, revision 2)
 //  3. ItemList (window closed)
-//  4. ShortcutInit (empty)
+//  4. ShortcutInit
 //  5. HennaInfo (empty)
 //  6. QuestList (empty)
 //  7. the spawn: CharInfo and RelationChanged both ways with the players
@@ -194,9 +197,9 @@ func (s *Server) enterWorld(p *Player) {
 	p.sendUserInfo()
 	p.Send(enterMacroList)
 	p.Send(serverpackets.NewItemListPacket(serverpackets.ItemList{Items: p.inv.ItemInfos()}))
-	p.Send(emptyShortcutInit)
+	p.Send(shortcutInitPacket(p))
 	p.Send(emptyHennaInfo)
-	p.Send(emptyQuestList)
+	s.questsEnterWorld(p) // quest.go: the quests load, the tutorial, QuestList
 
 	if err := s.world.AddPlayer(p); err != nil {
 		// Mobius disconnects both players of a duplicate object ID.
@@ -219,7 +222,7 @@ func (s *Server) enterWorld(p *Player) {
 		return // a hook made the player leave
 	}
 	// Mobius updateEffectIcons sends the buff icons 300 ms after the spawn.
-	p.after(enterDelay, func() { p.Send(emptyAbnormalStatus) })
+	p.Effects().UpdateIcons(false)
 
 	p.Send(etcStatusPacket(p))
 	p.Send(s.storageMaxCount(p))
@@ -232,8 +235,8 @@ func (s *Server) enterWorld(p *Player) {
 	}
 
 	// Mobius sendSkillList sends the list 300 ms later.
-	p.after(enterDelay, func() { p.Send(emptySkillList) })
-	p.Send(emptySkillCoolTime)
+	p.SendSkillList()
+	p.Send(s.SkillCoolTimePacket(p))
 
 	p.BroadcastUserInfo()
 	s.world.FlushUpdates()

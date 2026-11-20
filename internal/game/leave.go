@@ -104,6 +104,7 @@ func (s *Server) shutdown() {
 			sess.CloseAfter(serverClosePacket, 0)
 		}
 	}
+	s.saveGlobals(true) // quest.go: the scripts' global variables
 	s.log.Info("game world: players saved for shutdown", "players", len(players))
 }
 
@@ -149,7 +150,7 @@ func (s *Server) leave(p *Player, save bool, done func(error)) {
 	if save && inGame {
 		// The saves others asked for earlier go first (decision I2).
 		s.flushSaveRequests()
-		snap, changes = p.Snapshot(), p.takeItemChanges()
+		snap, changes = p.Snapshot(), p.takeSaveChanges()
 	}
 	// The client is detached before the player leaves the world (Mobius
 	// Disconnection): its viewers get DeleteObject, the leaving client

@@ -11,6 +11,7 @@ import (
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
+	"github.com/IPeter/l2go/internal/rnd"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/scripting/scripttest"
 	"github.com/IPeter/l2go/internal/storage"
@@ -72,6 +73,8 @@ type dialogEnvOptions struct {
 	configure func(gs *config.GameServer)
 	// start is when the fake clock starts; zero means testStart.
 	start time.Time
+	// rand is the scripts' random source; nil is a random one.
+	rand rnd.Source
 }
 
 // newDialogEnv starts a server like newEnv, with world data, the HTML pages
@@ -96,7 +99,10 @@ func newDialogEnv(t *testing.T, opts dialogEnvOptions) *testEnv {
 		dir := scripttest.WriteScripts(t, opts.scripts)
 		gs.Scripts.Dir = dir
 		var err error
-		engine, err = scripting.New(t.Context(), scripting.Options{Dir: dir, Output: out})
+		engine, err = scripting.New(t.Context(), scripting.Options{
+			Dir: dir, Output: out, World: out, Rand: opts.rand,
+			Constants: ScriptConstants(nil, 0, QuestSettings{}),
+		})
 		if err != nil {
 			t.Fatalf("load the test scripts: %v", err)
 		}
@@ -169,6 +175,7 @@ type testChar struct {
 	karma         int32
 	adena         int64
 	items         []storage.Item // more items; object IDs are given
+	quests        []storage.Quest
 }
 
 // enterChar creates a human fighter as c describes and enters the world
@@ -183,6 +190,10 @@ func (e *testEnv) enterChar(c testChar) (*fakeSession, *Player) {
 		ch.Level = c.level
 	}
 	ch.Karma = c.karma
+	ch.Quests = c.quests
+	if c.level > 1 {
+		ch.Exp = e.srv.ExpForLevel(int(c.level))
+	}
 	extra := c.items
 	if c.adena > 0 {
 		extra = append(extra, storage.Item{ItemID: adenaID, Count: c.adena, Slot: storage.PaperdollNone, Mana: storage.NoMana})

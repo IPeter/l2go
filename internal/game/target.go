@@ -119,16 +119,14 @@ func (s *Server) handleAttackRequest(p *Player, body []byte) {
 }
 
 // handleTargetCanceld handles RequestTargetCanceld (0x37): the player drops
-// its target (Mobius aborts a cast first when Unselect is 0; nothing is cast
-// yet).
+// its target, or with Unselect 0 aborts a cast first (castTargetCanceled).
 func (s *Server) handleTargetCanceld(p *Player, body []byte) {
-	if _, err := clientpackets.ParseRequestTargetCanceld(body); err != nil {
+	req, err := clientpackets.ParseRequestTargetCanceld(body)
+	if err != nil {
 		s.log.Debug("game: bad RequestTargetCanceld", append(p.logArgs(), "err", err)...)
 		return
 	}
-	if p.Target != nil {
-		s.SetTarget(p, nil)
-	}
+	s.castTargetCanceled(p, req.Unselect)
 }
 
 // actionObject returns the object a click of p names, with the checks of

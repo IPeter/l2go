@@ -15,8 +15,8 @@ import (
 // does nothing, a quest item is refused, a dead player does nothing, the
 // item's conditions must hold unless it is worn; an equipable item goes on
 // or comes off (useEquippableItem), a lure goes into the left hand of a
-// fishing rod, and other items run their handler (only Book exists until
-// the skill engine).
+// fishing rod, and other items run their handler (Book here, the item
+// skills and shots in item_skill.go).
 func (s *Server) handleUseItem(p *Player, body []byte) {
 	req, err := clientpackets.ParseUseItem(body)
 	if err != nil {
@@ -40,9 +40,14 @@ func (s *Server) handleUseItem(p *Player, body []byte) {
 	if !it.Equipped() && !s.checkItemCondition(p, it) {
 		return
 	}
+	if !s.itemUseReady(p, it) { // item_skill.go: stun, sleep, item reuse
+		return
+	}
 	s.onActionRequest(p)
 	if it.Equipable() {
-		s.useEquippableItem(p, it)
+		if !s.equipWhileCasting(p) {
+			s.useEquippableItem(p, it)
+		}
 		return
 	}
 	if w := p.inv.Paperdoll(storage.PaperdollRHand); w != nil && w.Template().Weapon != nil &&
@@ -58,7 +63,9 @@ func (s *Server) handleUseItem(p *Player, body []byte) {
 	case t.Etc != nil && t.Etc.Handler == "Book":
 		s.useBook(p, it)
 	case t.Etc != nil && t.Etc.Handler != "":
-		s.log.Debug("game: item handler not available yet", append(p.logArgs(), "item", it.ItemID(), "handler", t.Etc.Handler)...)
+		if !s.useItemHandler(p, it, req.CtrlPressed) { // item_skill.go
+			s.log.Debug("game: item handler not available yet", append(p.logArgs(), "item", it.ItemID(), "handler", t.Etc.Handler)...)
+		}
 	}
 }
 
@@ -94,10 +101,12 @@ func (s *Server) useEquippableItem(p *Player, it *inventory.Item) {
 				p.SendSystemMessage(sysMsgEquippedS1, name)
 			}
 			s.decreaseMana(p, it)
+			s.weaponEquipped(p, it) // shot.go: a weapon recharges the shots
 		} else {
 			p.SendSystemMessage(sysMsgEquipConditionNotMet)
 		}
 	}
+	s.refreshExpertisePenalty(p) // penalty.go
 	p.BroadcastUserInfo()
 	s.itemsChanged(p, false, nil)
 	if p.stats.InventoryLimit() != oldLimit {

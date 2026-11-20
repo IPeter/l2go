@@ -167,10 +167,14 @@ type Server struct {
 	death    deathFeature
 	kill     npcDeathFeature
 	shop     shopFeature
+	quest    questFeature // quest.go
 
 	// multisell and warehouse are in multisell.go and warehouse.go.
 	multisell multisellFeature
 	warehouse warehouseFeature
+	skills    skillsFeature    // skill_feature.go
+	learn     learnFeature     // skill_learn.go
+	itemSkill itemSkillFeature // item_skill.go
 }
 
 var _ Service = (*Server)(nil)
@@ -258,10 +262,14 @@ func New(opts Options) (*Server, error) {
 		userCommands: make(map[int32]UserCommand),
 	}
 	s.items.pool, s.items.passives, s.items.categories = opts.IDPool, opts.Passives, opts.Categories
+	s.quest.store, s.quest.settings = opts.GlobalVariables, opts.Quests.withDefaults()
 	bg := context.Background()
 	s.bg.Store(&bg)
 	s.world.SetUpdateFlush(s.flushUpdate)
 	s.world.SetActivation(activationOf(gs.World))
+	if err := s.newSkillEnv(opts.Skills); err != nil {
+		return nil, err
+	}
 	if err := s.registerCore(); err != nil {
 		return nil, err
 	}

@@ -97,6 +97,12 @@ type Player struct {
 	dead         bool
 	regen        regenState
 	statusQueued bool // a StatusUpdate is due at the end of the tick
+
+	skill *skillPlayer // skills and effects (skill_creature.go)
+
+	quests playerQuests // quest states and player variables (quest.go)
+
+	itemSkill playerItemSkill // shortcuts, shots, item skills, penalties (item_skill.go)
 }
 
 var (
@@ -135,6 +141,7 @@ func (s *Server) newPlayer(sess Session, c storage.Character) (*Player, error) {
 	}
 	p.char = c
 	p.char.Items = nil
+	p.skill = s.newSkillPlayer(p) // the skills come on the loop (loadSkills)
 	s.loadItems(p, c.Items)
 	s.applyDeathPenalty(p) // Mobius restoreDeathPenaltyBuffLevel
 	v := st.View()

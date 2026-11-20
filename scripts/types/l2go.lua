@@ -891,6 +891,18 @@ function Player:sex() end
 ---@return integer
 function Player:base_class() end
 
+---Changes the class (Mobius setPlayerClass): the class change effect, the
+---system message, the new skills and the skill list.
+---@param id integer a ClassId value
+function Player:set_class_id(id) end
+
+---Sets the base class (Mobius setBaseClass).
+---@param id integer a ClassId value
+function Player:set_base_class(id) end
+
+---Sends UserInfo to the player and CharInfo to the players around it.
+function Player:broadcast_user_info() end
+
 ---@return boolean
 function Player:is_mage_class() end
 

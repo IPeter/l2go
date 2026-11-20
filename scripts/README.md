@@ -268,6 +268,7 @@ Handlers get players and NPCs as values with methods. They are valid only while 
 | `player:get_quest_state(name)` | the state of any quest, by name |
 | `player:sex()`, `player:base_class()`, `player:is_mage_class()`, `player:is_newbie()`, `player:is_dead()`, `player:is_in_category(Category.X)` | |
 | `player:var(name, default)`, `var_int`, `var_bool`, `set_var(name, value)` | player variables, saved with the character |
+| `player:set_class_id(ClassId.X)`, `player:set_base_class(id)`, `player:broadcast_user_info()` | the class change (effect, message, skill list) |
 | `player:is_in_party()`, `party_members()`, `clan()`, `is_clan_leader()`, `is_sub_class_active()`, `is_noble()` | alone, no clan, until those features exist |
 | `player:social_action(n)`, `teleport(x, y, z)`, `send_message(text)`, `send_system_message(SystemMessageId.X, ...)` | |
 | `x()`, `y()`, `z()`, `heading()`, `is_inside_radius_2d(other, r)`, `is_inside_radius_3d(other, r)` | players and NPCs |

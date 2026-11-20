@@ -307,6 +307,7 @@ func (s *Server) takeInventoryUpdates(p *Player, skip *inventory.Item) []serverp
 		p.items.warehouse.TakeUpdates()
 	}
 	ups := p.inv.TakeUpdates()
+	s.itemsRemoved(p, ups) // shortcut.go: the shortcuts of items that left
 	out := make([]serverpackets.InventoryItem, 0, len(ups))
 	for _, u := range ups {
 		if u.Item != skip {
@@ -434,12 +435,20 @@ func (s *Server) refreshOverloaded(p *Player) {
 	}
 }
 
-// etcStatusPacket is EtcStatusUpdate with p's state: the weight penalty,
-// the danger area icon and the death penalty level.
+// etcStatusPacket is EtcStatusUpdate with p's state: the force charges, the
+// weight penalty, the danger area icon, the grade penalty, the Charm of
+// Courage and the death penalty level.
 func etcStatusPacket(p *Player) []byte {
+	var charges int32
+	if p.skill != nil {
+		charges = int32(p.skill.charges) //nolint:gosec // 0-7
+	}
 	return serverpackets.NewEtcStatusUpdatePacket(serverpackets.EtcStatusUpdate{
+		Charges:           charges,
 		WeightPenalty:     p.items.weightPenalty,
 		DangerArea:        p.Zones.Inside(ZoneDangerArea),
+		GradePenalty:      p.GradePenalty(),
+		CharmOfCourage:    p.CharmOfCourage(),
 		DeathPenaltyLevel: p.char.DeathPenaltyLevel,
 	})
 }

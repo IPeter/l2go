@@ -89,8 +89,9 @@ func (s *Server) ReduceAdena(p *Player, count int64, sendMessage bool) bool {
 // template's) is set on the item returned, and InventoryUpdate and
 // StatusUpdate with the load follow. A full inventory drops the new item
 // at p's feet when AutoLootSlotLimit is on, as Mobius does. Items that take
-// effect at once (herbs) need the skill engine and are not added. Adena
-// goes through the same path; use AddAdena for its limit messages.
+// effect at once (herbs) are not added: their skills are cast at once (it
+// returns nil then). Adena goes through the same path; use AddAdena for its
+// limit messages.
 func (s *Server) AddItem(p *Player, itemID int32, count int64, enchant int32, sendMessage, earned bool) (*inventory.Item, error) {
 	if count <= 0 {
 		return nil, inventory.ErrInvalidCount
@@ -99,10 +100,8 @@ func (s *Server) AddItem(p *Player, itemID int32, count int64, enchant int32, se
 	if !ok {
 		return nil, inventory.ErrUnknownItem
 	}
-	if t.ExImmediateEffect && t.Etc != nil {
-		return nil, nil
-	}
-	if sendMessage {
+	herb := t.ExImmediateEffect && t.Etc != nil
+	if sendMessage && (!herb || !s.CastingNow(p)) {
 		name := s.itemNameParam(itemID)
 		switch {
 		case count > 1 && earned:
@@ -114,6 +113,10 @@ func (s *Server) AddItem(p *Player, itemID int32, count int64, enchant int32, se
 		default:
 			p.SendSystemMessage(sysMsgObtainedS1, name)
 		}
+	}
+	if herb {
+		s.castHerbSkills(p, t) // item_skill.go
+		return nil, nil
 	}
 	it, err := p.inv.Create(itemID, count)
 	if err != nil {

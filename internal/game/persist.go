@@ -39,6 +39,15 @@ func (p *Player) Snapshot() storage.Character {
 	c.CurHP, c.CurMP, c.CurCP = p.CurHP, p.CurMP, p.CurCP
 	c.LastAccess = p.srv.loop.Now()
 	c.Items = p.storageItems()
+	p.storeSkills(&c) // skill_persist.go
+	if p.itemSkill.loaded {
+		p.storeShortcuts(&c) // shortcut.go
+		p.storeItemReuse(&c) // item_skill.go
+	}
+	if p.quests.vars != nil {
+		c.Vars = p.quests.vars.Map() // quest.go: the player variables
+	}
+	c.Quests = p.questDocuments()
 	return c
 }
 
@@ -50,7 +59,8 @@ func (p *Player) Snapshot() storage.Character {
 // saver's goroutine; it must not block. Loop-only.
 func (s *Server) Save(p *Player, done func(error)) {
 	s.flushSaveRequests()
-	s.saver.enqueue(p.Snapshot(), p.takeItemChanges(), done)
+	changes := p.takeSaveChanges()
+	s.saver.enqueue(p.Snapshot(), changes, s.questSaveDone(p, changes.Quests, done))
 }
 
 // RequestSave asks for a save of p at the end of the tick (decision I2):
@@ -70,7 +80,8 @@ func (s *Server) flushSaveRequests() {
 	s.items.saveRequests = nil
 	for _, p := range reqs {
 		if p.state == stateInGame {
-			s.saver.enqueue(p.Snapshot(), p.takeItemChanges(), nil)
+			changes := p.takeSaveChanges()
+			s.saver.enqueue(p.Snapshot(), changes, s.questSaveDone(p, changes.Quests, nil))
 		}
 	}
 }
@@ -280,15 +291,19 @@ func noItemChanges(ch storage.ItemChanges) bool {
 
 // mergeItemChanges returns the changes of a, then b, as one set of changes
 // with the meaning of storage.CharacterSaver.Save: each change of b
-// replaces what a says about the same item.
+// replaces what a says about the same item, and the quest changes merge per
+// quest, the newer winning (storage.QuestChanges.Merge).
 func mergeItemChanges(a, b storage.ItemChanges) storage.ItemChanges {
+	quests := a.Quests.Merge(b.Quests)
 	if noItemChanges(b) {
+		a.Quests = quests
 		return a
 	}
 	out := storage.ItemChanges{
 		Upserts:   slices.Clone(a.Upserts),
 		Destroyed: slices.Clone(a.Destroyed),
 		Left:      slices.Clone(a.Left),
+		Quests:    quests,
 	}
 	drop := func(id int32) {
 		out.Upserts = slices.DeleteFunc(out.Upserts, func(it storage.Item) bool { return it.ObjectID == id })

@@ -363,7 +363,9 @@ func (s *Server) doAttack(a, t Creature) AttackOutcome {
 		}
 	}
 
-	strike := &stats.Strike{Attacker: af, Target: tf, Night: s.world.GameTime().IsNight()}
+	// The Attack shows the soulshot charged at the start (shot.go).
+	soulshot, grade := s.attackSoulshot(a)
+	strike := &stats.Strike{Attacker: af, Target: tf, Soulshot: soulshot, Night: s.world.GameTime().IsNight()}
 	if s.attack.traits != nil {
 		if b, ok := s.attack.traits(a, t); ok {
 			strike.SetTrait(b)
@@ -398,7 +400,7 @@ func (s *Server) doAttack(a, t Creature) AttackOutcome {
 		st.bowLock = gameTick(now) + int64(timing.BowLockTicks)
 	}
 	for i, h := range hits {
-		s.attackTimer(st, timing.Hits[i], func() { s.onHitTimer(a, t, h) })
+		s.attackTimer(st, timing.Hits[i], func() { s.onHitTimer(a, t, h, i == 0) })
 	}
 
 	// Mobius flags the attacker outside PvP zones and starts its stance.
@@ -410,8 +412,10 @@ func (s *Server) doAttack(a, t Creature) AttackOutcome {
 	}
 	if !res.Landed() {
 		s.AbortAttack(a)
+	} else {
+		s.spendSoulshot(a) // shot.go: a landed swing spends the soulshot
 	}
-	s.world.Broadcast(a, s.attackPacket(a, t, hits), true)
+	s.world.Broadcast(a, s.attackPacket(a, t, hits, soulshot, grade), true)
 	s.readyAfter(a, st, timing.Ready)
 	return AttackSwung
 }
@@ -473,13 +477,15 @@ func (s *Server) canUseRangeWeapon(a Creature, w *data.Item, st *attackState) (A
 	return AttackSwung, true
 }
 
-// attackPacket is the Attack of a's swing at t with its hits.
-func (s *Server) attackPacket(a, t Creature, hits []stats.Hit) []byte {
+// attackPacket is the Attack of a's swing at t with its hits, and the
+// soulshot with the weapon's grade when one was charged.
+func (s *Server) attackPacket(a, t Creature, hits []stats.Hit, soulshot bool, grade int32) []byte {
 	ap, tp := a.Position(), t.Position()
 	pkt := serverpackets.Attack{
 		AttackerID: int32(a.ID()),
 		X:          ap.X, Y: ap.Y, Z: ap.Z,
 		TargetX: tp.X, TargetY: tp.Y, TargetZ: tp.Z,
+		Soulshot: soulshot, Grade: grade,
 		Hits: make([]serverpackets.AttackHit, len(hits)),
 	}
 	for i, h := range hits {
@@ -496,15 +502,20 @@ func (s *Server) attackPacket(a, t Creature, hits []stats.Hit) []byte {
 
 // onHitTimer is Mobius Creature.onHitTimer: a hit of a's swing lands on t.
 // Reflected and absorbed damage (which skip bows), damage listeners,
-// trigger skills and soulshots come with the skills (M7): until then the
-// REFLECT_DAMAGE_PERCENT and ABSORB_DAMAGE_PERCENT stats are 0.
-func (s *Server) onHitTimer(a, t Creature, h stats.Hit) {
+// trigger skills come with the skills (M7): until then the
+// REFLECT_DAMAGE_PERCENT and ABSORB_DAMAGE_PERCENT stats are 0. The first
+// hit of a swing (recharge) charges the automatic soulshots again at its
+// end, and when the target died before it (shot.go).
+func (s *Server) onHitTimer(a, t Creature, h stats.Hit, recharge bool) {
 	if !attackerInWorld(a) {
 		return
 	}
 	if t == nil || a.IsDead() {
 		s.notifyCancel(a)
 		return
+	}
+	if recharge {
+		defer s.RechargeShots(a, true, false)
 	}
 	_, npc := a.(*Npc)
 	if (npc && t.IsDead()) || t.IsDead() || !s.surrounding(a, t) {
@@ -534,6 +545,7 @@ func (s *Server) onHitTimer(a, t Creature, h stats.Hit) {
 	if !creatureRaid(t) {
 		if tc, st := s.breakTarget(t); tc != nil && s.combat.AttackBreak(s.attack.rnd, tc, st, float64(h.Damage)) {
 			s.BreakAttack(t)
+			s.BreakCast(t)
 		}
 	}
 }
@@ -580,6 +592,7 @@ func sendDamageMessage(p *Player, target Creature, damage int, crit, miss bool) 
 // breakTarget returns what Formulas.calcAtkBreak reads of t.
 func (s *Server) breakTarget(t Creature) (stats.Combatant, stats.BreakState) {
 	var st stats.BreakState
+	st.Casting = s.CastingNow(t)
 	switch v := t.(type) {
 	case *Player:
 		w := s.activeWeaponItem(v)
@@ -598,7 +611,7 @@ func (s *Server) breakTarget(t Creature) (stats.Combatant, stats.BreakState) {
 // w (nil for none), shield and position.
 func (s *Server) fighter(c Creature, w *data.Item) stats.Fighter {
 	pos := c.Position()
-	f := stats.Fighter{Ref: c, X: int(pos.X), Y: int(pos.Y), Z: int(pos.Z), Heading: int(pos.Heading)}
+	f := stats.Fighter{Ref: s.statsRef(c), X: int(pos.X), Y: int(pos.Y), Z: int(pos.Z), Heading: int(pos.Heading)}
 	var sw *stats.Weapon
 	if w != nil {
 		sw = &stats.Weapon{ItemID: w.ID, Type: w.Weapon.Type.String(), ReuseDelay: w.ReuseDelay}

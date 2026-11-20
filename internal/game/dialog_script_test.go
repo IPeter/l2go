@@ -137,28 +137,6 @@ func TestScriptFirstTalkDefaults(t *testing.T) {
 	}
 }
 
-func TestScriptQuestWindow(t *testing.T) {
-	e := newDialogEnv(t, dialogEnvOptions{pages: dialogPages, scripts: dialogScripts})
-	sess, p := e.enterChar(testChar{account: "hero", name: "Hero", pos: tiStart})
-	guide := e.spawnNpc(npcNewbieGuide, eastOf(tiStart, -50))
-	gid := strconv.Itoa(int(guide.ID()))
-
-	// Two scripts talk at the guide: the player chooses.
-	e.talk(sess, p, guide)
-	ps := e.bypass(sess, "Script")
-	wantPage(t, "quest choice", onePage(t, ps), guide.ID(), `<html><body>`+
-		`<a action="bypass npc_`+gid+`_Script OtherNpc">[OtherNpc]</a><br>`+
-		`<a action="bypass npc_`+gid+`_Script TestNpc">[TestNpc]</a><br>`+
-		`</body></html>`)
-	// Choosing one runs its talk handler.
-	ps = e.bypass(sess, "npc_"+gid+"_Script TestNpc")
-	wantPage(t, "talk", onePage(t, ps), guide.ID(), "<html><body>Talk with Hero</body></html>")
-	// The choice page is gone: OtherNpc's link no longer works.
-	if ps := e.bypass(sess, "npc_"+gid+"_Script OtherNpc"); len(ps) != 0 {
-		t.Errorf("a link of the old page answered %q", testclient.Names(ps))
-	}
-}
-
 func TestScriptErrorsShowToGMs(t *testing.T) {
 	e := newDialogEnv(t, dialogEnvOptions{pages: dialogPages, scripts: dialogScripts})
 	sess, gm := e.enterChar(testChar{account: "gm", name: "Gm", access: storage.AccessLevelAdmin, pos: tiStart})

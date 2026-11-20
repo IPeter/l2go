@@ -71,6 +71,7 @@ type Item struct {
 	lastChange Change
 	dirty      bool
 	c          *Container // the container holding the item, nil if none
+	shots      uint8      // the charged shots of a weapon, a bit per kind (shots.go)
 }
 
 // NewItem returns an item that is in no container (LocVoid), such as a

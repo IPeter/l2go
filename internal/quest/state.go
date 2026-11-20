@@ -206,6 +206,10 @@ func (st *State) Cond() int32 {
 	return 0
 }
 
+// Step returns the step as last set, whatever the state (Mobius _cond,
+// which IsCond compares).
+func (st *State) Step() int32 { return st.cond }
+
 // IsCond reports whether the step is cond (Mobius isCond), whatever the
 // state.
 func (st *State) IsCond(cond int32) bool { return st.cond == cond }

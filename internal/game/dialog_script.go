@@ -2,9 +2,11 @@ package game
 
 import (
 	"html"
+	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/IPeter/l2go/internal/quest"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/world"
 )
@@ -44,7 +46,7 @@ func (s *Server) showScriptReply(p *Player, n *Npc, r scripting.Reply) {
 	}
 	switch r.Kind {
 	case scripting.ReplyPage:
-		content, ok := s.readScriptPage(p, r.Dir, r.Content)
+		content, ok := s.readScriptPage(p, r.Dir, s.scriptRelDir(r.Script), r.Content)
 		if !ok {
 			// Mobius showHtmlFile sends nothing for a missing page.
 			s.log.Warn("game: script page not found", append(p.logArgs(), "script", r.Script, "page", r.Content)...)
@@ -106,49 +108,133 @@ func (s *Server) bypassScript(p *Player, n *Npc, command string) {
 }
 
 // showQuestWindow opens n's quest window (Mobius
-// ScriptLink.showQuestWindow): the scripts that talk at n are its quests.
-// With none, Mobius's "no quest" page shows; with one, it answers; with
-// more, the player chooses.
+// ScriptLink.showQuestWindow(player, npc)): the quests (IDs 1 to 19999)
+// that talk at n and of which p has a state, and those n starts, when what
+// they require exists (q:requires). With none, Mobius's "no quest" page
+// shows; with one, it answers; with more, the player chooses, the quests
+// by ID with "(In Progress)" and "(Done)".
 func (s *Server) showQuestWindow(p *Player, n *Npc) {
-	var names []string
+	var options []scripting.QuestInfo
 	if s.scripts != nil {
-		names = s.scripts.TalkScripts(n.Template.ID)
+		seen := make(map[string]bool)
+		consider := func(name string, needState bool) {
+			if seen[name] {
+				return
+			}
+			q, ok := s.scripts.Quest(name)
+			if !ok || q.ID < 1 || q.ID > quest.MaxListID || !questAvailable(q) {
+				return
+			}
+			if needState && s.QuestState(p, name) == nil {
+				return
+			}
+			seen[name] = true
+			options = append(options, q)
+		}
+		for _, name := range s.scripts.TalkScripts(n.Template.ID) {
+			consider(name, true)
+		}
+		for _, name := range s.scripts.StartQuests(n.Template.ID) {
+			consider(name, false)
+		}
 	}
-	switch len(names) {
+	slices.SortFunc(options, func(a, b scripting.QuestInfo) int { return a.ID - b.ID })
+	switch len(options) {
 	case 0:
 		s.showScriptTalk(p, n, "")
 	case 1:
-		s.showScriptTalk(p, n, names[0])
+		s.showScriptTalk(p, n, options[0].Name)
 	default:
-		// Mobius showQuestChooseWindow.
-		var b strings.Builder
-		b.WriteString("<html><body>")
-		for _, name := range names {
-			b.WriteString(`<a action="bypass npc_` + strconv.Itoa(int(n.ID())) + `_Script ` + name + `">[` + name + `]</a><br>`)
-		}
-		b.WriteString("</body></html>")
-		s.insertObjectIDAndShow(p, n, b.String())
+		s.showQuestChooseWindow(p, n, options)
 	}
 }
 
+// questAvailable reports whether the features a quest requires exist
+// (decision Q10). None of them does yet.
+func questAvailable(q scripting.QuestInfo) bool { return len(q.Requires) == 0 }
+
+// showQuestChooseWindow lets p choose one of quests (Mobius
+// showQuestChooseWindow).
+func (s *Server) showQuestChooseWindow(p *Player, n *Npc, quests []scripting.QuestInfo) {
+	var b strings.Builder
+	b.WriteString("<html><body>")
+	for _, q := range quests {
+		state := ""
+		if st := s.QuestState(p, q.Name); st != nil {
+			switch {
+			case st.IsStarted():
+				state = " (In Progress)"
+			case st.IsCompleted():
+				state = " (Done)"
+			}
+		}
+		label := q.Description
+		if q.Custom {
+			label = q.Name
+		}
+		b.WriteString(`<a action="bypass npc_` + strconv.Itoa(int(n.ID())) + `_Script ` + q.Name + `">[` + label + state + `]</a><br>`)
+	}
+	b.WriteString("</body></html>")
+	s.insertObjectIDAndShow(p, n, b.String())
+}
+
 // showScriptTalk runs the talk handler of the script name at n (Mobius
-// ScriptLink.showQuestWindow(player, npc, questId)). An unknown script
-// shows the "no quest" page.
+// ScriptLink.showQuestWindow(player, npc, questId)). A quest (IDs 1 to
+// 19999) is refused with 80% weight (weight penalty 3) or a 90% full
+// inventory, and a quest not yet taken with more than 25 active quests
+// (fullquest.html). An unknown script shows the "no quest" page.
 func (s *Server) showScriptTalk(p *Player, n *Npc, name string) {
-	if name != "" && s.scripts != nil && s.scripts.HasScript(name) {
-		reply, ok := s.scripts.Talk(s.background(), name, n.Template.ID, p, n.ScriptRef())
-		if ok || reply.Err == nil {
-			s.dialogState(p).lastQuestNpc = n.ID()
-		}
-		if ok {
-			s.showScriptReply(p, n, reply)
-		} else {
-			s.showScriptError(p, reply.Err)
-		}
-	} else {
+	var q scripting.QuestInfo
+	found := name != "" && s.scripts != nil
+	if found {
+		q, found = s.scripts.Quest(name)
+	}
+	if !found {
 		s.insertObjectIDAndShow(p, n, s.noQuestPage(p))
+		p.SendActionFailed()
+		return
+	}
+	listed := q.ID >= 1 && q.ID <= quest.MaxListID
+	if listed && (p.WeightPenalty() >= 3 || !s.inventoryUnder90(p)) {
+		p.SendSystemMessage(sysMsgQuestInventoryFull)
+		return
+	}
+	if listed && s.QuestState(p, name) == nil && len(s.questsOf(p).book.Active()) > questMaxActive {
+		s.sendPage(p, s.pageFile(p, n.ID(), "fullquest.html"))
+		return
+	}
+	reply, ok := s.scripts.Talk(s.background(), name, n.Template.ID, p, n.ScriptRef())
+	switch {
+	case ok:
+		s.dialogState(p).lastQuestNpc = n.ID()
+		s.showScriptReply(p, n, reply)
+	case reply.Err != nil:
+		s.showScriptError(p, reply.Err)
+	default:
+		s.dialogState(p).lastQuestNpc = n.ID()
 	}
 	p.SendActionFailed()
+}
+
+// inventoryUnder90 is Mobius isInventoryUnder90(true): the items, quest
+// items included, fill at most 90% of the inventory's slots.
+func (s *Server) inventoryUnder90(p *Player) bool {
+	if p.inv.Inventory == nil {
+		return true
+	}
+	return float64(p.inv.Len()) <= float64(p.stats.View().InventoryLimit)*0.9
+}
+
+// scriptRelDir returns the folder of a script relative to the scripts
+// folder, "" if there is no such script.
+func (s *Server) scriptRelDir(name string) string {
+	if s.scripts == nil || name == "" {
+		return ""
+	}
+	if q, ok := s.scripts.Quest(name); ok {
+		return q.RelDir
+	}
+	return ""
 }
 
 // noQuestPage returns data/html/noquest.htm, or Mobius's text when it is

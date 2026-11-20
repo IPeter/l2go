@@ -194,8 +194,9 @@ func (s *Server) removeSP(p *Player, amount int64) {
 // start of the new level when it is outside it. A level-up fills HP, MP and
 // CP, shows SocialAction 15 to p and the players around and sends "Your
 // level has increased!". Either way the weight penalty is checked and p
-// gets its UserInfo. It reports whether the level went up. Skills follow
-// in M7. Loop-only.
+// gets its UserInfo, and the auto-get skills come or the skills too far
+// above the new level drop (RewardSkills). It reports whether the level
+// went up. Loop-only.
 func (s *Server) AddLevel(p *Player, delta int) bool {
 	maxLevel := s.MaxLevel()
 	old := p.Level()
@@ -210,6 +211,7 @@ func (s *Server) AddLevel(p *Player, delta int) bool {
 		p.char.Exp = s.ExpForLevel(p.Level())
 	}
 	if increased {
+		s.questLevelUp(p) // quest_events.go: the tutorial's "CE40"
 		v := p.stats.View()
 		p.SetCurrentHP(float64(v.MaxHP))
 		p.SetCurrentMP(float64(v.MaxMP))
@@ -222,7 +224,9 @@ func (s *Server) AddLevel(p *Player, delta int) bool {
 		}
 		p.SendSystemMessage(sysMsgLevelIncreased)
 	}
+	s.RewardSkills(p) // auto-get skills, and the delevel check (skill_learn.go)
 	s.refreshOverloaded(p)
+	s.refreshExpertisePenalty(p) // penalty.go
 	if p.state == stateInGame {
 		p.UpdateUserInfo()
 	}

@@ -254,7 +254,11 @@ func TestCharacterCreateEveryClass(t *testing.T) {
 	}
 	// Orc Fighter's Training Gloves are two-handed: right hand.
 	orc, _ := e.chars.ListByAccount(testCtx(t), "player1")
-	for _, ch := range orc {
+	for i, ch := range orc {
+		// Only the account's first character is its newbie.
+		if ch.Newbie != (i == 0) {
+			t.Errorf("character %d (%s): newbie %v, want %v", i, ch.Name, ch.Newbie, i == 0)
+		}
 		if ch.ClassID != 44 {
 			continue
 		}

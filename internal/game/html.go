@@ -214,12 +214,33 @@ func (s *Server) ShowHTML(p *Player, npc world.ObjectID, html string) {
 }
 
 // readScriptPage reads a page file a script names, from the script's
-// folder, then from the HTML folder (Mobius Quest.getHtm also falls back to
-// the data folder; a "data/html/" prefix names the HTML folder). Script
-// pages are read on every use, so edits show without a restart.
-func (s *Server) readScriptPage(p *Player, dir, name string) (string, bool) {
+// folder dir, then from scripts/<rel>/ of the HTML folder (rel is the
+// script's folder relative to the scripts folder; decision Q11), then from
+// the HTML folder itself (Mobius Quest.getHtm also falls back to the data
+// folder; a "data/html/" prefix names the HTML folder). Script pages are
+// read on every use, so edits show without a restart.
+func (s *Server) readScriptPage(p *Player, dir, rel, name string) (string, bool) {
+	content, ok := s.readScriptDirPage(p, dir, name)
+	if ok {
+		return content, true
+	}
+	if clean, okName := cleanHTMLPath(name); okName && rel != "" && !strings.HasPrefix(name, htmlPrefix) {
+		page := "scripts/" + rel + "/" + clean
+		if content, ok := s.dialog.html.get(page); ok {
+			debugHTMLPath(p, "html/"+page)
+			return content, true
+		}
+	}
 	if rel, ok := strings.CutPrefix(name, htmlPrefix); ok {
 		return s.htmlFile(p, rel)
+	}
+	return s.htmlFile(p, name)
+}
+
+// readScriptDirPage reads a page from the script's folder dir.
+func (s *Server) readScriptDirPage(p *Player, dir, name string) (string, bool) {
+	if strings.HasPrefix(name, htmlPrefix) {
+		return "", false
 	}
 	if dir != "" {
 		if clean, ok := cleanHTMLPath(name); ok {
@@ -234,7 +255,7 @@ func (s *Server) readScriptPage(p *Player, dir, name string) (string, bool) {
 			}
 		}
 	}
-	return s.htmlFile(p, name)
+	return "", false
 }
 
 // checkHTMLDir logs a warning when the HTML folder is missing: the dialogs

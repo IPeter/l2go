@@ -87,6 +87,8 @@ type Npc struct {
 	// priceConfig is a merchant's tax region, set when it spawns (Mobius
 	// Merchant.onSpawn, merchant_price.go); nil for other NPCs.
 	priceConfig *data.PriceConfig
+
+	skill *skillNpc // skills and effects (skill_creature.go)
 }
 
 var (
@@ -317,6 +319,7 @@ func (n *Npc) infoPacket(attackable bool) []byte {
 		Name:                  n.serverName(),
 		Title:                 n.serverTitle(),
 		Invisible:             n.Invisible(),
+		AbnormalEffects:       abnormalMask(n.skill),
 		InWater:               motion.InWater,
 		Flying:                motion.Flying,
 		EnchantEffect:         n.Enchant,
@@ -436,6 +439,8 @@ func (s *Server) newNpc(t *data.NpcTemplate) (*Npc, error) {
 		srv:      s,
 		class:    c,
 	}
+	n.skill = s.newSkillNpc(n)
+	s.addTemplateSkills(n) // skill_known.go: the passives change the stats
 	// Every new NPC of a template has the same stat set: the numbers of the
 	// first one serve them all.
 	if c.firstOK && c.first.version == st.Version() {
@@ -481,6 +486,7 @@ func (s *Server) placeNpc(n *Npc, pos world.Position, aiData map[string]int) err
 	}
 	s.npcSpawned(n, aiData, &pos) // ai.go: Mobius Attackable.onSpawn
 	s.merchantSpawned(n)          // merchant_price.go: Mobius Merchant.onSpawn
+	s.questNpcSpawned(n)          // quest_events.go: the scripts' on_spawn
 	return nil
 }
 
@@ -512,6 +518,8 @@ func (s *Server) DespawnNpc(n *Npc) {
 	if wasIn {
 		s.removeNpc(n)
 	}
+	s.npcSkillsGone(n, n.spawn == nil) // skill_persist.go
+	s.questNpcGone(n)                  // quest_events.go: its quest timers stop
 	switch sp := n.spawn; {
 	case sp != nil:
 		s.scheduleRespawn(sp)

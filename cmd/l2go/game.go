@@ -63,6 +63,11 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	if err != nil {
 		return err
 	}
+	// Skills, skill trees and armor sets.
+	skillData, err := data.LoadSkills(gs.DataDir)
+	if err != nil {
+		return err
+	}
 
 	// Geodata (ground heights, walls) from the L2J tiles in geodata.dir. An
 	// empty setting, or a folder without tiles, runs without geodata, as
@@ -75,14 +80,26 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		logger.Info("no geodata (geodata.dir is empty): heights come from the clients and the spawns")
 	}
 
+	// The scripts' constant tables (ClassId, SystemMessageId, ...).
+	constants, err := data.LoadConstants(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	// Mobius's quest defaults until the quest config keys exist.
+	quests := game.QuestSettings{}
+
 	// The scripts run on the world loop. Their output (npc:say and the
-	// like) reaches the players through the game's adapter.
+	// like) and the quests' world (quest states, items, timers) reach the
+	// players through the game's adapter.
 	out := game.NewScriptOutput()
 	engine, err := scripting.New(ctx, scripting.Options{
-		Dir:     gs.Scripts.Dir,
-		Timeout: time.Duration(gs.Scripts.EventTimeout),
-		Logger:  gsLogger,
-		Output:  out,
+		Dir:       gs.Scripts.Dir,
+		Timeout:   time.Duration(gs.Scripts.EventTimeout),
+		Logger:    gsLogger,
+		Output:    out,
+		World:     out,
+		Constants: game.ScriptConstants(constants, gs.Combat.PartyRange, quests),
+		Rates:     scripting.Rates{QuestItemDropAmount: quests.ItemDropAmount},
 	})
 	if err != nil {
 		return err
@@ -112,20 +129,23 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	defer idPool.Close()
 
 	world, err := game.New(game.Options{
-		Config:       cfg,
-		ServerID:     gs.ID,
-		Data:         gameData,
-		World:        worldData,
-		Characters:   store.Characters(),
-		IDs:          store.IDs(),
-		IDPool:       idPool,
-		Passives:     passives,
-		Categories:   categories,
-		Economy:      economy,
-		Scripts:      engine,
-		ScriptOutput: out,
-		Geo:          geoEngine,
-		Logger:       gsLogger,
+		Config:          cfg,
+		ServerID:        gs.ID,
+		Data:            gameData,
+		World:           worldData,
+		Characters:      store.Characters(),
+		IDs:             store.IDs(),
+		IDPool:          idPool,
+		Passives:        passives,
+		Categories:      categories,
+		Economy:         economy,
+		Skills:          skillData,
+		Scripts:         engine,
+		ScriptOutput:    out,
+		GlobalVariables: store.GlobalVariables(),
+		Quests:          quests,
+		Geo:             geoEngine,
+		Logger:          gsLogger,
 	})
 	if err != nil {
 		return err

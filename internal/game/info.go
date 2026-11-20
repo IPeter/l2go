@@ -28,11 +28,9 @@ type UpdateFlusher interface {
 var (
 	actionFailedPacket   = serverpackets.NewActionFailedPacket()
 	leaveWorldPacket     = serverpackets.NewLeaveWorldPacket()
-	emptyQuestList       = serverpackets.NewQuestListPacket(nil)
 	emptySkillCoolTime   = serverpackets.NewSkillCoolTimePacket(nil)
 	emptySkillList       = serverpackets.NewSkillListPacket(nil)
 	emptyAbnormalStatus  = serverpackets.NewAbnormalStatusUpdatePacket(nil)
-	emptyShortcutInit    = serverpackets.NewShortcutInitPacket(nil)
 	emptyHennaInfo       = serverpackets.NewHennaInfoPacket(serverpackets.HennaInfo{})
 	emptyFriendList      = serverpackets.NewFriendListPacket(nil)
 	manorListPacket      = serverpackets.NewExSendManorListPacket(serverpackets.InterludeCastles())
@@ -238,7 +236,7 @@ func (p *Player) userInfo() []byte {
 	pos := p.Position()
 	recLeft, recHave := p.recommendations()
 	title := p.Title()
-	abnormal := int32(0)
+	abnormal := abnormalMask(p.skill)
 	if p.Invisible() {
 		abnormal |= serverpackets.AbnormalStealth
 		if p.IsGM() {
@@ -320,7 +318,7 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 	pos := p.Position()
 	gmSeesInvisible := p.Invisible() && viewer.IsGM()
 	title := p.Title()
-	abnormal := int32(0)
+	abnormal := abnormalMask(p.skill)
 	if gmSeesInvisible {
 		title = "Invisible"
 		abnormal |= serverpackets.AbnormalStealth

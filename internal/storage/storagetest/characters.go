@@ -70,6 +70,7 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 		DeleteTime:  created.Add(7 * 24 * time.Hour),
 		CreatedAt:   created,
 		LastAccess:  created.Add(time.Hour),
+		Newbie:      true,
 		Items: []storage.Item{
 			{ObjectID: objectID + 1, ItemID: itemSquireSword, Count: 1, Slot: storage.PaperdollRHand, Mana: storage.NoMana},
 			{ObjectID: objectID + 2, ItemID: itemSquireShirt, Count: 1, Enchant: 3, Slot: storage.PaperdollChest, Loc: storage.LocPaperdoll, Mana: storage.NoMana},
@@ -84,6 +85,26 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 			{Name: questLetters, Vars: map[string]string{"<state>": "Completed"}},
 			// Variables set while CREATED are saved without <state>.
 			{Name: questTutorial, Vars: map[string]string{"ex": "1"}},
+		},
+		// Out of ID order: the stores keep the order.
+		Skills: []storage.CharacterSkill{
+			{ClassIndex: 0, ID: 194, Level: 1},
+			{ClassIndex: 0, ID: 3, Level: 2},
+			{ClassIndex: 1, ID: 1177, Level: 5},
+		},
+		SavedSkills: []storage.SavedSkill{
+			{ClassIndex: 0, SkillID: 1068, SkillLevel: 3, RemainingTime: 1100, RestoreType: storage.RestoreEffect},
+			{ClassIndex: 0, SkillID: 3, SkillLevel: 2, RemainingTime: -1, ReuseDelay: 13_000, ReuseEnd: 1_795_000_012_345, RestoreType: storage.RestoreReuse},
+		},
+		// Out of slot order: the stores keep the order.
+		Shortcuts: []storage.Shortcut{
+			{ClassIndex: 0, Slot: 3, Page: 0, Type: storage.ShortcutAction, ID: 5},
+			{ClassIndex: 0, Slot: 1, Page: 0, Type: storage.ShortcutSkill, ID: 3, Level: 2},
+			{ClassIndex: 0, Slot: 11, Page: 10, Type: storage.ShortcutItem, ID: objectID + 3, Level: -1},
+			{ClassIndex: 1, Slot: 0, Page: 1, Type: storage.ShortcutSkill, ID: 1177, Level: 5},
+		},
+		ItemReuse: []storage.ItemReuse{
+			{ItemID: 1061, ObjectID: objectID + 9, ReuseDelay: 10_000, ReuseEnd: 1_795_000_004_321},
 		},
 	}
 }
@@ -146,6 +167,23 @@ func changedCharacter(c storage.Character) storage.Character {
 		{Name: questRoien, Vars: map[string]string{"<state>": "Started", "cond": "1"}},
 		{Name: questLetters, Vars: map[string]string{"<state>": "Completed", "restartTime": "1795000000000"}},
 	}
+	// A skill went up a level, one is new; the saved effects changed.
+	c.Skills = []storage.CharacterSkill{
+		{ClassIndex: 0, ID: 194, Level: 1},
+		{ClassIndex: 0, ID: 3, Level: 5},
+		{ClassIndex: 1, ID: 1177, Level: 5},
+		{ClassIndex: 0, ID: 1068, Level: 1},
+	}
+	c.SavedSkills = []storage.SavedSkill{
+		{ClassIndex: 0, SkillID: 1040, SkillLevel: 3, RemainingTime: 15, ReuseDelay: 4000, ReuseEnd: 1_795_000_099_000, RestoreType: storage.RestoreEffect},
+	}
+	// A shortcut moved up a level, one went; the item reuse ended.
+	c.Shortcuts = []storage.Shortcut{
+		{ClassIndex: 0, Slot: 3, Page: 0, Type: storage.ShortcutAction, ID: 5},
+		{ClassIndex: 0, Slot: 1, Page: 0, Type: storage.ShortcutSkill, ID: 3, Level: 5},
+		{ClassIndex: 1, Slot: 0, Page: 1, Type: storage.ShortcutSkill, ID: 1177, Level: 5},
+	}
+	c.ItemReuse = nil
 	return c
 }
 
@@ -224,6 +262,31 @@ func diffFields(got, want storage.Character) string {
 	}
 	if len(want.Vars) == 0 {
 		want.Vars = nil // stored as none
+	}
+	for _, f := range []struct {
+		name  string
+		empty bool
+	}{
+		{"Skills", got.Skills != nil && len(got.Skills) == 0},
+		{"SavedSkills", got.SavedSkills != nil && len(got.SavedSkills) == 0},
+		{"Shortcuts", got.Shortcuts != nil && len(got.Shortcuts) == 0},
+		{"ItemReuse", got.ItemReuse != nil && len(got.ItemReuse) == 0},
+	} {
+		if f.empty {
+			diffs = append(diffs, f.name+" is empty, want nil")
+		}
+	}
+	if len(want.Skills) == 0 {
+		want.Skills = nil // stored as none
+	}
+	if len(want.SavedSkills) == 0 {
+		want.SavedSkills = nil
+	}
+	if len(want.Shortcuts) == 0 {
+		want.Shortcuts = nil
+	}
+	if len(want.ItemReuse) == 0 {
+		want.ItemReuse = nil
 	}
 	if !reflect.DeepEqual(got, want) {
 		diffs = append(diffs, fmt.Sprintf("other fields = %+v, want %+v", got, want))
@@ -613,8 +676,10 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		upd := changedCharacter(orig)
 		arg := upd
 		arg.Items = slices.Clone(upd.Items)
-		// The identity fields are kept as stored, whatever the caller sends.
+		// The identity fields and the newbie flag are kept as stored,
+		// whatever the caller sends.
 		arg.Account, arg.Name, arg.Race, arg.CreatedAt = "mallory", "Smaug", 0, baseTime.Add(time.Hour)
+		arg.Newbie = false
 		if err := s.Update(t.Context(), &arg); err != nil {
 			t.Fatalf("Update: %v", err)
 		}

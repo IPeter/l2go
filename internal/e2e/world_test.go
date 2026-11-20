@@ -135,8 +135,21 @@ func (w *walk) enterWorld(t *testing.T) {
 			u.HP, u.MP, u.Exp, u.SP, u.GM, u.PAtkSpd, u.PAtkSpd2, newFighter.MaxHP, newFighter.MaxMP)
 	}
 	checkStartingItems(t, res.Items, u)
-	if len(res.Shortcuts.Shortcuts)+len(res.Quests.Quests)+len(res.Skills.Skills) != 0 {
-		t.Errorf("a new character has shortcuts %+v, quests %+v, skills %+v", res.Shortcuts, res.Quests, res.Skills)
+	if len(res.Quests.Quests)+len(res.Skills.Skills) != 0 {
+		t.Errorf("a new character has quests %+v, skills %+v", res.Quests, res.Skills)
+	}
+	// Mobius initialShortcuts.xml: Attack, Pick Up, Sit/Stand and the
+	// Tutorial Guide for every class (Human Fighters have no class bar).
+	var bar []string
+	for _, sc := range res.Shortcuts.Shortcuts {
+		id := fmt.Sprint(sc.ID)
+		if sc.Type == testclient.ShortcutItem {
+			id = "item"
+		}
+		bar = append(bar, fmt.Sprintf("%d:%d:%s", sc.Type, sc.Slot, id))
+	}
+	if want := []string{"3:0:2", "3:3:5", "3:10:0", "1:11:item"}; !slices.Equal(bar, want) {
+		t.Errorf("a new character's shortcuts %q, want %q", bar, want)
 	}
 	if res.EtcStatus != (testclient.EtcStatusUpdate{}) {
 		t.Errorf("EtcStatusUpdate %+v, want no status icons", res.EtcStatus)

@@ -44,6 +44,7 @@ type stack struct {
 	chars     *memstore.Characters
 	ids       *memstore.IDs
 	loginAddr string
+	gameAddr  string
 }
 
 // startStack starts both servers on 127.0.0.1:0 with the real data/ and
@@ -80,6 +81,7 @@ func startStack(t *testing.T) *stack {
 		chars:     memstore.NewCharacters(),
 		ids:       memstore.NewIDs(),
 		loginAddr: clientLn.Addr().String(),
+		gameAddr:  gameLn.Addr().String(),
 	}
 
 	ls, err := loginserver.New(cfg, s.accounts, logger.With("role", "login"))
@@ -100,14 +102,21 @@ func startStack(t *testing.T) *stack {
 		t.Fatal(err)
 	}
 
-	// The scripts run on the world loop; what they do to the world (npc:say)
-	// reaches the players through the game's adapter.
+	constants, err := data.LoadConstants(gs.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The scripts run on the world loop; what they do to the world (npc:say,
+	// the quests' items and states) reaches the players through the game's
+	// adapter.
 	out := game.NewScriptOutput()
 	engine, err := scripting.New(t.Context(), scripting.Options{
-		Dir:     gs.Scripts.Dir,
-		Timeout: time.Duration(gs.Scripts.EventTimeout),
-		Logger:  gsLogger,
-		Output:  out,
+		Dir:       gs.Scripts.Dir,
+		Timeout:   time.Duration(gs.Scripts.EventTimeout),
+		Logger:    gsLogger,
+		Output:    out,
+		World:     out,
+		Constants: game.ScriptConstants(constants, gs.Combat.PartyRange, game.QuestSettings{}),
 	})
 	if err != nil {
 		t.Fatal(err)

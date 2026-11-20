@@ -19,8 +19,8 @@ var nonHTMLBypasses = []string{
 
 // notYetCommands are the bypass commands (lower case) of the Mobius bypass
 // handlers whose features come in later milestones: trying clothes on,
-// multisell, warehouses and freight, skill trainers, augmenting, newbie
-// buffs, the lottery, festivals, observation, the rift and the rest
+// multisell, warehouses and freight, skill enchanting, augmenting, the
+// blessing of protection, the lottery, festivals, observation, the rift and the rest
 // (decision N6). They answer with the "not available yet" page; so does any
 // other NPC command the server does not know yet, since the link cache
 // already proved that a page offered it. The shops are in shop.go.
@@ -29,8 +29,8 @@ var notYetCommands = map[string]bool{
 	"depositp": true, "withdrawp": true, "withdrawsortedp": true,
 	"depositc": true, "withdrawc": true, "withdrawsortedc": true,
 	"package_deposit": true, "package_withdraw": true,
-	"skilllist": true, "enchantskilllist": true, "augment": true,
-	"supportmagic": true, "giveblessing": true, "loto": true,
+	"enchantskilllist": true, "augment": true,
+	"giveblessing": true, "loto": true,
 	"festival": true, "festivaldesc": true,
 	"observe": true, "observesiege": true, "observeoracle": true,
 	"enterrift": true, "changeriftroom": true, "exitrift": true,
@@ -217,6 +217,10 @@ func (s *Server) runBypassHandler(p *Player, n *Npc, command string) {
 		s.bypassDepositP(p)
 	case n != nil && word == "withdrawp":
 		s.bypassWithdrawP(p)
+	case n != nil && word == "skilllist":
+		s.bypassSkillList(p, n) // skill_learn.go
+	case n != nil && word == "supportmagic":
+		s.bypassSupportMagic(p, n) // newbie.go
 	case shopCommands[word]:
 		s.shopBypass(p, n, word, command) // shop.go
 	case n != nil:

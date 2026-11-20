@@ -39,10 +39,6 @@ func (s *Server) handleRequestShowMiniMap(p *Player, _ []byte) { p.Send(miniMapP
 // (Mobius RequestManorList).
 func (s *Server) handleRequestManorList(p *Player, _ []byte) { p.Send(manorListPacket) }
 
-// handleRequestQuestList answers RequestQuestList (0x63) with the quest list,
-// empty until quests exist (Mobius RequestQuestList).
-func (s *Server) handleRequestQuestList(p *Player, _ []byte) { p.Send(emptyQuestList) }
-
 // handleRequestSkillCoolTime answers RequestSkillCoolTime (0x9D) with the
-// skills on cooldown, none until skills exist (Mobius RequestSkillCoolTime).
-func (s *Server) handleRequestSkillCoolTime(p *Player, _ []byte) { p.Send(emptySkillCoolTime) }
+// skills under reuse (Mobius RequestSkillCoolTime).
+func (s *Server) handleRequestSkillCoolTime(p *Player, _ []byte) { p.Send(s.SkillCoolTimePacket(p)) }

@@ -1,0 +1,14 @@
+[
+{"classId":-1,"page":0,"slot":0,"type":"ACTION","id":2},
+{"classId":-1,"page":0,"slot":3,"type":"ACTION","id":5},
+{"classId":-1,"page":0,"slot":10,"type":"ACTION","id":0},
+{"classId":-1,"page":0,"slot":11,"type":"ITEM","id":5588},
+{"classId":-1,"page":1,"slot":0,"type":"MACRO","id":10000},
+{"classId":10,"page":0,"slot":1,"type":"SKILL","id":1177,"level":1},
+{"classId":10,"page":0,"slot":9,"type":"SKILL","id":1216,"level":1},
+{"classId":25,"page":0,"slot":1,"type":"SKILL","id":1177,"level":1},
+{"classId":25,"page":0,"slot":9,"type":"SKILL","id":1216,"level":1},
+{"classId":38,"page":0,"slot":1,"type":"SKILL","id":1177,"level":1},
+{"classId":38,"page":0,"slot":9,"type":"SKILL","id":1216,"level":1},
+{"classId":49,"page":0,"slot":1,"type":"SKILL","id":1001,"level":1}
+]

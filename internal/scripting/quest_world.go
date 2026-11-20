@@ -183,6 +183,18 @@ type PlayerDetails interface {
 	InCategory(category int) bool
 }
 
+// PlayerClasses is the part of a PlayerRef behind the class change methods
+// of the village masters and the class quests.
+type PlayerClasses interface {
+	// SetClassID is Mobius setPlayerClass: the class change with its
+	// effect, message and skills.
+	SetClassID(id int)
+	// SetBaseClassID is Mobius setBaseClass.
+	SetBaseClassID(id int)
+	// BroadcastUserInfo is Mobius broadcastUserInfo.
+	BroadcastUserInfo()
+}
+
 // PlayerVars is Mobius PlayerVariables: string values per character,
 // saved with it.
 type PlayerVars interface {

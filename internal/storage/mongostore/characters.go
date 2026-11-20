@@ -124,11 +124,119 @@ type characterDoc struct {
 	DeleteTime  *time.Time `bson:"delete_time,omitempty"` // absent if not deleting
 	CreatedAt   time.Time  `bson:"created_at"`
 	LastAccess  *time.Time `bson:"last_access,omitempty"` // absent if never entered the world
+	Newbie      bool       `bson:"newbie,omitempty"`      // the account's first character; set at creation only
 
 	DeathPenaltyLevel int32 `bson:"death_penalty_level"`
 	ExpBeforeDeath    int64 `bson:"exp_before_death"`
 
 	Vars map[string]string `bson:"vars,omitempty"` // character variables, absent if none
+
+	Skills      []skillDoc      `bson:"skills,omitempty"`      // known skills, absent if none
+	SavedSkills []savedSkillDoc `bson:"skills_save,omitempty"` // saved effects and reuse, absent if none
+
+	Shortcuts []shortcutDoc  `bson:"shortcuts,omitempty"`       // the shortcut bar, absent if empty
+	ItemReuse []itemReuseDoc `bson:"item_reuse_save,omitempty"` // item reuse, absent if none
+}
+
+// shortcutDoc is the stored form of storage.Shortcut, with the column names
+// of Mobius character_shortcuts.
+type shortcutDoc struct {
+	ClassIndex int32 `bson:"class_index"`
+	Slot       int32 `bson:"slot"`
+	Page       int32 `bson:"page"`
+	Type       int32 `bson:"type"`
+	ID         int32 `bson:"shortcut_id"`
+	Level      int32 `bson:"level"`
+}
+
+// itemReuseDoc is the stored form of storage.ItemReuse, with the column
+// names of Mobius character_item_reuse_save.
+type itemReuseDoc struct {
+	ItemID     int32 `bson:"itemId"`
+	ObjectID   int32 `bson:"itemObjId"`
+	ReuseDelay int64 `bson:"reuseDelay"`
+	ReuseEnd   int64 `bson:"systime"`
+}
+
+// convertList converts a list of one stored form into another, nil for
+// none.
+func convertList[T, U any](in []T, conv func(T) U) []U {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]U, len(in))
+	for i, v := range in {
+		out[i] = conv(v)
+	}
+	return out
+}
+
+// skillDoc is the stored form of storage.CharacterSkill, with the column
+// names of Mobius character_skills.
+type skillDoc struct {
+	ClassIndex int32 `bson:"class_index"`
+	ID         int32 `bson:"skill_id"`
+	Level      int32 `bson:"skill_level"`
+}
+
+// savedSkillDoc is the stored form of storage.SavedSkill, with the column
+// names of Mobius character_skills_save.
+type savedSkillDoc struct {
+	ClassIndex    int32 `bson:"class_index"`
+	SkillID       int32 `bson:"skill_id"`
+	SkillLevel    int32 `bson:"skill_level"`
+	RemainingTime int32 `bson:"remaining_time"`
+	ReuseDelay    int64 `bson:"reuse_delay"`
+	ReuseEnd      int64 `bson:"systime"`
+	RestoreType   int32 `bson:"restore_type"`
+}
+
+// toSkillDocs returns the documents of skills, nil for none.
+func toSkillDocs(skills []storage.CharacterSkill) []skillDoc {
+	if len(skills) == 0 {
+		return nil
+	}
+	docs := make([]skillDoc, len(skills))
+	for i, s := range skills {
+		docs[i] = skillDoc(s)
+	}
+	return docs
+}
+
+// fromSkillDocs returns the skills of docs, nil for none.
+func fromSkillDocs(docs []skillDoc) []storage.CharacterSkill {
+	if len(docs) == 0 {
+		return nil
+	}
+	skills := make([]storage.CharacterSkill, len(docs))
+	for i, d := range docs {
+		skills[i] = storage.CharacterSkill(d)
+	}
+	return skills
+}
+
+// toSavedSkillDocs returns the documents of saved skills, nil for none.
+func toSavedSkillDocs(saved []storage.SavedSkill) []savedSkillDoc {
+	if len(saved) == 0 {
+		return nil
+	}
+	docs := make([]savedSkillDoc, len(saved))
+	for i, s := range saved {
+		docs[i] = savedSkillDoc(s)
+	}
+	return docs
+}
+
+// fromSavedSkillDocs returns the saved skills of docs, nil for none.
+func fromSavedSkillDocs(docs []savedSkillDoc) []storage.SavedSkill {
+	if len(docs) == 0 {
+		return nil
+	}
+	saved := make([]storage.SavedSkill, len(docs))
+	for i, d := range docs {
+		saved[i] = storage.SavedSkill(d)
+	}
+	return saved
 }
 
 // questDoc is the stored form of storage.Quest. The _id is the server's.
@@ -251,11 +359,18 @@ func toCharacterDoc(c *storage.Character) characterDoc {
 		DeleteTime:  optionalTime(c.DeleteTime),
 		CreatedAt:   c.CreatedAt,
 		LastAccess:  optionalTime(c.LastAccess),
+		Newbie:      c.Newbie,
 
 		DeathPenaltyLevel: c.DeathPenaltyLevel,
 		ExpBeforeDeath:    c.ExpBeforeDeath,
 
 		Vars: optionalVars(c.Vars),
+
+		Skills:      toSkillDocs(c.Skills),
+		SavedSkills: toSavedSkillDocs(c.SavedSkills),
+
+		Shortcuts: convertList(c.Shortcuts, func(s storage.Shortcut) shortcutDoc { return shortcutDoc(s) }),
+		ItemReuse: convertList(c.ItemReuse, func(r storage.ItemReuse) itemReuseDoc { return itemReuseDoc(r) }),
 	}
 }
 
@@ -303,6 +418,7 @@ func (d *characterDoc) character(items []storage.Item, quests []storage.Quest) s
 		DeleteTime:  timeOrZero(d.DeleteTime),
 		CreatedAt:   d.CreatedAt,
 		LastAccess:  timeOrZero(d.LastAccess),
+		Newbie:      d.Newbie,
 		Items:       items,
 
 		DeathPenaltyLevel: d.DeathPenaltyLevel,
@@ -310,6 +426,12 @@ func (d *characterDoc) character(items []storage.Item, quests []storage.Quest) s
 
 		Vars:   optionalVars(d.Vars),
 		Quests: quests,
+
+		Skills:      fromSkillDocs(d.Skills),
+		SavedSkills: fromSavedSkillDocs(d.SavedSkills),
+
+		Shortcuts: convertList(d.Shortcuts, func(s shortcutDoc) storage.Shortcut { return storage.Shortcut(s) }),
+		ItemReuse: convertList(d.ItemReuse, func(r itemReuseDoc) storage.ItemReuse { return storage.ItemReuse(r) }),
 	}
 }
 
@@ -533,8 +655,8 @@ func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character
 }
 
 // characterUpdate returns the update that stores the fields Update saves.
-// The identity fields (_id, account, name, name_lower, race, created_at) are
-// not written.
+// The identity fields (_id, account, name, name_lower, race, created_at) and
+// the newbie flag are not written.
 func characterUpdate(c *storage.Character) bson.D {
 	doc := toCharacterDoc(c)
 	set := bson.D{
@@ -570,6 +692,26 @@ func characterUpdate(c *storage.Character) bson.D {
 		set = append(set, bson.E{Key: "vars", Value: doc.Vars})
 	} else {
 		unset = append(unset, bson.E{Key: "vars", Value: ""})
+	}
+	if doc.Skills != nil {
+		set = append(set, bson.E{Key: "skills", Value: doc.Skills})
+	} else {
+		unset = append(unset, bson.E{Key: "skills", Value: ""})
+	}
+	if doc.SavedSkills != nil {
+		set = append(set, bson.E{Key: "skills_save", Value: doc.SavedSkills})
+	} else {
+		unset = append(unset, bson.E{Key: "skills_save", Value: ""})
+	}
+	if doc.Shortcuts != nil {
+		set = append(set, bson.E{Key: "shortcuts", Value: doc.Shortcuts})
+	} else {
+		unset = append(unset, bson.E{Key: "shortcuts", Value: ""})
+	}
+	if doc.ItemReuse != nil {
+		set = append(set, bson.E{Key: "item_reuse_save", Value: doc.ItemReuse})
+	} else {
+		unset = append(unset, bson.E{Key: "item_reuse_save", Value: ""})
 	}
 	for _, f := range []struct {
 		key string

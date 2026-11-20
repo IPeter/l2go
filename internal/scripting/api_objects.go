@@ -188,6 +188,20 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 			}
 			return 1
 		},
+		"set_class_id": func(L *lua.LState) int {
+			pc := playerAs[PlayerClasses](L, "set_class_id", "class change")
+			pc.SetClassID(int(checkInt(L, 2, "player:set_class_id")))
+			return 0
+		},
+		"set_base_class": func(L *lua.LState) int {
+			pc := playerAs[PlayerClasses](L, "set_base_class", "class change")
+			pc.SetBaseClassID(int(checkInt(L, 2, "player:set_base_class")))
+			return 0
+		},
+		"broadcast_user_info": func(L *lua.LState) int {
+			playerAs[PlayerClasses](L, "broadcast_user_info", "class change").BroadcastUserInfo()
+			return 0
+		},
 		"set_var": func(L *lua.LState) int {
 			pv := playerAs[PlayerVars](L, "set_var", "variables")
 			pv.SetVar(L.CheckString(2), valueString(L, 3, "player:set_var"))

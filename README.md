@@ -40,7 +40,7 @@ In the world (Milestones 3 and 4, ported from L2J Mobius):
 | Gatekeepers | Teleport lists with their prices: free up to level 40 (`npcs.maxFreeTeleportLevel`), otherwise paid in adena. |
 | Zones and map regions | Every Mobius zone is loaded, and the server knows which zones each player is in. In water the character swims, at swim speed. `/loc` names the nearest town, and the map window (Alt+M) opens. |
 | Lua NPC scripts | Scripts answer the first click on an NPC, its quest link and their own dialog links with a page, inline HTML or a message, and can make the NPC speak. Like every Lua script, they reload without a restart (see [Lua scripting](#lua-scripting)). |
-| GM commands | For characters with access level 1 or more ([how](#connecting-an-interlude-client)): `//teleport x y z` (also `//move_to`), `//loc`, `//gmspeed n`, `//heal [name or radius]`, `//invis` and `//vis`, `//online`, `//spawn <npcId or name> [count]`, `//delete [range]` (the targeted NPC, or the NPCs around, with their spawns), `//respawn`, `//npcinfo`, and shift-click on an NPC for its info page. |
+| GM commands | For characters with access level 1 or more ([how](#connecting-an-interlude-client)): `//teleport x y z` (also `//move_to`), `//loc`, `//gmspeed n`, `//heal [name or radius]`, `//invis` and `//vis`, `//online`, `//spawn <npcId or name> [count]`, `//delete [range]` (the targeted NPC, or the NPCs around, with their spawns), `//respawn`, `//npcinfo`, and shift-click on an NPC for its info page. `//admin` opens Mobius's admin panel (`data/html/admin/`): its menus, help, teleport and item pages work, and a button whose command is not ported yet answers "The command '...' does not exist!". |
 
 What does not work yet:
 

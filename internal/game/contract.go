@@ -128,6 +128,11 @@ type Options struct {
 	// Categories are the class categories (data.LoadCategories) that item
 	// conditions test; nil means a player is in none.
 	Categories *data.Categories
+	// Skills is the skill data (data.LoadSkills): skills, skill trees and
+	// armor sets. New compiles it into the skill Catalog. Nil means no
+	// skills: players and NPCs know none, and saved skills are kept as they
+	// were loaded.
+	Skills *data.Skills
 	// Economy is the shop data (data.LoadEconomy): buy lists, multisell
 	// lists and merchant price configs. Nil means no NPC sells anything.
 	Economy *data.Economy
@@ -138,6 +143,13 @@ type Options struct {
 	// players. Nil makes New create one (Server.ScriptOutput), for an engine
 	// made afterwards.
 	ScriptOutput *ScriptOutput
+
+	// GlobalVariables stores the global variables of the quest scripts
+	// (Mobius GlobalVariablesManager); nil keeps them in memory only.
+	GlobalVariables storage.GlobalVariableStore
+	// Quests are the quest rules (rates, delays, tutorial); the zero value
+	// is Mobius's defaults.
+	Quests QuestSettings
 
 	// Geo answers the geodata questions; nil means geo.None (no geodata).
 	Geo geo.Engine
