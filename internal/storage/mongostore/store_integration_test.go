@@ -381,6 +381,10 @@ func TestMigrateFailureLeavesCharacterUntouched(t *testing.T) {
 // once.
 func TestMigrateConcurrently(t *testing.T) {
 	s, name := openTestStore(t)
+	// Open runs the migration itself, so the second server opens before the
+	// legacy characters exist; otherwise it would move them all on its own
+	// and leave nothing to race for.
+	other := openNamed(t, name)
 	const characters, perCharacter = 20, 3
 	var docs []bson.D
 	for i := range int32(characters) {
@@ -392,7 +396,6 @@ func TestMigrateConcurrently(t *testing.T) {
 		docs = append(docs, legacyCharacter(id, "Legacy"+string(rune('A'+i)), items))
 	}
 	insertLegacy(t, s, docs...)
-	other := openNamed(t, name)
 
 	var (
 		wg           sync.WaitGroup
