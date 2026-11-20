@@ -106,6 +106,11 @@ func startStack(t *testing.T) *stack {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Skills, as cmd/l2go loads them: new characters get their auto-get skills.
+	skillData, err := data.LoadSkills(gs.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// The scripts run on the world loop; what they do to the world (npc:say,
 	// the quests' items and states) reaches the players through the game's
 	// adapter.
@@ -142,6 +147,7 @@ func startStack(t *testing.T) *stack {
 		World:          worldData,
 		Characters:     s.chars,
 		IDs:            s.ids,
+		Skills:         skillData,
 		Scripts:        engine,
 		ScriptOutput:   out,
 		Clock:          s.clock,
