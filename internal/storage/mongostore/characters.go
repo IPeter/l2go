@@ -30,7 +30,8 @@ const (
 //   - memstore uses the same Go function, so both stores agree exactly on
 //     which names are the same. ICU collation rules can differ from Go's.
 //
-// The account index also covers the sort order of ListByAccount.
+// The account index also covers the sort order of ListByAccount, and the
+// clan index the member query of the clan registry (decision T1).
 func characterIndexes() []mongo.IndexModel {
 	return []mongo.IndexModel{
 		{
@@ -39,6 +40,9 @@ func characterIndexes() []mongo.IndexModel {
 		},
 		{
 			Keys: bson.D{{Key: "account", Value: 1}, {Key: "created_at", Value: 1}, {Key: "_id", Value: 1}},
+		},
+		{
+			Keys: bson.D{{Key: "clan_id", Value: 1}, {Key: "_id", Value: 1}},
 		},
 	}
 }
@@ -54,10 +58,13 @@ func itemIndexes() []mongo.IndexModel {
 // Characters returns the character store backed by this database.
 func (s *Store) Characters() *Characters {
 	return &Characters{
-		store:  s,
-		chars:  s.db.Collection(charactersCollection),
-		items:  s.db.Collection(itemsCollection),
-		quests: s.db.Collection(questsCollection),
+		store:     s,
+		chars:     s.db.Collection(charactersCollection),
+		items:     s.db.Collection(itemsCollection),
+		quests:    s.db.Collection(questsCollection),
+		clans:     s.db.Collection(clansCollection),
+		crests:    s.db.Collection(crestsCollection),
+		relations: s.db.Collection(relationsCollection),
 	}
 }
 
@@ -77,41 +84,57 @@ func (s *Store) Characters() *Characters {
 //
 // Every write that touches more than one runs in one transaction. Reads
 // that need more than one run in a transaction too, so they see a character,
-// its items and its quests as one write left them.
+// its items and its quests as one write left them. WriteBatch also writes
+// the clans, crests and relations (social.go).
 type Characters struct {
-	store  *Store
-	chars  *mongo.Collection
-	items  *mongo.Collection
-	quests *mongo.Collection
+	store     *Store
+	chars     *mongo.Collection
+	items     *mongo.Collection
+	quests    *mongo.Collection
+	clans     *mongo.Collection
+	crests    *mongo.Collection
+	relations *mongo.Collection
 }
 
 var (
 	_ storage.CharacterStore = (*Characters)(nil)
 	_ storage.CharacterSaver = (*Characters)(nil)
+	_ storage.BatchWriter    = (*Characters)(nil)
 )
 
 // characterDoc is the stored form of storage.Character without its items.
 type characterDoc struct {
-	ObjectID    int32      `bson:"_id"`
-	Account     string     `bson:"account"`
-	Name        string     `bson:"name"`
-	NameLower   string     `bson:"name_lower"` // storage.NameKey(Name), unique
-	Race        int32      `bson:"race"`
-	Sex         int32      `bson:"sex"`
-	ClassID     int32      `bson:"class_id"`
-	BaseClassID int32      `bson:"base_class_id"`
-	HairStyle   int32      `bson:"hair_style"`
-	HairColor   int32      `bson:"hair_color"`
-	Face        int32      `bson:"face"`
-	Level       int32      `bson:"level"`
-	Exp         int64      `bson:"exp"`
-	SP          int32      `bson:"sp"`
-	Karma       int32      `bson:"karma"`
-	PvPKills    int32      `bson:"pvp_kills"`
-	PKKills     int32      `bson:"pk_kills"`
-	ClanID      int32      `bson:"clan_id"`
-	Title       string     `bson:"title,omitempty"`    // absent if none
-	RecomHave   int32      `bson:"rec_have,omitempty"` // absent if none
+	ObjectID    int32  `bson:"_id"`
+	Account     string `bson:"account"`
+	Name        string `bson:"name"`
+	NameLower   string `bson:"name_lower"` // storage.NameKey(Name), unique
+	Race        int32  `bson:"race"`
+	Sex         int32  `bson:"sex"`
+	ClassID     int32  `bson:"class_id"`
+	BaseClassID int32  `bson:"base_class_id"`
+	HairStyle   int32  `bson:"hair_style"`
+	HairColor   int32  `bson:"hair_color"`
+	Face        int32  `bson:"face"`
+	Level       int32  `bson:"level"`
+	Exp         int64  `bson:"exp"`
+	SP          int32  `bson:"sp"`
+	Karma       int32  `bson:"karma"`
+	PvPKills    int32  `bson:"pvp_kills"`
+	PKKills     int32  `bson:"pk_kills"`
+	ClanID      int32  `bson:"clan_id"`
+	Title       string `bson:"title,omitempty"`    // absent if none
+	RecomHave   int32  `bson:"rec_have,omitempty"` // absent if none
+
+	// The clan fields (decision T1), absent while zero.
+	PowerGrade       int32 `bson:"power_grade,omitempty"`
+	PledgeType       int32 `bson:"pledge_type,omitempty"`
+	Apprentice       int32 `bson:"apprentice,omitempty"`
+	Sponsor          int32 `bson:"sponsor,omitempty"`
+	LvlJoinedAcademy int32 `bson:"lvl_joined_academy,omitempty"`
+	WantsPeace       bool  `bson:"wants_peace,omitempty"`
+	ClanJoinExpiry   int64 `bson:"clan_join_expiry,omitempty"`   // Unix milliseconds
+	ClanCreateExpiry int64 `bson:"clan_create_expiry,omitempty"` // Unix milliseconds
+
 	CurHP       float64    `bson:"cur_hp"`
 	MaxHP       float64    `bson:"max_hp"`
 	CurMP       float64    `bson:"cur_mp"`
@@ -349,6 +372,16 @@ func toCharacterDoc(c *storage.Character) characterDoc {
 		ClanID:      c.ClanID,
 		Title:       c.Title,
 		RecomHave:   c.RecomHave,
+
+		PowerGrade:       c.PowerGrade,
+		PledgeType:       c.PledgeType,
+		Apprentice:       c.Apprentice,
+		Sponsor:          c.Sponsor,
+		LvlJoinedAcademy: c.LvlJoinedAcademy,
+		WantsPeace:       c.WantsPeace,
+		ClanJoinExpiry:   c.ClanJoinExpiry,
+		ClanCreateExpiry: c.ClanCreateExpiry,
+
 		CurHP:       c.CurHP,
 		MaxHP:       c.MaxHP,
 		CurMP:       c.CurMP,
@@ -410,6 +443,16 @@ func (d *characterDoc) character(items []storage.Item, quests []storage.Quest) s
 		ClanID:      d.ClanID,
 		Title:       d.Title,
 		RecomHave:   d.RecomHave,
+
+		PowerGrade:       d.PowerGrade,
+		PledgeType:       d.PledgeType,
+		Apprentice:       d.Apprentice,
+		Sponsor:          d.Sponsor,
+		LvlJoinedAcademy: d.LvlJoinedAcademy,
+		WantsPeace:       d.WantsPeace,
+		ClanJoinExpiry:   d.ClanJoinExpiry,
+		ClanCreateExpiry: d.ClanCreateExpiry,
+
 		CurHP:       d.CurHP,
 		MaxHP:       d.MaxHP,
 		CurMP:       d.CurMP,
@@ -748,6 +791,13 @@ func characterUpdate(c *storage.Character) bson.D {
 		{Key: "access_level", Value: doc.AccessLevel},
 	}
 	var unset bson.D
+	for _, f := range clanFieldValues(&doc) {
+		if f.zero {
+			unset = append(unset, bson.E{Key: f.key, Value: ""})
+		} else {
+			set = append(set, bson.E{Key: f.key, Value: f.value})
+		}
+	}
 	if doc.Vars != nil {
 		set = append(set, bson.E{Key: "vars", Value: doc.Vars})
 	} else {
@@ -791,6 +841,30 @@ func characterUpdate(c *storage.Character) bson.D {
 		update = append(update, bson.E{Key: "$unset", Value: unset})
 	}
 	return update
+}
+
+// fieldValue is one field of a character document for an update: written
+// with $set, or removed with $unset while it has its zero value, as the
+// document keeps it (omitempty).
+type fieldValue struct {
+	key   string
+	value any
+	zero  bool
+	patch storage.PatchFields // the CharacterPatch field it is
+}
+
+// clanFieldValues returns the clan fields of doc (decision T1).
+func clanFieldValues(doc *characterDoc) []fieldValue {
+	return []fieldValue{
+		{"power_grade", doc.PowerGrade, doc.PowerGrade == 0, storage.PatchPowerGrade},
+		{"pledge_type", doc.PledgeType, doc.PledgeType == 0, storage.PatchPledgeType},
+		{"apprentice", doc.Apprentice, doc.Apprentice == 0, storage.PatchApprentice},
+		{"sponsor", doc.Sponsor, doc.Sponsor == 0, storage.PatchSponsor},
+		{"lvl_joined_academy", doc.LvlJoinedAcademy, doc.LvlJoinedAcademy == 0, storage.PatchLvlJoinedAcademy},
+		{"wants_peace", doc.WantsPeace, !doc.WantsPeace, storage.PatchWantsPeace},
+		{"clan_join_expiry", doc.ClanJoinExpiry, doc.ClanJoinExpiry == 0, storage.PatchClanJoinExpiry},
+		{"clan_create_expiry", doc.ClanCreateExpiry, doc.ClanCreateExpiry == 0, storage.PatchClanCreateExpiry},
+	}
 }
 
 // updateFields applies a characterUpdate inside a transaction. It returns
@@ -863,46 +937,77 @@ func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
 // left while the character still owns them, upserts the changed ones, and
 // then does the same for the quests.
 func (s *Characters) Save(ctx context.Context, c *storage.Character, changes storage.ItemChanges) error {
-	update := characterUpdate(c)
-	upserts := itemUpserts(c.ObjectID, changes.Upserts)
-	quests := questUpserts(c.ObjectID, changes.Quests.Upserts)
-	deletedQuests := changes.Quests.Deleted
+	w := newSaveWrite(c, changes)
 	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
 	err := s.store.write(ctx, func(ctx context.Context) error {
-		if err := s.updateFields(ctx, c.ObjectID, update); err != nil {
-			return err
-		}
-		if len(changes.Destroyed) > 0 {
-			_, err := s.items.DeleteMany(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: changes.Destroyed}}}})
-			if err != nil {
-				return err
-			}
-		}
-		if len(changes.Left) > 0 {
-			_, err := s.items.DeleteMany(ctx, bson.D{
-				{Key: "_id", Value: bson.D{{Key: "$in", Value: changes.Left}}},
-				{Key: "owner_id", Value: c.ObjectID},
-			})
-			if err != nil {
-				return err
-			}
-		}
-		if err := s.upsertItems(ctx, upserts); err != nil {
-			return err
-		}
-		if len(deletedQuests) > 0 {
-			_, err := s.quests.DeleteMany(ctx, bson.D{
-				{Key: "char", Value: c.ObjectID},
-				{Key: "quest", Value: bson.D{{Key: "$in", Value: deletedQuests}}},
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return s.writeQuests(ctx, quests)
+		return s.applySave(ctx, w)
 	})
 	return writeError("save character", err)
+}
+
+// saveWrite is a Save prepared for a transaction.
+type saveWrite struct {
+	objectID      int32
+	update        bson.D
+	changes       storage.ItemChanges
+	upserts       []mongo.WriteModel
+	quests        []mongo.WriteModel
+	deletedQuests []string
+}
+
+func newSaveWrite(c *storage.Character, changes storage.ItemChanges) saveWrite {
+	return saveWrite{
+		objectID:      c.ObjectID,
+		update:        characterUpdate(c),
+		changes:       changes,
+		upserts:       itemUpserts(c.ObjectID, changes.Upserts),
+		quests:        questUpserts(c.ObjectID, changes.Quests.Upserts),
+		deletedQuests: changes.Quests.Deleted,
+	}
+}
+
+// applySave writes what Save writes, inside a transaction: the character's
+// fields, the destroyed items, the items that left while the character
+// still owns them, the changed items, and then the same for the quests.
+func (s *Characters) applySave(ctx context.Context, w saveWrite) error {
+	if err := s.updateFields(ctx, w.objectID, w.update); err != nil {
+		return err
+	}
+	if err := s.applyItems(ctx, w.objectID, w.changes.Destroyed, w.changes.Left, w.upserts); err != nil {
+		return err
+	}
+	if len(w.deletedQuests) > 0 {
+		_, err := s.quests.DeleteMany(ctx, bson.D{
+			{Key: "char", Value: w.objectID},
+			{Key: "quest", Value: bson.D{{Key: "$in", Value: w.deletedQuests}}},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return s.writeQuests(ctx, w.quests)
+}
+
+// applyItems applies owner's item changes, with the meaning of
+// storage.ItemChanges, inside a transaction; upserts come from itemUpserts.
+func (s *Characters) applyItems(ctx context.Context, owner int32, destroyed, left []int32, upserts []mongo.WriteModel) error {
+	if len(destroyed) > 0 {
+		_, err := s.items.DeleteMany(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: destroyed}}}})
+		if err != nil {
+			return err
+		}
+	}
+	if len(left) > 0 {
+		_, err := s.items.DeleteMany(ctx, bson.D{
+			{Key: "_id", Value: bson.D{{Key: "$in", Value: left}}},
+			{Key: "owner_id", Value: owner},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return s.upsertItems(ctx, upserts)
 }
 
 // Delete implements storage.CharacterStore: the character, all its items and
@@ -921,20 +1026,28 @@ func (s *Characters) Delete(ctx context.Context, objectID int32) error {
 		if _, err := s.items.DeleteMany(ctx, bson.D{{Key: "owner_id", Value: objectID}}); err != nil {
 			return err
 		}
-		_, err = s.quests.DeleteMany(ctx, bson.D{{Key: "char", Value: objectID}})
+		if _, err = s.quests.DeleteMany(ctx, bson.D{{Key: "char", Value: objectID}}); err != nil {
+			return err
+		}
+		_, err = s.relations.DeleteMany(ctx, bson.D{{Key: "$or", Value: bson.A{
+			bson.D{{Key: "owner", Value: objectID}},
+			bson.D{{Key: "target", Value: objectID}},
+		}}})
 		return err
 	})
 	return writeError("delete character", err)
 }
 
 // writeError returns the error of a write transaction: storage.ErrNotFound
-// as it is, anything else wrapped.
+// and storage.ErrExists as they are, anything else wrapped.
 func writeError(what string, err error) error {
 	switch {
 	case err == nil:
 		return nil
 	case errors.Is(err, storage.ErrNotFound):
 		return storage.ErrNotFound
+	case errors.Is(err, storage.ErrExists):
+		return storage.ErrExists
 	default:
 		return fmt.Errorf("mongostore: %s: %w", what, err)
 	}

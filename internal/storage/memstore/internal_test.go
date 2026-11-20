@@ -18,6 +18,38 @@ func TestFailedWrites(t *testing.T) {
 	})
 }
 
+func TestSocialStores(t *testing.T) {
+	storagetest.TestSocialStores(t, func(*testing.T) (storagetest.SocialStores, func(error)) {
+		s := NewCharacters()
+		stores := storagetest.SocialStores{Characters: s, Batches: s, Clans: s.Clans(), Crests: s.Crests(), Relations: s.Relations()}
+		return stores, func(err error) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.failNext = err
+		}
+	})
+}
+
+// TestSocialZeroValue checks the clan, crest and relation views of a zero
+// Characters.
+func TestSocialZeroValue(t *testing.T) {
+	var s Characters
+	if list, err := s.Clans().LoadClans(t.Context()); err != nil || list != nil {
+		t.Errorf("LoadClans on zero value = %+v, %v", list, err)
+	}
+	if id, err := s.Crests().NextCrestID(t.Context()); err != nil || id != 1 {
+		t.Errorf("NextCrestID on zero value = %d, %v; want 1", id, err)
+	}
+	if list, err := s.Relations().Relations(t.Context(), 1); err != nil || list != nil {
+		t.Errorf("Relations on zero value = %+v, %v", list, err)
+	}
+	var z Characters
+	b := storage.Batch{Relations: storage.RelationChanges{Added: storage.FriendRelations(1, 2)}}
+	if err := z.WriteBatch(t.Context(), b); err != nil {
+		t.Fatalf("WriteBatch on zero value: %v", err)
+	}
+}
+
 func TestGlobalVariables(t *testing.T) {
 	storagetest.TestGlobalVariableStore(t, func(*testing.T) (storage.GlobalVariableStore, func(error)) {
 		s := NewGlobalVariables()

@@ -13,12 +13,14 @@ import (
 	"github.com/IPeter/l2go/internal/storage"
 )
 
-// Characters is an in-memory storage.CharacterStore and
-// storage.CharacterSaver. Like the MongoDB store it keeps the items and the
+// Characters is an in-memory storage.CharacterStore, storage.CharacterSaver
+// and storage.BatchWriter. Like the MongoDB store it keeps the items and the
 // quests apart from the characters, each with its owner, so items move
-// between characters the same way. Every write checks first and then changes
-// everything at once, which makes it as atomic as a transaction. The zero
-// value is ready to use and it is safe for concurrent use.
+// between characters the same way. It also holds the clans, crests and
+// relations, which Clans, Crests and Relations read, so a Batch covers them
+// all. Every write checks first and then changes everything at once, which
+// makes it as atomic as a transaction. The zero value is ready to use and it
+// is safe for concurrent use.
 type Characters struct {
 	mu      sync.Mutex
 	byID    map[int32]storage.Character // without items
@@ -27,9 +29,15 @@ type Characters struct {
 	byOwner map[int32]map[int32]struct{}
 	quests  map[int32]map[string]map[string]string // character → quest name → vars
 
-	// failNext, if set, fails the next Create, Update, Save or Delete that
-	// gets past its checks, before it changes anything. Tests in this
-	// package use it to run the shared failed-write tests.
+	clans      map[int32]storage.Clan
+	clanByName map[string]int32 // storage.NameKey(clan name) → clan ID
+	crests     map[int32]storage.Crest
+	crestsUsed int32 // crest IDs handed out
+	relations  map[storage.Relation]struct{}
+
+	// failNext, if set, fails the next Create, Update, Save, WriteBatch or
+	// Delete that gets past its checks, before it changes anything. Tests in
+	// this package use it to run the shared failed-write tests.
 	failNext error
 }
 
@@ -42,6 +50,7 @@ type ownedItem struct {
 var (
 	_ storage.CharacterStore = (*Characters)(nil)
 	_ storage.CharacterSaver = (*Characters)(nil)
+	_ storage.BatchWriter    = (*Characters)(nil)
 )
 
 // NewCharacters returns an empty store.
@@ -57,6 +66,10 @@ func (s *Characters) init() {
 		s.items = make(map[int32]ownedItem)
 		s.byOwner = make(map[int32]map[int32]struct{})
 		s.quests = make(map[int32]map[string]map[string]string)
+		s.clans = make(map[int32]storage.Clan)
+		s.clanByName = make(map[string]int32)
+		s.crests = make(map[int32]storage.Crest)
+		s.relations = make(map[storage.Relation]struct{})
 	}
 }
 
@@ -258,20 +271,14 @@ func (s *Characters) Save(ctx context.Context, c *storage.Character, changes sto
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.updateFields(c); err != nil {
-		return err
-	}
-	for _, id := range changes.Destroyed {
-		s.deleteItem(id)
-	}
-	for _, id := range changes.Left {
-		if e, ok := s.items[id]; ok && e.owner == c.ObjectID {
-			s.deleteItem(id)
-		}
-	}
-	for _, it := range changes.Upserts {
-		s.putItem(c.ObjectID, it)
-	}
+	return s.writeBatch(&storage.Batch{Saves: []storage.CharacterSave{{Character: *c, Changes: changes}}})
+}
+
+// applySave writes what Save writes of the stored character c. The caller
+// holds s.mu and checked that c exists.
+func (s *Characters) applySave(c *storage.Character, changes storage.ItemChanges) {
+	s.storeFields(c)
+	s.applyItems(c.ObjectID, changes.Upserts, changes.Destroyed, changes.Left)
 	for _, name := range changes.Quests.Deleted {
 		delete(s.quests[c.ObjectID], name)
 	}
@@ -281,19 +288,41 @@ func (s *Characters) Save(ctx context.Context, c *storage.Character, changes sto
 	if len(s.quests[c.ObjectID]) == 0 {
 		delete(s.quests, c.ObjectID)
 	}
-	return nil
+}
+
+// applyItems applies item changes of owner with the meaning of
+// storage.ItemChanges. The caller holds s.mu.
+func (s *Characters) applyItems(owner int32, upserts []storage.Item, destroyed, left []int32) {
+	for _, id := range destroyed {
+		s.deleteItem(id)
+	}
+	for _, id := range left {
+		if e, ok := s.items[id]; ok && e.owner == owner {
+			s.deleteItem(id)
+		}
+	}
+	for _, it := range upserts {
+		s.putItem(owner, it)
+	}
 }
 
 // updateFields stores the fields Update saves, or returns ErrNotFound or
 // the injected failure. The caller holds s.mu.
 func (s *Characters) updateFields(c *storage.Character) error {
-	old, ok := s.byID[c.ObjectID]
-	if !ok {
+	if _, ok := s.byID[c.ObjectID]; !ok {
 		return storage.ErrNotFound
 	}
 	if err := s.takeFault(); err != nil {
 		return err
 	}
+	s.storeFields(c)
+	return nil
+}
+
+// storeFields stores the fields Update saves of the stored character c. The
+// caller holds s.mu.
+func (s *Characters) storeFields(c *storage.Character) {
+	old := s.byID[c.ObjectID]
 	stored := *c
 	stored.Items, stored.Quests = nil, nil
 	stored.Vars = cloneVars(c.Vars)
@@ -304,7 +333,6 @@ func (s *Characters) updateFields(c *storage.Character) error {
 	stored.DeleteTime = normalizeTime(stored.DeleteTime)
 	stored.LastAccess = normalizeTime(stored.LastAccess)
 	s.byID[c.ObjectID] = stored
-	return nil
 }
 
 // Delete implements storage.CharacterStore.
@@ -327,6 +355,11 @@ func (s *Characters) Delete(ctx context.Context, objectID int32) error {
 	delete(s.quests, objectID)
 	delete(s.byID, objectID)
 	delete(s.byName, storage.NameKey(c.Name))
+	for r := range s.relations {
+		if r.Owner == objectID || r.Target == objectID {
+			delete(s.relations, r)
+		}
+	}
 	return nil
 }
 

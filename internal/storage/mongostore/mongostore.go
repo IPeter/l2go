@@ -3,16 +3,22 @@
 // Collections:
 //   - accounts: one document per login account, unique on username.
 //   - characters: one document per character, unique on name_lower,
-//     indexed on account (see Characters).
+//     indexed on account and on clan_id (see Characters).
 //   - items: one document per item with its owner, indexed on owner_id and
 //     loc (see Characters).
 //   - character_quests: one document per character and quest, unique on
 //     char and quest (see Characters).
 //   - global_variables: one document per global variable (see
 //     GlobalVariables).
-//   - counters: the object ID counter (see IDs).
+//   - clans: one document per clan, unique on nameKey, indexed on allyId
+//     and allyNameKey (see Clans).
+//   - crests: one document per crest (see Crests).
+//   - character_relations: one document per friend or block, unique on
+//     owner, target and relation, indexed on target (see Relations).
+//   - counters: the object ID and crest ID counters (see IDs and Crests).
 //
-// A character and its items are written in one transaction, so the
+// A character and its items are written in one transaction, and so is a
+// storage.Batch (Characters.WriteBatch), so the
 // deployment must be a replica set (a one-node one is enough, as in docker
 // compose) or a sharded cluster. Open refuses a standalone server.
 package mongostore
@@ -192,6 +198,14 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 	_, err = s.db.Collection(questsCollection).Indexes().CreateMany(ctx, questIndexes())
 	if err != nil {
 		return fmt.Errorf("mongostore: create character_quests indexes: %w", err)
+	}
+	_, err = s.db.Collection(clansCollection).Indexes().CreateMany(ctx, clanIndexes())
+	if err != nil {
+		return fmt.Errorf("mongostore: create clans indexes: %w", err)
+	}
+	_, err = s.db.Collection(relationsCollection).Indexes().CreateMany(ctx, relationIndexes())
+	if err != nil {
+		return fmt.Errorf("mongostore: create character_relations indexes: %w", err)
 	}
 	return nil
 }

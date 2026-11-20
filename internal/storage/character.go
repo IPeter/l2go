@@ -56,8 +56,8 @@ func (s PaperdollSlot) Equipped() bool {
 // Mobius ItemLocation enum, which its items table stores in the loc column.
 type ItemLocation string
 
-// Item locations. Others (CLANWH, FREIGHT, PET, PET_EQUIP) come with the
-// features that use them; the stores keep any value.
+// Item locations. Others (FREIGHT, PET, PET_EQUIP) come with the features
+// that use them; the stores keep any value. LocClanWarehouse is in social.go.
 const (
 	LocInventory ItemLocation = "INVENTORY" // carried, not worn
 	LocPaperdoll ItemLocation = "PAPERDOLL" // worn in the paperdoll slot Item.Slot
@@ -144,6 +144,22 @@ type Character struct {
 	// RecomHave is the recommendations the character received (Mobius
 	// characters.rec_have).
 	RecomHave int32
+
+	// The clan fields (decision T1, the Mobius characters columns). Clan
+	// privileges are not stored: they follow from the rank.
+	PowerGrade int32 // the rank in the clan, 1-9 (Mobius power_grade); 0 outside a clan
+	PledgeType int32 // the unit, storage.UnitMain, UnitAcademy, ... (Mobius subpledge)
+	Apprentice int32 // the academy member this member sponsors, 0 for none
+	Sponsor    int32 // the sponsor of this academy member, 0 for none
+	// LvlJoinedAcademy is the level at which the character joined the
+	// academy, 0 outside it.
+	LvlJoinedAcademy int32
+	WantsPeace       bool // asked for peace in clan wars (Mobius wantspeace)
+	// ClanJoinExpiry and ClanCreateExpiry are when the character may join
+	// or create a clan again, in Unix milliseconds, 0 for none (decision
+	// T14).
+	ClanJoinExpiry   int64
+	ClanCreateExpiry int64
 
 	// DeathPenaltyLevel is the level of the Death Penalty (skill 5076), 0
 	// without one (Mobius character_skills_save of 5076).
@@ -391,7 +407,7 @@ type CharacterStore interface {
 	// Update saves the state of the character with c.ObjectID: position and
 	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
 	// and kill counts, title and recommendations, death penalty level and exp
-	// before death, clan, delete
+	// before death, clan and the clan fields, delete
 	// time, last access, access level, variables, skills and saved skills. The
 	// identity fields (account, name, race and creation time) and the newbie
 	// flag are kept as stored. c.Items replaces the character's items: those it owned that
@@ -402,8 +418,9 @@ type CharacterStore interface {
 	// is no such character.
 	Update(ctx context.Context, c *Character) error
 	// Delete removes the character, all its items, wherever they are kept,
-	// and its quests. Its name becomes free. It returns ErrNotFound if there
-	// is no such character.
+	// its quests, and its relations both ways: those it has and those other
+	// characters have to it (Mobius GameClient.deleteCharByObjId). Its name
+	// becomes free. It returns ErrNotFound if there is no such character.
 	Delete(ctx context.Context, objectID int32) error
 	// SetDeleteTime sets when the character will be deleted. The zero time
 	// clears it (the character is restored). It returns ErrNotFound if

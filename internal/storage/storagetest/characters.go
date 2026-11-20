@@ -55,6 +55,15 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 		Title:       "Lord of the Mines",
 		RecomHave:   15,
 
+		PowerGrade:       6,
+		PledgeType:       storage.UnitAcademy,
+		Apprentice:       objectID + 50,
+		Sponsor:          objectID + 51,
+		LvlJoinedAcademy: 18,
+		WantsPeace:       true,
+		ClanJoinExpiry:   1_795_000_000_111,
+		ClanCreateExpiry: 1_795_000_000_222,
+
 		DeathPenaltyLevel: 3,
 		ExpBeforeDeath:    1_234_567_999_999,
 
@@ -139,6 +148,10 @@ func changedCharacter(c storage.Character) storage.Character {
 	c.ClanID = 0
 	c.Title = ""
 	c.RecomHave = 3
+	// Left the clan: the clan fields are cleared, the penalties set.
+	c.PowerGrade, c.PledgeType, c.Apprentice, c.Sponsor, c.LvlJoinedAcademy = 0, 0, 0, 0, 0
+	c.WantsPeace = false
+	c.ClanJoinExpiry, c.ClanCreateExpiry = 1_795_086_400_000, 1_795_864_000_000
 	c.DeathPenaltyLevel = 0
 	c.ExpBeforeDeath = 9_876_600_000
 	c.CurHP = 1200.5

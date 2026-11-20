@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -71,6 +72,151 @@ func TestFailedWrites(t *testing.T) {
 		s, _ := openTestStore(t)
 		return s.Characters(), s.fault.arm
 	})
+}
+
+func TestSocialStores(t *testing.T) {
+	storagetest.TestSocialStores(t, func(t *testing.T) (storagetest.SocialStores, func(error)) {
+		s, _ := openTestStore(t)
+		chars := s.Characters()
+		stores := storagetest.SocialStores{Characters: chars, Batches: chars, Clans: s.Clans(), Crests: s.Crests(), Relations: s.Relations()}
+		return stores, s.fault.arm
+	})
+}
+
+// indexKeys returns the key lists of the collection's indexes and which of
+// them are unique.
+func indexKeys(t *testing.T, s *Store, coll string) (keys [][]string, unique map[string]bool) {
+	t.Helper()
+	specs, err := s.db.Collection(coll).Indexes().ListSpecifications(t.Context())
+	if err != nil {
+		t.Fatalf("list %s indexes: %v", coll, err)
+	}
+	unique = make(map[string]bool)
+	for _, sp := range specs {
+		elems, err := sp.KeysDocument.Elements()
+		if err != nil {
+			t.Fatalf("index %s keys: %v", sp.Name, err)
+		}
+		var k []string
+		for _, e := range elems {
+			k = append(k, e.Key())
+		}
+		keys = append(keys, k)
+		if sp.Unique != nil && *sp.Unique {
+			unique[strings.Join(k, ",")] = true
+		}
+	}
+	return keys, unique
+}
+
+// TestSocialDocuments checks the stored layout of Plan 12's data model and
+// its indexes.
+func TestSocialDocuments(t *testing.T) {
+	s, _ := openTestStore(t)
+	for _, tt := range []struct {
+		coll   string
+		keys   string
+		unique bool
+	}{
+		{clansCollection, "nameKey", true},
+		{clansCollection, "allyId", false},
+		{clansCollection, "allyNameKey", false},
+		{relationsCollection, "owner,target,relation", true},
+		{relationsCollection, "target", false},
+		{charactersCollection, "clan_id,_id", false},
+	} {
+		keys, unique := indexKeys(t, s, tt.coll)
+		if !slices.ContainsFunc(keys, func(k []string) bool { return strings.Join(k, ",") == tt.keys }) {
+			t.Errorf("%s indexes on %v, want one on %s", tt.coll, keys, tt.keys)
+		}
+		if unique[tt.keys] != tt.unique {
+			t.Errorf("%s index on %s unique = %v, want %v", tt.coll, tt.keys, unique[tt.keys], tt.unique)
+		}
+	}
+
+	clan := storage.Clan{ID: 50, Name: "Dragons", Level: 3, LeaderID: 10, AllyID: 50, AllyName: "Fire",
+		AllyPenalty: storage.AllyPenalty{Expiry: 7, Type: storage.AllyPenaltyClanLeaved},
+		Ranks:       []storage.ClanRank{{Rank: 1, Privs: 8388606}}, WarsDeclared: []int32{60}}
+	c := storage.Character{ObjectID: 10, Account: "alice", Name: "Layout", ClanID: 50, PowerGrade: 1}
+	if err := s.Characters().Create(t.Context(), &c); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	b := storage.Batch{
+		Clans:     []storage.Clan{clan},
+		Crests:    []storage.Crest{{ID: 1, Type: storage.CrestPledge, Data: []byte{1, 2}}},
+		Relations: storage.RelationChanges{Added: []storage.Relation{{Owner: 10, Target: 11, Type: storage.RelationBlock}}},
+	}
+	if err := s.Characters().WriteBatch(t.Context(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	var doc bson.Raw
+	if err := s.db.Collection(clansCollection).FindOne(t.Context(), bson.D{{Key: "_id", Value: int32(50)}}).Decode(&doc); err != nil {
+		t.Fatalf("find clan: %v", err)
+	}
+	for _, f := range []struct {
+		path string
+		want any
+	}{
+		{"name", "Dragons"}, {"nameKey", "dragons"}, {"level", int32(3)}, {"leaderId", int32(10)}, {"allyId", int32(50)},
+		{"allyName", "Fire"}, {"allyNameKey", "fire"}, {"allyPenalty.expiry", int64(7)}, {"allyPenalty.type", int32(1)},
+		{"ranks.0.rank", int32(1)}, {"ranks.0.privs", int32(8388606)}, {"warsDeclared.0", int32(60)},
+		{"notice.text", ""}, {"notice.enabled", false}, {"castleId", int32(0)}, {"hideoutId", int32(0)},
+		{"memberPenaltyExpiry", int64(0)}, {"dissolvingExpiry", int64(0)}, {"crestId", int32(0)},
+	} {
+		rv, err := doc.LookupErr(strings.Split(f.path, ".")...)
+		if err != nil {
+			t.Errorf("clan field %s: %v", f.path, err)
+			continue
+		}
+		var (
+			got any
+			ok  bool
+		)
+		switch f.want.(type) {
+		case int32:
+			got, ok = rv.Int32OK()
+		case int64:
+			got, ok = rv.Int64OK()
+		case string:
+			got, ok = rv.StringValueOK()
+		case bool:
+			got, ok = rv.BooleanOK()
+		}
+		if !ok || got != f.want {
+			t.Errorf("clan field %s = %v (%s), want %#v", f.path, rv, rv.Type, f.want)
+		}
+	}
+	var crest bson.Raw
+	if err := s.db.Collection(crestsCollection).FindOne(t.Context(), bson.D{{Key: "_id", Value: int32(1)}}).Decode(&crest); err != nil {
+		t.Fatalf("find crest: %v", err)
+	}
+	if _, data, ok := crest.Lookup("data").BinaryOK(); !ok || !reflect.DeepEqual(data, []byte{1, 2}) || crest.Lookup("type").AsInt64() != 1 {
+		t.Errorf("crest document = %v", crest)
+	}
+	var rel bson.M
+	if err := s.db.Collection(relationsCollection).FindOne(t.Context(), bson.D{}).Decode(&rel); err != nil {
+		t.Fatalf("find relation: %v", err)
+	}
+	if rel["owner"] != int32(10) || rel["target"] != int32(11) || rel["relation"] != int32(1) {
+		t.Errorf("relation document = %v", rel)
+	}
+	var ch bson.M
+	if err := s.db.Collection(charactersCollection).FindOne(t.Context(), bson.D{{Key: "_id", Value: int32(10)}}).Decode(&ch); err != nil {
+		t.Fatalf("find character: %v", err)
+	}
+	if ch["clan_id"] != int32(50) || ch["power_grade"] != int32(1) {
+		t.Errorf("character clan fields = %v", ch)
+	}
+	if _, ok := ch["wants_peace"]; ok {
+		t.Errorf("character document has wants_peace while false: %v", ch)
+	}
+	// The crest counter starts at 1 apart from the object ID counter.
+	if _, err := s.IDs().NextID(t.Context()); err != nil {
+		t.Fatalf("NextID: %v", err)
+	}
+	if id, err := s.Crests().NextCrestID(t.Context()); err != nil || id != 1 {
+		t.Errorf("NextCrestID = %d, %v; want 1", id, err)
+	}
 }
 
 func TestGlobalVariables(t *testing.T) {
