@@ -154,6 +154,11 @@ type Options struct {
 	// Geo answers the geodata questions; nil means geo.None (no geodata).
 	Geo geo.Engine
 
+	// Accounts changes access levels of accounts on the login server (the
+	// account bans of the admin panel, admin_char.go); the login link
+	// (*link.Client) is one. Nil leaves account bans unavailable.
+	Accounts AccountAccess
+
 	// Rand is the game's random source on the loop (decision F7): combat
 	// rolls draw from it in Mobius's order. Nil means a PCG source with a
 	// random seed, which New logs. Tests pass rnd.NewScripted or rnd.New

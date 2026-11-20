@@ -50,10 +50,10 @@ func npcCollision(n *Npc) int32 { return int32(n.Template.Collision.Radius) }
 func npcFlying(n *Npc) bool { return n.Template.Status.Flying }
 
 // npcMovementDisabled is Mobius isMovementDisabled for an NPC: dead,
-// immobile (canMove false) or not in the world. Stuns, roots and the like
-// come with skills.
+// immobile (canMove false), paralyzed by //para or not in the world. Stuns,
+// roots and the like come with skills.
 func npcMovementDisabled(n *Npc) bool {
-	return n.Dead || !n.Template.Status.CanMove || !n.InWorld()
+	return n.Dead || !n.Template.Status.CanMove || !n.InWorld() || adminParalyzed(n)
 }
 
 // NpcRunning reports whether the NPC runs (Mobius isRunning). Loop-only.

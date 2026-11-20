@@ -44,6 +44,8 @@ func sampleMessages() []message {
 		verifySessionResultMsg{requestID: 43},
 		pingMsg{},
 		pongMsg{},
+		changeAccessLevelMsg{account: "alice", level: -1},
+		changeAccessLevelMsg{account: "Ünïcødé𝄞", level: math.MaxInt32},
 	}
 }
 
@@ -84,6 +86,7 @@ func TestEncodeLayout(t *testing.T) {
 		{verifySessionResultMsg{requestID: 5}, []byte{0x06, 5, 0, 0, 0, 0}},
 		{pingMsg{}, []byte{0x07}},
 		{pongMsg{}, []byte{0x08}},
+		{changeAccessLevelMsg{account: "ab", level: -1}, []byte{0x09, 'a', 0, 'b', 0, 0, 0, 0xff, 0xff, 0xff, 0xff}},
 	}
 	for _, tt := range tests {
 		if got := tt.m.encode(); !bytes.Equal(got, tt.want) {

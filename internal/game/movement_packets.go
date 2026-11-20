@@ -49,8 +49,8 @@ func (s *Server) handleMoveToLocation(p *Player, body []byte) {
 		p.SendActionFailed()
 		return
 	}
-	if !p.InWorld() {
-		// Teleporting (Mobius isMovementDisabled).
+	if !p.InWorld() || adminParalyzed(p) {
+		// Teleporting or paralyzed by //para (Mobius isMovementDisabled).
 		p.SendActionFailed()
 		return
 	}

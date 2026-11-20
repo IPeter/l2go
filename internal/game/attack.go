@@ -311,8 +311,8 @@ func (s *Server) npcAttackEvent(n *Npc, ev AttackEvent) {
 
 // doAttack is Mobius Creature.doAttack.
 func (s *Server) doAttack(a, t Creature) AttackOutcome {
-	if a == nil || t == nil || !attackerInWorld(a) {
-		return AttackNone
+	if a == nil || t == nil || !attackerInWorld(a) || adminParalyzed(a) {
+		return AttackNone // paralyzed by //para: Mobius isAttackingDisabled
 	}
 	now := s.Now()
 	st := s.attackStateOf(a)

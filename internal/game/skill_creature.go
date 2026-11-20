@@ -44,6 +44,8 @@ type skillBase struct {
 	listeners   []skillDamageListener
 	immobilized bool
 	locked      skills.Creature
+
+	admin creatureAdmin // GM paralysis and visual effects (admin_gm.go)
 }
 
 // skillDamageListener is a damage listener of an effect
@@ -125,7 +127,10 @@ func (n *Npc) SkillCreature() skills.Creature { return n.skill }
 func (n *Npc) Effects() *skills.EffectList { return n.skill.el }
 
 // effectHolder is an adapter that may be nil (a creature made without one).
-type effectHolder interface{ effectList() *skills.EffectList }
+type effectHolder interface {
+	effectList() *skills.EffectList
+	adminVisual() uint32
+}
 
 func (a *skillPlayer) effectList() *skills.EffectList {
 	if a == nil {
@@ -142,13 +147,14 @@ func (a *skillNpc) effectList() *skills.EffectList {
 }
 
 // abnormalMask is getAbnormalVisualEffects: the normal visual mask of the
-// effects, which UserInfo, CharInfo and NpcInfo show.
+// effects and of the GM's visual effects (admin_gm.go), which UserInfo,
+// CharInfo and NpcInfo show.
 func abnormalMask(a effectHolder) int32 {
 	el := a.effectList()
 	if el == nil {
 		return 0
 	}
-	return int32(el.Visual().Normal) //nolint:gosec // a bit mask
+	return int32(el.Visual().Normal | a.adminVisual()) //nolint:gosec // a bit mask
 }
 
 // SkillCreature returns the skills.Creature of a player or an NPC, nil for
@@ -319,12 +325,13 @@ func (b *skillBase) IsAlikeDead() bool {
 }
 
 // IsInvul reports invulnerability: an Invincible effect, or a player
-// waiting for Appearing after a teleport (Mobius isTeleporting).
+// waiting for Appearing after a teleport (Mobius isTeleporting) or made
+// invulnerable by //invul (admin_gm.go).
 func (b *skillBase) IsInvul() bool {
 	if b.el.IsAffected(skills.FlagInvul) {
 		return true
 	}
-	return b.p != nil && b.p.Teleporting()
+	return b.p != nil && (b.p.Teleporting() || b.p.admin.invul)
 }
 
 // IsMoving reports a creature on its way somewhere.
@@ -758,6 +765,10 @@ func (b *skillBase) ReduceCurrentHP(damage float64, attacker skills.Creature, _ 
 // toggle's damage does not wake.
 func (b *skillBase) ReduceCurrentHPByDOT(damage float64, attacker skills.Creature, sk *skills.Skill) {
 	b.el.StopOnDamage(sk == nil || !sk.IsToggle())
+	if b.p != nil {
+		b.p.reduceHP(damage, b.srv.gameCreature(attacker), true) // invulnerability does not stop it
+		return
+	}
 	b.gc().ReduceHP(damage, b.srv.gameCreature(attacker))
 }
 
@@ -872,9 +883,9 @@ func (b *skillBase) SetTarget(t skills.Creature) {
 func (b *skillBase) SetImmobilized(v bool) { b.immobilized = v }
 
 // IsMovementDisabled reports a creature that cannot move: dead,
-// immobilized, stunned, rooted, sleeping or paralyzed.
+// immobilized, stunned, rooted, sleeping or paralyzed (also by //para).
 func (b *skillBase) IsMovementDisabled() bool {
-	if b.immobilized || b.IsAlikeDead() {
+	if b.immobilized || b.admin.paralyzed || b.IsAlikeDead() {
 		return true
 	}
 	for _, f := range [...]skills.EffectFlag{skills.FlagStunned, skills.FlagRooted, skills.FlagSleep, skills.FlagParalyzed} {
@@ -1076,8 +1087,9 @@ func (a *skillPlayer) PkKills() int { return int(a.p.char.PKKills) }
 // PvpFlag returns the PvP flag.
 func (a *skillPlayer) PvpFlag() int { return int(a.p.PvPFlag) }
 
-// IsHero is false: heroes come with the Olympiad.
-func (a *skillPlayer) IsHero() bool { return false }
+// IsHero reports the hero status; until the Olympiad only //sethero gives
+// it (admin_char.go).
+func (a *skillPlayer) IsHero() bool { return a.p.IsHero() }
 
 // InOlympiad is false: the Olympiad does not exist yet.
 func (a *skillPlayer) InOlympiad() bool { return false }
@@ -1101,8 +1113,8 @@ func (a *skillPlayer) BonusWeightPenalty() int {
 	return int(javaInt32(a.p.stats.Calc(stats.WeightPenalty, 1)))
 }
 
-// DietMode is false: the diet mode does not exist yet.
-func (a *skillPlayer) DietMode() bool { return false }
+// DietMode reports the diet mode of //diet (admin_gm.go).
+func (a *skillPlayer) DietMode() bool { return a.p.admin.diet }
 
 // InventoryNonQuestSize returns the number of items in the inventory.
 // Quest items have their own limit in Mobius; until quest items are told

@@ -370,9 +370,9 @@ func (s *Server) skillDisabled(b *skillBase, sk *skills.Skill) bool {
 }
 
 // allSkillsDisabled is Mobius isAllSkillsDisabled: stunned, asleep or
-// paralyzed.
+// paralyzed (also by //para).
 func allSkillsDisabled(b *skillBase) bool {
-	return b.el.IsAffected(skills.FlagStunned) || b.el.IsAffected(skills.FlagSleep) || b.el.IsAffected(skills.FlagParalyzed)
+	return b.admin.paralyzed || b.el.IsAffected(skills.FlagStunned) || b.el.IsAffected(skills.FlagSleep) || b.el.IsAffected(skills.FlagParalyzed)
 }
 
 // clear ends the slot's cast flag (setCastingNow(false) or

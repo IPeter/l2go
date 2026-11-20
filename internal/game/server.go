@@ -175,6 +175,7 @@ type Server struct {
 	skills    skillsFeature    // skill_feature.go
 	learn     learnFeature     // skill_learn.go
 	itemSkill itemSkillFeature // item_skill.go
+	adminChar adminCharFeature // admin_char.go
 }
 
 var _ Service = (*Server)(nil)
@@ -263,6 +264,7 @@ func New(opts Options) (*Server, error) {
 	}
 	s.items.pool, s.items.passives, s.items.categories = opts.IDPool, opts.Passives, opts.Categories
 	s.quest.store, s.quest.settings = opts.GlobalVariables, opts.Quests.withDefaults()
+	s.adminChar.accounts = opts.Accounts
 	bg := context.Background()
 	s.bg.Store(&bg)
 	s.world.SetUpdateFlush(s.flushUpdate)

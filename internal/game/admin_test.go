@@ -17,7 +17,7 @@ var adminTestPages = map[string]string{
 	"admin/main_menu.htm": `<html><title>Main Admin Menu</title><body>` +
 		`<button value="Game" action="bypass admin_admin2">` +
 		`<button value="Help" action="bypass admin_help">` +
-		`<edit var="qbox"><button value="Find" action="bypass admin_find_character $qbox">` +
+		`<edit var="qbox"><button value="Nothing" action="bypass admin_no_such_command $qbox">` +
 		`<button value="Kill" action="bypass -h admin_kill_menu"></body></html>`,
 	"admin/game_menu.htm":  `<html><title>Game Panel</title><body><button value="Main" action="bypass admin_admin"></body></html>`,
 	"admin/gm_menu.htm":    `<html><title>GM Menu</title><body><button value="Invis" action="bypass -h admin_invis_menu"></body></html>`,
@@ -59,10 +59,10 @@ func TestAdminPanel(t *testing.T) {
 	// A command the page does not offer is dropped.
 	noPage(t, "a bypass of no page", e.bypass(gs, "admin_admin7"))
 	// A button of a command the server does not have yet.
-	got = e.bypass(gs, "admin_find_character Bob")
-	noPage(t, "find_character", got)
-	if msgs := messages(got); !slices.Equal(msgs, []string{"The command 'find_character' does not exist!"}) {
-		t.Errorf("find_character: messages %q", msgs)
+	got = e.bypass(gs, "admin_no_such_command Bob")
+	noPage(t, "no_such_command", got)
+	if msgs := messages(got); !slices.Equal(msgs, []string{"The command 'no_such_command' does not exist!"}) {
+		t.Errorf("no_such_command: messages %q", msgs)
 	}
 	adminPage(t, "Help button", e.bypass(gs, "admin_help"), "Admin Help")
 
@@ -76,7 +76,7 @@ func TestAdminPanel(t *testing.T) {
 	}
 	e.onLoop(func() { e.srv.ShowAdminPage(pl, "main_menu.htm") })
 	ps.take(t)
-	for _, cmd := range []string{"admin_admin2", "admin_find_character x"} {
+	for _, cmd := range []string{"admin_admin2", "admin_no_such_command x"} {
 		got = e.bypass(ps, cmd)
 		noPage(t, "a player's "+cmd, got)
 		if msgs := messages(got); len(msgs) != 0 {

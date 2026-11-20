@@ -346,3 +346,20 @@ func (a *Accounts) SetLastServer(ctx context.Context, username string, serverID 
 	}
 	return nil
 }
+
+// SetAccessLevel implements storage.AccountStore.
+func (a *Accounts) SetAccessLevel(ctx context.Context, username string, level storage.AccessLevel) error {
+	ctx, cancel := context.WithTimeout(ctx, a.timeout)
+	defer cancel()
+	res, err := a.coll.UpdateOne(ctx,
+		bson.D{{Key: "username", Value: username}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "access_level", Value: int8(level)}}}},
+	)
+	if err != nil {
+		return fmt.Errorf("mongostore: set access level: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}

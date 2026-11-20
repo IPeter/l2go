@@ -52,6 +52,8 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 		PvPKills:    12,
 		PKKills:     13,
 		ClanID:      14,
+		Title:       "Lord of the Mines",
+		RecomHave:   15,
 
 		DeathPenaltyLevel: 3,
 		ExpBeforeDeath:    1_234_567_999_999,
@@ -135,6 +137,8 @@ func changedCharacter(c storage.Character) storage.Character {
 	c.PvPKills = 22
 	c.PKKills = 1
 	c.ClanID = 0
+	c.Title = ""
+	c.RecomHave = 3
 	c.DeathPenaltyLevel = 0
 	c.ExpBeforeDeath = 9_876_600_000
 	c.CurHP = 1200.5
@@ -430,6 +434,51 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		}
 		if len(none) != 0 {
 			t.Errorf("ListByAccount(nobody) = %+v, want empty", none)
+		}
+	})
+
+	t.Run("GetByName", func(t *testing.T) {
+		s := newStore(t)
+		want := sampleCharacter(100, "alice", "Gimli", baseTime)
+		mustCreate(t, s, want, sampleCharacter(200, "bob", "Legolas", baseTime))
+		for _, name := range []string{"Gimli", "gimli", "GIMLI"} {
+			got, err := s.GetByName(t.Context(), name)
+			if err != nil {
+				t.Fatalf("GetByName(%s): %v", name, err)
+			}
+			if d := diffCharacter(got, want); d != "" {
+				t.Errorf("GetByName(%s): %s", name, d)
+			}
+		}
+		if _, err := s.GetByName(t.Context(), "Gloin"); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("GetByName(Gloin) error = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("Rename", func(t *testing.T) {
+		s := newStore(t)
+		gimli := sampleCharacter(100, "alice", "Gimli", baseTime)
+		mustCreate(t, s, gimli, sampleCharacter(200, "bob", "Legolas", baseTime))
+		if err := s.Rename(t.Context(), 100, "LEGOLAS"); !errors.Is(err, storage.ErrExists) {
+			t.Errorf("Rename to a taken name: error = %v, want ErrExists", err)
+		}
+		if err := s.Rename(t.Context(), 999, "Gloin"); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("Rename of nobody: error = %v, want ErrNotFound", err)
+		}
+		// Another case of its own name is fine.
+		if err := s.Rename(t.Context(), 100, "GIMLI"); err != nil {
+			t.Fatalf("Rename(GIMLI): %v", err)
+		}
+		if err := s.Rename(t.Context(), 100, "Gloin"); err != nil {
+			t.Fatalf("Rename(Gloin): %v", err)
+		}
+		want := gimli
+		want.Name = "Gloin"
+		checkStored(t, s, want)
+		for name, exists := range map[string]bool{"Gimli": false, "gloin": true, "Legolas": true} {
+			if ok, err := s.NameExists(t.Context(), name); err != nil || ok != exists {
+				t.Errorf("after Rename: NameExists(%s) = %v, %v, want %v", name, ok, err, exists)
+			}
 		}
 	})
 

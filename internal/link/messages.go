@@ -25,6 +25,7 @@ import (
 //	0x06 VerifySessionResult  login→game  request ID u32, ok u8 (0 or 1)
 //	0x07 Ping                 either way  no fields
 //	0x08 Pong                 either way  no fields
+//	0x09 ChangeAccessLevel    game→login  account (UTF-16LE, zero-terminated), access level i32
 const (
 	opChallenge           = 0x01
 	opRegister            = 0x02
@@ -34,6 +35,7 @@ const (
 	opVerifySessionResult = 0x06
 	opPing                = 0x07
 	opPong                = 0x08
+	opChangeAccessLevel   = 0x09
 )
 
 const (
@@ -94,6 +96,21 @@ type verifySessionResultMsg struct {
 type pingMsg struct{}
 
 type pongMsg struct{}
+
+// changeAccessLevelMsg is L2J's ChangeAccessLevel: a GM banned or unbanned
+// an account on the game server.
+type changeAccessLevelMsg struct {
+	account string
+	level   int32
+}
+
+func (m changeAccessLevelMsg) encode() []byte {
+	w := packets.NewWriter(1 + 2*len(m.account) + 2 + 4)
+	w.WriteUint8(opChangeAccessLevel)
+	w.WriteString(m.account)
+	w.WriteInt32(m.level)
+	return w.Bytes()
+}
 
 func (m challengeMsg) encode() []byte {
 	w := packets.NewWriter(1 + 2 + challengeSize)
@@ -204,6 +221,12 @@ func decode(body []byte) (message, error) {
 		m = pingMsg{}
 	case opPong:
 		m = pongMsg{}
+	case opChangeAccessLevel:
+		c := changeAccessLevelMsg{account: r.ReadString(), level: r.ReadInt32()}
+		if r.Err() == nil && !validAccount(c.account) {
+			return nil, fmt.Errorf("%w: invalid account name", errMalformed)
+		}
+		m = c
 	default:
 		return nil, fmt.Errorf("%w: unknown opcode 0x%02x", errMalformed, body[0])
 	}

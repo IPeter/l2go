@@ -59,6 +59,26 @@ func TestAccountStore(t *testing.T, newStore func(t *testing.T) storage.AccountS
 		}
 	})
 
+	t.Run("AccessLevel", func(t *testing.T) {
+		s := newStore(t)
+		if err := s.Create(t.Context(), storage.Account{Username: "frank", LastServer: 2}); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		if err := s.SetAccessLevel(t.Context(), "frank", storage.AccessLevelBanned); err != nil {
+			t.Fatalf("SetAccessLevel: %v", err)
+		}
+		got, err := s.FindByUsername(t.Context(), "frank")
+		if err != nil {
+			t.Fatalf("FindByUsername: %v", err)
+		}
+		if got.AccessLevel != storage.AccessLevelBanned || got.LastServer != 2 {
+			t.Errorf("after SetAccessLevel: %+v, want access level -1 and LastServer 2", got)
+		}
+		if err := s.SetAccessLevel(t.Context(), "nobody", storage.AccessLevelBanned); !errors.Is(err, storage.ErrNotFound) {
+			t.Errorf("SetAccessLevel(nobody) error = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("NotFound", func(t *testing.T) {
 		s := newStore(t)
 		_, err := s.FindByUsername(t.Context(), "nobody")

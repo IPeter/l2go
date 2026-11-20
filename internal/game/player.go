@@ -103,6 +103,8 @@ type Player struct {
 	quests playerQuests // quest states and player variables (quest.go)
 
 	itemSkill playerItemSkill // shortcuts, shots, item skills, penalties (item_skill.go)
+
+	admin playerAdmin // the GM toggles: invul, diet, silence, ... (admin_gm.go)
 }
 
 var (
@@ -206,9 +208,8 @@ func (p *Player) BaseClassID() int {
 // Female reports whether the character is female.
 func (p *Player) Female() bool { return p.char.Sex == 1 }
 
-// Title returns the title shown under the name. Titles are not stored yet,
-// so it is empty.
-func (p *Player) Title() string { return "" }
+// Title returns the title shown under the name (//settitle sets it).
+func (p *Player) Title() string { return p.char.Title }
 
 // Karma returns the karma.
 func (p *Player) Karma() int32 { return p.char.Karma }
@@ -334,18 +335,20 @@ func (p *Player) autoAttackableBy(v *Player) bool {
 }
 
 // recommendations returns the recommendations the player can still give and
-// has received. They are not stored yet; Mobius restartRecom gives a new day
-// 3, 6 or 9 to give from level 10, 20 and 40.
+// has received. Those received are stored (//rec sets them); those to give
+// are not yet: Mobius restartRecom gives a new day 3, 6 or 9 to give from
+// level 10, 20 and 40.
 func (p *Player) recommendations() (left, have int16) {
+	have = int16(min(max(p.char.RecomHave, 0), 255)) //nolint:gosec // clamped as Mobius setRecomHave
 	switch level := p.Level(); {
 	case level < 10:
-		return 0, 0
+		return 0, have
 	case level < 20:
-		return 3, 0
+		return 3, have
 	case level < 40:
-		return 6, 0
+		return 6, have
 	default:
-		return 9, 0
+		return 9, have
 	}
 }
 

@@ -403,7 +403,7 @@ func (s *Server) refreshOverloaded(p *Player) {
 	proc := (load - int64(p.stats.Calc(stats.WeightPenalty, 1))) * 1000 / maxLoad
 	var level int32
 	switch {
-	case proc < 500:
+	case proc < 500 || p.admin.diet: // //diet (admin_gm.go)
 		level = 0
 	case proc < 666:
 		level = 1
@@ -446,6 +446,7 @@ func etcStatusPacket(p *Player) []byte {
 	return serverpackets.NewEtcStatusUpdatePacket(serverpackets.EtcStatusUpdate{
 		Charges:           charges,
 		WeightPenalty:     p.items.weightPenalty,
+		ChatBlocked:       p.admin.silence || p.chatBanned(), // //silence (admin_gm.go), chat ban (admin_char.go)
 		DangerArea:        p.Zones.Inside(ZoneDangerArea),
 		GradePenalty:      p.GradePenalty(),
 		CharmOfCourage:    p.CharmOfCourage(),

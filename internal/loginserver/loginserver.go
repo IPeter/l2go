@@ -143,7 +143,7 @@ func newServer(cfg config.Config, store storage.AccountStore, logger *slog.Logge
 	for _, gs := range cfg.GameServers {
 		secrets[gs.ID] = gs.Secret
 	}
-	ls := link.NewServer(link.ServerConfig{GameServers: secrets}, sessions, logger.With("component", "link"))
+	ls := link.NewServer(link.ServerConfig{GameServers: secrets, AccessLevels: accountAccess{store}}, sessions, logger.With("component", "link"))
 	return &Server{
 		cfg:         cfg,
 		store:       store,
@@ -157,6 +157,20 @@ func newServer(cfg config.Config, store storage.AccountStore, logger *slog.Logge
 		idleTimeout: DefaultIdleTimeout,
 		bcryptCost:  defaultBcryptCost,
 	}, nil
+}
+
+// accountAccessTimeout bounds storing an access level a game server sent.
+const accountAccessTimeout = 10 * time.Second
+
+// accountAccess stores the access levels the game servers send over the
+// link (a GM's account ban, link.AccessLevelSetter). Levels outside the
+// stored range are clamped.
+type accountAccess struct{ store storage.AccountStore }
+
+func (a accountAccess) SetAccessLevel(account string, level int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), accountAccessTimeout)
+	defer cancel()
+	return a.store.SetAccessLevel(ctx, account, storage.AccessLevel(max(min(level, 127), -128))) //nolint:gosec // clamped
 }
 
 // Stats returns the current counters.

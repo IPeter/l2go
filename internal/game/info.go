@@ -304,9 +304,11 @@ func (p *Player) userInfo() []byte {
 		MaxCP:                 v.MaxCP,
 		CurCP:                 p.CurCP,
 		EnchantEffect:         p.enchantEffect(),
-		NameColor:             defaultNameColor,
+		Noble:                 p.nobleFlag(),
+		HeroAura:              p.IsHero(),
+		NameColor:             p.nameColor(),
 		Running:               p.Running(),
-		TitleColor:            defaultTitleColor,
+		TitleColor:            p.titleColor(),
 	})
 }
 
@@ -362,9 +364,11 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 		MaxCP:                 v.MaxCP,
 		CurCP:                 p.CurCP,
 		EnchantEffect:         p.enchantEffect(),
-		NameColor:             defaultNameColor,
+		Noble:                 p.nobleFlag(),
+		HeroAura:              p.IsHero(),
+		NameColor:             p.nameColor(),
 		Heading:               pos.Heading,
-		TitleColor:            defaultTitleColor,
+		TitleColor:            p.titleColor(),
 	})
 }
 

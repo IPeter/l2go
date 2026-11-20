@@ -76,3 +76,19 @@ func (s *Accounts) SetLastServer(ctx context.Context, username string, serverID 
 	s.byName[username] = acc
 	return nil
 }
+
+// SetAccessLevel implements storage.AccountStore.
+func (s *Accounts) SetAccessLevel(ctx context.Context, username string, level storage.AccessLevel) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	acc, ok := s.byName[username]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	acc.AccessLevel = level
+	s.byName[username] = acc
+	return nil
+}

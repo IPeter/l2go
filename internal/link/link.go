@@ -80,6 +80,13 @@ type SessionConsumer interface {
 	Consume(account string, k session.Keys) bool
 }
 
+// AccessLevelSetter stores an account's access level when a game server
+// asks for it (a GM's account ban). It is called on the link's goroutine
+// of that game server.
+type AccessLevelSetter interface {
+	SetAccessLevel(account string, level int) error
+}
+
 // ServerStatus is what the login server knows about one game server.
 type ServerStatus struct {
 	// Online is true while the game server is registered.

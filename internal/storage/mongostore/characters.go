@@ -110,6 +110,8 @@ type characterDoc struct {
 	PvPKills    int32      `bson:"pvp_kills"`
 	PKKills     int32      `bson:"pk_kills"`
 	ClanID      int32      `bson:"clan_id"`
+	Title       string     `bson:"title,omitempty"`    // absent if none
+	RecomHave   int32      `bson:"rec_have,omitempty"` // absent if none
 	CurHP       float64    `bson:"cur_hp"`
 	MaxHP       float64    `bson:"max_hp"`
 	CurMP       float64    `bson:"cur_mp"`
@@ -345,6 +347,8 @@ func toCharacterDoc(c *storage.Character) characterDoc {
 		PvPKills:    c.PvPKills,
 		PKKills:     c.PKKills,
 		ClanID:      c.ClanID,
+		Title:       c.Title,
+		RecomHave:   c.RecomHave,
 		CurHP:       c.CurHP,
 		MaxHP:       c.MaxHP,
 		CurMP:       c.CurMP,
@@ -404,6 +408,8 @@ func (d *characterDoc) character(items []storage.Item, quests []storage.Quest) s
 		PvPKills:    d.PvPKills,
 		PKKills:     d.PKKills,
 		ClanID:      d.ClanID,
+		Title:       d.Title,
+		RecomHave:   d.RecomHave,
 		CurHP:       d.CurHP,
 		MaxHP:       d.MaxHP,
 		CurMP:       d.CurMP,
@@ -654,6 +660,58 @@ func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character
 	return c, nil
 }
 
+// GetByName implements storage.CharacterStore.
+func (s *Characters) GetByName(ctx context.Context, name string) (storage.Character, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
+	defer cancel()
+	var c storage.Character
+	err := s.store.read(ctx, func(ctx context.Context) error {
+		var doc characterDoc
+		if err := s.chars.FindOne(ctx, bson.D{{Key: "name_lower", Value: storage.NameKey(name)}}).Decode(&doc); err != nil {
+			return err
+		}
+		items, err := s.findItems(ctx, bson.D{{Key: "owner_id", Value: doc.ObjectID}})
+		if err != nil {
+			return err
+		}
+		quests, err := s.findQuests(ctx, bson.D{{Key: "char", Value: doc.ObjectID}})
+		if err != nil {
+			return err
+		}
+		c = doc.character(items[doc.ObjectID], quests[doc.ObjectID])
+		return nil
+	})
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return storage.Character{}, storage.ErrNotFound
+	}
+	if err != nil {
+		return storage.Character{}, fmt.Errorf("mongostore: get character by name: %w", err)
+	}
+	return c, nil
+}
+
+// Rename implements storage.CharacterStore: the unique name_lower index
+// refuses a name another character has.
+func (s *Characters) Rename(ctx context.Context, objectID int32, name string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
+	defer cancel()
+	res, err := s.chars.UpdateOne(ctx, bson.D{{Key: "_id", Value: objectID}},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "name", Value: name},
+			{Key: "name_lower", Value: storage.NameKey(name)},
+		}}})
+	if mongo.IsDuplicateKeyError(err) {
+		return storage.ErrExists
+	}
+	if err != nil {
+		return fmt.Errorf("mongostore: rename character: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
 // characterUpdate returns the update that stores the fields Update saves.
 // The identity fields (_id, account, name, name_lower, race, created_at) and
 // the newbie flag are not written.
@@ -673,6 +731,8 @@ func characterUpdate(c *storage.Character) bson.D {
 		{Key: "pvp_kills", Value: doc.PvPKills},
 		{Key: "pk_kills", Value: doc.PKKills},
 		{Key: "clan_id", Value: doc.ClanID},
+		{Key: "title", Value: doc.Title},
+		{Key: "rec_have", Value: doc.RecomHave},
 		{Key: "death_penalty_level", Value: doc.DeathPenaltyLevel},
 		{Key: "exp_before_death", Value: doc.ExpBeforeDeath},
 		{Key: "cur_hp", Value: doc.CurHP},

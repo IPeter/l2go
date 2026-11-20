@@ -69,10 +69,15 @@ func (p *Player) ReduceCP(value int) {
 // sitting player stands up; CP absorb the damage of a player attacker first;
 // an attacker other than the player itself makes the client show "$s1 hit
 // you for $s2 damage." with the int damage; HP go down to 0; under 0.5 HP the
-// player dies (Server.Kill). Summons, duels, the Olympiad, Arcane Shield and
-// damage transfer do not exist yet. Loop-only.
-func (p *Player) ReduceHP(value float64, attacker Creature) {
-	if p.dead {
+// player dies (Server.Kill). An invulnerable player (Mobius isInvul: an
+// Invincible effect, a teleport, //invul) takes nothing. Summons, duels, the
+// Olympiad, Arcane Shield and damage transfer do not exist yet. Loop-only.
+func (p *Player) ReduceHP(value float64, attacker Creature) { p.reduceHP(value, attacker, false) }
+
+// reduceHP is ReduceHP; damage over time (dot) also hits an invulnerable
+// player, as in Mobius.
+func (p *Player) reduceHP(value float64, attacker Creature, dot bool) {
+	if p.dead || (!dot && p.skill != nil && p.skill.IsInvul()) {
 		return
 	}
 	if p.Sitting {

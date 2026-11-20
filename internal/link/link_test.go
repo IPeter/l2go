@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -507,6 +508,58 @@ func TestVerifySession(t *testing.T) {
 
 	if !c.Connected() {
 		t.Error("the link dropped during session checks")
+	}
+}
+
+// accessRecorder records the access levels a link server gets.
+type accessRecorder struct {
+	mu  sync.Mutex
+	got []string
+}
+
+func (r *accessRecorder) SetAccessLevel(account string, level int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.got = append(r.got, fmt.Sprintf("%s=%d", account, level))
+	return nil
+}
+
+func (r *accessRecorder) list() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.got)
+}
+
+// ChangeAccessLevel reaches the login server's setter in order; it fails
+// while the link is down and for names the link cannot carry.
+func TestChangeAccessLevel(t *testing.T) {
+	rec := &accessRecorder{}
+	cfg := testServerConfig()
+	cfg.AccessLevels = rec
+	srv := startServerWith(t, "127.0.0.1:0", cfg, nil)
+
+	down := NewClient(testClientConfig(srv.addr), nil)
+	if err := down.ChangeAccessLevel("alice", -1); !errors.Is(err, ErrNotConnected) {
+		t.Errorf("ChangeAccessLevel before Run = %v, want ErrNotConnected", err)
+	}
+
+	c := startClient(t, testClientConfig(srv.addr))
+	eventually(t, "the client is connected", c.Connected)
+	if err := c.ChangeAccessLevel("", -1); err == nil {
+		t.Error("ChangeAccessLevel with an empty account succeeded")
+	}
+	for _, step := range []struct {
+		account string
+		level   int
+	}{{"alice", -1}, {"bob", 0}, {"alice", 0}} {
+		if err := c.ChangeAccessLevel(step.account, step.level); err != nil {
+			t.Fatalf("ChangeAccessLevel(%s, %d) = %v", step.account, step.level, err)
+		}
+	}
+	want := []string{"alice=-1", "bob=0", "alice=0"}
+	eventually(t, "the access levels arrive", func() bool { return slices.Equal(rec.list(), want) })
+	if !c.Connected() {
+		t.Error("the link dropped after ChangeAccessLevel")
 	}
 }
 

@@ -51,4 +51,7 @@ type AccountStore interface {
 	// SetLastServer stores the account's last server. It returns
 	// ErrNotFound if the account does not exist.
 	SetLastServer(ctx context.Context, username string, serverID int) error
+	// SetAccessLevel stores the account's access level; AccessLevelBanned
+	// bans it. It returns ErrNotFound if the account does not exist.
+	SetAccessLevel(ctx context.Context, username string, level AccessLevel) error
 }

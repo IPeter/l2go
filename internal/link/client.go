@@ -147,6 +147,27 @@ func (c *Client) VerifySession(ctx context.Context, account string, k session.Ke
 	}
 }
 
+// ChangeAccessLevel tells the login server to store level as the access
+// level of account (L2J ChangeAccessLevel): a GM banned the account (-1) or
+// lifted the ban (0). There is no answer. It returns ErrNotConnected
+// (possibly wrapped) while the link is down; an account name the link
+// cannot carry is an error too.
+func (c *Client) ChangeAccessLevel(account string, level int) error {
+	if !validAccount(account) {
+		return fmt.Errorf("link: invalid account name %q", account)
+	}
+	c.mu.Lock()
+	cc := c.conn
+	c.mu.Unlock()
+	if cc == nil {
+		return ErrNotConnected
+	}
+	if err := cc.send(changeAccessLevelMsg{account: account, level: int32(max(min(level, math.MaxInt32), math.MinInt32))}); err != nil { //nolint:gosec // clamped
+		return fmt.Errorf("%w: %w", ErrNotConnected, err)
+	}
+	return nil
+}
+
 // Run connects to the login server, registers and keeps the link alive
 // until ctx is done, then returns nil. When the link fails it reconnects
 // with exponential backoff. It returns a *RejectedError if the login

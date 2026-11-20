@@ -139,6 +139,12 @@ type Character struct {
 	PKKills     int32
 	ClanID      int32 // 0 if not in a clan
 
+	// Title is the title shown under the name (Mobius characters.title).
+	Title string
+	// RecomHave is the recommendations the character received (Mobius
+	// characters.rec_have).
+	RecomHave int32
+
 	// DeathPenaltyLevel is the level of the Death Penalty (skill 5076), 0
 	// without one (Mobius character_skills_save of 5076).
 	DeathPenaltyLevel int32
@@ -374,10 +380,18 @@ type CharacterStore interface {
 	// variables and quests, or ErrNotFound. This is the load at character
 	// select.
 	Get(ctx context.Context, objectID int32) (Character, error)
+	// GetByName returns the character with this name, ignoring case, as Get
+	// does, or ErrNotFound.
+	GetByName(ctx context.Context, name string) (Character, error)
+	// Rename gives the character with objectID the name name. It returns
+	// ErrExists if another character has the name, ignoring case, and
+	// ErrNotFound if there is no such character.
+	Rename(ctx context.Context, objectID int32, name string) error
 
 	// Update saves the state of the character with c.ObjectID: position and
 	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
-	// and kill counts, death penalty level and exp before death, clan, delete
+	// and kill counts, title and recommendations, death penalty level and exp
+	// before death, clan, delete
 	// time, last access, access level, variables, skills and saved skills. The
 	// identity fields (account, name, race and creation time) and the newbie
 	// flag are kept as stored. c.Items replaces the character's items: those it owned that

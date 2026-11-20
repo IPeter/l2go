@@ -175,6 +175,42 @@ func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character
 	return s.load(c), nil
 }
 
+// GetByName implements storage.CharacterStore.
+func (s *Characters) GetByName(ctx context.Context, name string) (storage.Character, error) {
+	if err := ctx.Err(); err != nil {
+		return storage.Character{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id, ok := s.byName[storage.NameKey(name)]
+	if !ok {
+		return storage.Character{}, storage.ErrNotFound
+	}
+	return s.load(s.byID[id]), nil
+}
+
+// Rename implements storage.CharacterStore.
+func (s *Characters) Rename(ctx context.Context, objectID int32, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.byID[objectID]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	key := storage.NameKey(name)
+	if id, taken := s.byName[key]; taken && id != objectID {
+		return storage.ErrExists
+	}
+	delete(s.byName, storage.NameKey(c.Name))
+	c.Name = name
+	s.byID[objectID] = c
+	s.byName[key] = objectID
+	return nil
+}
+
 // load returns a copy of the stored character c with its items, variables
 // and quests. The caller holds s.mu.
 func (s *Characters) load(c storage.Character) storage.Character {

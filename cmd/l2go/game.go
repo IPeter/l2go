@@ -128,6 +128,13 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	}
 	defer idPool.Close()
 
+	loginLink := link.NewClient(link.ClientConfig{
+		Addr:       cfg.LoginServer.GameServerAddr(),
+		ServerID:   gs.ID,
+		Secret:     gs.Secret,
+		MaxPlayers: int(gs.Options.MaxPlayers),
+	}, gsLogger)
+
 	world, err := game.New(game.Options{
 		Config:          cfg,
 		ServerID:        gs.ID,
@@ -145,18 +152,12 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		GlobalVariables: store.GlobalVariables(),
 		Quests:          quests,
 		Geo:             geoEngine,
+		Accounts:        loginLink, // account bans of the admin panel
 		Logger:          gsLogger,
 	})
 	if err != nil {
 		return err
 	}
-
-	loginLink := link.NewClient(link.ClientConfig{
-		Addr:       cfg.LoginServer.GameServerAddr(),
-		ServerID:   gs.ID,
-		Secret:     gs.Secret,
-		MaxPlayers: int(gs.Options.MaxPlayers),
-	}, gsLogger)
 
 	srv, err := gameserver.New(cfg, opts.serverID, gameserver.Deps{
 		Characters: store.Characters(),

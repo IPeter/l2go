@@ -27,6 +27,10 @@ type ServerConfig struct {
 	// empty secret are ignored.
 	GameServers map[int]string
 
+	// AccessLevels stores the access levels game servers send
+	// (ChangeAccessLevel, a GM's account ban); nil ignores them.
+	AccessLevels AccessLevelSetter
+
 	// RegisterTimeout is how long a new connection has to register before
 	// it is closed. Default 5s.
 	RegisterTimeout time.Duration
@@ -247,6 +251,14 @@ func (s *Server) serveRegistered(conn net.Conn, id int, connID uint64, logger *s
 		case pingMsg:
 			reply = pongMsg{}
 		case pongMsg:
+		case changeAccessLevelMsg:
+			if setter := s.cfg.AccessLevels; setter != nil {
+				if err := setter.SetAccessLevel(m.account, int(m.level)); err != nil {
+					logger.Warn("cannot change an account's access level", "account", m.account, "level", m.level, "err", err)
+				} else {
+					logger.Info("account access level changed", "account", m.account, "level", m.level)
+				}
+			}
 		default:
 			return fmt.Errorf("unexpected %T from a game server", msg)
 		}

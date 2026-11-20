@@ -61,6 +61,9 @@ func (b brokenStore) Create(context.Context, storage.Account) error { return b.e
 func (b brokenStore) SetLastServer(context.Context, string, int) error {
 	return b.err
 }
+func (b brokenStore) SetAccessLevel(context.Context, string, storage.AccessLevel) error {
+	return b.err
+}
 
 // fakeStatuses replaces the link in unit tests.
 type fakeStatuses map[int]link.ServerStatus

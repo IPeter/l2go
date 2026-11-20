@@ -174,7 +174,7 @@ func (s *Server) isAggressiveTowards(n *Npc, target Creature) bool {
 	if !ok || p.state != stateInGame {
 		return false
 	}
-	if p.Teleporting() && p.IsGM() {
+	if (p.Teleporting() || p.admin.invul) && p.IsGM() {
 		return false // an invulnerable GM
 	}
 	if p.IsDead() || !within3D(n.Position(), p.Position(), s.npcAggroRange(n)) {

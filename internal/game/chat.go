@@ -69,6 +69,9 @@ func (s *Server) handleSay2(p *Player, body []byte) {
 		p.SendSystemMessage(serverpackets.SysMsgChatTooLong)
 		return
 	}
+	if s.chatPunished(p, typ, text) { // admin_char.go: chat ban and jail
+		return
+	}
 	if typ == serverpackets.ChatPetitionPlayer && p.IsGM() {
 		typ = serverpackets.ChatPetitionGM
 	}
@@ -298,11 +301,12 @@ func (s *Server) chatFloodOK(p *Player) bool {
 
 // chatWhisper sends a whisper to the player called target, in any case
 // (Mobius ChatWhisper): the target gets it with p's name, and p gets it back
-// with "->" and the target's name. When no such player is in the game, p
-// gets "That player is not online."
+// with "->" and the target's name. When no such player is in the game, or
+// it refuses messages (//silence, Mobius isSilenceMode), p gets "That player
+// is not online."
 func (s *Server) chatWhisper(p *Player, target, text string) {
 	to, ok := s.PlayerByName(target)
-	if !ok {
+	if !ok || to.admin.silence {
 		p.SendSystemMessage(serverpackets.SysMsgPlayerNotOnline)
 		return
 	}
@@ -311,10 +315,10 @@ func (s *Server) chatWhisper(p *Player, target, text string) {
 }
 
 // chatHeroVoice sends hero voice to every player (Mobius ChatHeroVoice).
-// Only heroes and GMs may use it; there are no heroes yet, and the flood
-// protector lets GMs through.
+// Only heroes (//sethero until the Olympiad) and GMs may use it, and the
+// flood protector lets GMs through.
 func (s *Server) chatHeroVoice(p *Player, text string) {
-	if !p.IsGM() {
+	if !p.IsGM() && !p.IsHero() {
 		p.SendMessage("Only Heroes can enter the Hero channel.")
 		return
 	}

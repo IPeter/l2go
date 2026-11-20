@@ -120,7 +120,7 @@ func (n *Npc) Hating(c Creature) int64 {
 	if a == nil {
 		return 0
 	}
-	if p, ok := c.(*Player); ok && (p.Invisible() || p.Teleporting() || (n.srv != nil && n.srv.SpawnProtected(p))) {
+	if p, ok := c.(*Player); ok && (p.Invisible() || p.Teleporting() || p.admin.invul || (n.srv != nil && n.srv.SpawnProtected(p))) {
 		n.removeAggro(c)
 		return 0
 	}

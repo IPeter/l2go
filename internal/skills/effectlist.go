@@ -238,6 +238,17 @@ func (l *EffectList) UnblockAbnormals(types ...data.AbnormalType) bool {
 	return changed
 }
 
+// BlockedAbnormals returns the blocked abnormal types, sorted
+// (getBlockedAbnormalTypes).
+func (l *EffectList) BlockedAbnormals() []data.AbnormalType {
+	out := make([]data.AbnormalType, 0, len(l.blocked))
+	for t := range l.blocked {
+		out = append(out, t)
+	}
+	slices.Sort(out)
+	return out
+}
+
 // doesStack reports whether a list of the skill's kind has an effect of its
 // abnormal type (doesStack).
 func (l *EffectList) doesStack(sk *Skill) bool {
