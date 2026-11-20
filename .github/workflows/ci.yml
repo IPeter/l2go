@@ -44,16 +44,6 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
-    services:
-      mongo:
-        image: mongo:8
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     steps:
       - uses: actions/checkout@v5
 
@@ -61,7 +51,15 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Service containers can't take command args, and transactions need a
+      # replica set, so start a one-node rs0 by hand.
+      - name: Start MongoDB replica set
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8 --replSet rs0
+          timeout 120 sh -c 'until docker exec mongo mongosh --quiet --eval "rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"localhost:27017\"}]}).ok"; do sleep 2; done'
+          timeout 60 sh -c 'until docker exec mongo mongosh --quiet --eval "db.hello().isWritablePrimary" | grep -q true; do sleep 1; done'
+
       - name: MongoDB integration tests
         env:
-          L2GO_MONGO_URI: mongodb://127.0.0.1:27017
+          L2GO_MONGO_URI: mongodb://127.0.0.1:27017/?directConnection=true
         run: go test -tags integration -count=1 ./internal/storage/...
