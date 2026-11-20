@@ -164,6 +164,11 @@ func (s *Server) gmSetLevel(p *Player, args []string) {
 		p.SendSystemMessage(gmSysMsgIncorrectTarget)
 		return
 	}
+	s.gmSetLevelOf(p, t, args)
+}
+
+// gmSetLevelOf is //set_level <level> run by the GM p on the player t.
+func (s *Server) gmSetLevelOf(p, t *Player, args []string) {
 	maxLevel := s.MaxLevel()
 	usage := fmt.Sprintf("You must specify level between 1 and %d.", maxLevel)
 	if len(args) == 0 {

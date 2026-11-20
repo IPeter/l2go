@@ -103,6 +103,9 @@ func (s *Server) ShowAdminPage(p *Player, rel string) {
 		s.log.Warn("game: missing admin page", "page", htmlPrefix+full)
 		content = adminMissingPage(htmlPrefix + full)
 	}
+	if rel == "main_menu.htm" {
+		content = adminAddLevelButton(content) // admin_level.go
+	}
 	s.sendPage(p, newPage(0, content))
 }
 
