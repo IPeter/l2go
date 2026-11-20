@@ -28,6 +28,7 @@ type World struct {
 	upd      updates
 	gameTime *GameTime
 	ids      *IDAllocator
+	act      activation
 }
 
 // New returns an empty world run by loop. It adds a tick hook for game time
@@ -42,6 +43,7 @@ func New(loop *Loop) *World {
 		upd:      updates{index: make(map[*Base]int)},
 		gameTime: newGameTime(loop),
 		ids:      NewIDAllocator(),
+		act:      activation{alwaysOn: true},
 	}
 	loop.OnTick(w.gameTime.update)
 	loop.OnTickEnd(func(time.Time) { w.FlushUpdates() })
@@ -84,6 +86,7 @@ func (w *World) Add(o Object) (Delta, error) {
 	r := w.regionAt(k, true)
 	r.add(b)
 	w.objects[b.id] = b
+	w.entered(r, b)
 
 	d := Delta{Subject: o, w: w}
 	for _, n := range r.neighbors {
@@ -108,9 +111,11 @@ func (w *World) Remove(o Object) Delta {
 	if r == nil {
 		return Delta{}
 	}
+	playable := b.viewer != nil
 	r.remove(b)
 	delete(w.objects, b.id)
 	b.self, b.viewer = nil, nil
+	w.left(r, playable)
 
 	d := Delta{Subject: o, w: w}
 	for _, n := range r.neighbors {
@@ -146,8 +151,12 @@ func (w *World) Move(o Object, pos Position) (Delta, error) {
 		return Delta{}, nil
 	}
 	r := w.regionAt(k, true)
+	// Mobius setXYZ: the old region loses the object (which may schedule its
+	// deactivation) before the new one gets it (which may activate it).
 	old.remove(b)
+	w.left(old, b.viewer != nil)
 	r.add(b)
+	w.entered(r, b)
 
 	d := Delta{Subject: o, w: w}
 	for _, n := range old.neighbors {

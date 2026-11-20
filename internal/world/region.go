@@ -77,6 +77,13 @@ type region struct {
 	objects   []*Base
 	viewers   []*Base   // the objects that are viewers, for fast broadcasts
 	neighbors []*region // existing regions of the 3×3×3 neighbourhood, itself first
+
+	// Activation (activation.go, Mobius WorldRegion): whether the region is
+	// active, how many regions of its neighbourhood (itself included) are,
+	// and the pending timer that turns the neighbours on or off.
+	active          bool
+	activeNeighbors int32
+	task            TimerID
 }
 
 func (r *region) add(b *Base) {
@@ -111,12 +118,13 @@ func (r *region) remove(b *Base) {
 }
 
 // regionAt returns the region with key k, creating it (and linking it to its
-// neighbours) when create is set.
+// neighbours) when create is set. A new region is inactive unless grids are
+// always on, and counts the active regions around it (activation.go).
 func (w *World) regionAt(k RegionKey, create bool) *region {
 	if r := w.regions[k.pack()]; r != nil || !create {
 		return r
 	}
-	r := &region{key: k}
+	r := &region{key: k, active: w.act.alwaysOn}
 	r.neighbors = append(r.neighbors, r)
 	for dx := int32(-1); dx <= 1; dx++ {
 		for dy := int32(-1); dy <= 1; dy++ {
@@ -128,6 +136,9 @@ func (w *World) regionAt(k RegionKey, create bool) *region {
 				if n := w.regions[nk.pack()]; n != nil {
 					r.neighbors = append(r.neighbors, n)
 					n.neighbors = append(n.neighbors, r)
+					if n.active && !w.act.alwaysOn {
+						r.activeNeighbors++
+					}
 				}
 			}
 		}
