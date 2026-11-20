@@ -58,6 +58,12 @@ Passive skills (`data.LoadPassives`) and categories (`data.LoadCategories`):
 | `skills/passives.json` | 59 passive skills, one per line: those NPC templates name that have effects, plus Weight Penalty (4270) and Death Penalty (5076); per level, the stat functions of the Buff effects and the DefenceTrait and AttackTrait values as the XML writes them; effects left out are named per skill (none in the current datapack) |
 | `categories/categories.json` | The 160 categories (`FIGHTER_GROUP`, `MAGE_GROUP`, ...), one per line, with their class (or NPC) IDs |
 
+Script constants (`data.LoadConstants`):
+
+| File | Content |
+|---|---|
+| `constants/constants.json` | The global tables of the Lua quest scripts, by Mobius name: `Category`, `ChatType` (client IDs), `ClassId`, `Paperdoll` (inventory slots), `QuestSound` (sound names), `QuestType`, `Race`, `Sex`, `State` (quest states) and `SystemMessageId` (the 2,083 message IDs, without their text) |
+
 The JSON schema is defined by the types in `internal/data`. The starting
 class templates character creation uses are built from `classes.json`.
 
@@ -104,6 +110,12 @@ datapack (`L2J_Mobius_CT_0_Interlude`):
 - The NPC and zone classes, from the Java sources in
   `java/org/l2jmobius/gameserver/entity/actor/instance/` and
   `.../entity/zone/type/`
+- The script constants, from `QuestSound.java`, `State.java` and
+  `QuestType.java` in `java/org/l2jmobius/gameserver/mechanics/script/`,
+  `network/enums/ChatType.java`, `network/SystemMessageId.java`,
+  `entity/actor/enums/player/Sex.java` and the `PAPERDOLL_*` constants of
+  `entity/itemcontainer/Inventory.java`; `ClassId`, `Race` and `Category`
+  repeat the generated enums
 - `html/`: copies of `dist/game/data/html/**` and of the `.htm` and `.html`
   files in `dist/game/data/scripts/**`
 
@@ -126,8 +138,8 @@ the Mobius sources; `go generate ./internal/data` does the same) and then
 `go run ./cmd/datagen` (every file of `data/`, `html/` included). To read
 another checkout: `make data MOBIUS=/path/to/L2J_Mobius_CT_0_Interlude`.
 
-`go run ./cmd/datagen -list` prints the domains (`categories`, `economy`,
-`html`, `items`, `passives`, `players`, `skills`, `world`); naming some (for example `go run ./cmd/datagen html` or
+`go run ./cmd/datagen -list` prints the domains (`categories`, `constants`,
+`economy`, `html`, `items`, `passives`, `players`, `skills`, `world`); naming some (for example `go run ./cmd/datagen html` or
 `go run ./cmd/datagen players items`) regenerates only those. The output is
 sorted and does not depend on the time or file order, so running it again on
 the same datapack gives identical files. Commit the JSON files; `html/` stays
