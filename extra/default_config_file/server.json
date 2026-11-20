@@ -50,7 +50,10 @@
         "autosaveInterval": "15m",
         "deleteCharAfterDays": 7,
         "maxRunSpeed": 250,
-        "spawnProtection": "10m"
+        "spawnProtection": "10m",
+        "gridsAlwaysOn": false,
+        "gridTurnOnTime": "1s",
+        "gridTurnOffTime": "90s"
       },
 
       "chat": {
@@ -63,11 +66,100 @@
       "npcs": {
         "spawnCustom": false,
         "maxFreeTeleportLevel": 40,
-        "interactionRange": 250
+        "interactionRange": 250,
+        "defaultCorpseTime": "7s",
+        "spoiledCorpseExtendTime": "10s",
+        "maxAggroRange": 450,
+        "maxDriftRange": 300,
+        "mobAggroInPeaceZone": true,
+        "aggroDistanceCheck": false,
+        "aggroDistanceCheckRange": 2000,
+        "attackablesCampPlayerCorpses": false
       },
 
       "geodata": {
         "dir": ""
+      },
+
+      "items": {
+        "allowDiscardItem": true,
+        "autoDestroyDroppedItemAfter": "600s",
+        "autoDestroyHerbTime": "60s",
+        "listOfProtectedItems": [],
+        "destroyPlayerDroppedItem": false,
+        "destroyEquipableItem": false,
+        "multipleItemDrop": true,
+        "maxAdena": 2000000000,
+        "warehouseSlotsNoDwarf": 100,
+        "warehouseSlotsDwarf": 120
+      },
+
+      "economy": {
+        "altKarmaPlayerCanShop": true,
+        "altKarmaPlayerCanUseWarehouse": true,
+        "onlyGMItemsFree": true,
+        "multisellAmountLimit": 10000,
+        "customMultisell": false,
+        "floodDropItem": "1s",
+        "floodTransaction": "1s",
+        "floodMultisell": "1s"
+      },
+
+      "rates": {
+        "xp": 1,
+        "sp": 1,
+        "deathDropChance": 1,
+        "deathDropAmount": 1,
+        "herbDropChance": 1,
+        "herbDropAmount": 1,
+        "dropChanceByItem": {"57": 1},
+        "dropAmountByItem": {"57": 1, "6656": 1, "6657": 1, "6658": 1, "6659": 1, "6660": 1, "6661": 1, "6662": 1, "8191": 1},
+        "dropMaxOccurrencesNormal": 2,
+        "dropAdenaMinLevelDifference": 8,
+        "dropAdenaMaxLevelDifference": 15,
+        "dropAdenaMinLevelGapChance": 10,
+        "dropItemMinLevelDifference": 5,
+        "dropItemMaxLevelDifference": 10,
+        "dropItemMinLevelGapChance": 10,
+        "monsterExpMaxLevelDifference": 11,
+        "karmaLost": -1,
+        "karmaExpLost": 1
+      },
+
+      "combat": {
+        "randomizeAutoAttackDamage": true,
+        "shieldBlocks": false,
+        "perfectShieldBlockRate": 10,
+        "cancelByHit": "cast",
+        "distanceBowDamage": false,
+        "hpRegenMultiplier": 100,
+        "mpRegenMultiplier": 100,
+        "cpRegenMultiplier": 100,
+        "respawnRestoreHP": 65,
+        "respawnRestoreCP": 0,
+        "respawnRestoreMP": 0,
+        "delevel": true,
+        "deathPenaltyChance": 20,
+        "partyRange": 1500,
+        "randomRespawnInTown": true,
+        "autoLoot": false,
+        "autoLootHerbs": false
+      },
+
+      "pvp": {
+        "pvpVsNormalTime": "120s",
+        "pvpVsPvpTime": "60s",
+        "minimumPkRequiredToDrop": 6,
+        "karmaDropLimit": 10,
+        "karmaRateDrop": 40,
+        "karmaRateDropItem": 50,
+        "karmaRateDropEquip": 40,
+        "karmaRateDropEquipWeapon": 10,
+        "listOfNonDroppableItems": [57, 1147, 425, 1146, 461, 10, 2368, 7, 6, 2370, 2369, 6842, 6611, 6612, 6613, 6614, 6615, 6616, 6617, 6618, 6619, 6620, 6621, 7694, 8181, 5575, 7694],
+        "listOfPetItems": [2375, 3500, 3501, 3502, 4422, 4423, 4424, 4425, 6648, 6649, 6650],
+        "canGMDropEquipment": false,
+        "awardPKKillPVPPoint": false,
+        "karmaPlayerCanBeKilledInPeaceZone": false
       }
     }
   ]

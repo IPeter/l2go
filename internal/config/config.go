@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"net"
 	"net/netip"
 	"net/url"
@@ -121,21 +122,36 @@ type GameServer struct {
 	// MaxCharactersPerAccount limits characters per account (0 = no limit).
 	MaxCharactersPerAccount int `json:"maxCharactersPerAccount"`
 
-	// World, Chat, NPCs and Geodata are the game rules. A section or a
-	// field left out of the file keeps its default (see DefaultWorld,
-	// DefaultChat and DefaultNPCs).
+	// World, Chat, NPCs, Geodata, Items, Economy, Rates, Combat and PvP are
+	// the game rules. A section or a field left out of the file keeps its
+	// default (see DefaultWorld, DefaultChat, DefaultNPCs, DefaultItems,
+	// DefaultEconomy, DefaultRates, DefaultCombat and DefaultPvP).
 	World   World   `json:"world"`
 	Chat    Chat    `json:"chat"`
 	NPCs    NPCs    `json:"npcs"`
 	Geodata Geodata `json:"geodata"`
+	Items   Items   `json:"items"`
+	Economy Economy `json:"economy"`
+	Rates   Rates   `json:"rates"`
+	Combat  Combat  `json:"combat"`
+	PvP     PvP     `json:"pvp"`
 }
 
-// UnmarshalJSON decodes a game server on top of the default World, Chat and
-// NPCs sections, so that fields left out keep their defaults while explicit
+// UnmarshalJSON decodes a game server on top of the default game rule
+// sections, so that fields left out keep their defaults while explicit
 // false and 0 values are kept. Unknown fields are an error.
 func (g *GameServer) UnmarshalJSON(b []byte) error {
 	type plain GameServer // without this method
-	p := plain{World: DefaultWorld(), Chat: DefaultChat(), NPCs: DefaultNPCs()}
+	p := plain{
+		World:   DefaultWorld(),
+		Chat:    DefaultChat(),
+		NPCs:    DefaultNPCs(),
+		Items:   DefaultItems(),
+		Economy: DefaultEconomy(),
+		Rates:   DefaultRates(),
+		Combat:  DefaultCombat(),
+		PvP:     DefaultPvP(),
+	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&p); err != nil {
@@ -165,6 +181,16 @@ type World struct {
 	// from aggressive monsters, until its first action, for example "10m".
 	// 0 turns it off (Mobius PlayerSpawnProtection).
 	SpawnProtection Duration `json:"spawnProtection"`
+	// GridsAlwaysOn keeps every world region active, so monsters think
+	// even where no player is (Mobius GridsAlwaysOn).
+	GridsAlwaysOn bool `json:"gridsAlwaysOn"`
+	// GridTurnOnTime is the delay before the neighbours of a region a player
+	// entered become active, for example "1s" (Mobius
+	// GridNeighborTurnOnTime).
+	GridTurnOnTime Duration `json:"gridTurnOnTime"`
+	// GridTurnOffTime is the delay before regions with no player around
+	// become inactive, for example "90s" (Mobius GridNeighborTurnOffTime).
+	GridTurnOffTime Duration `json:"gridTurnOffTime"`
 }
 
 // DefaultWorld returns the Mobius defaults.
@@ -175,6 +201,9 @@ func DefaultWorld() World {
 		DeleteCharAfterDays: DefaultDeleteCharAfterDays,
 		MaxRunSpeed:         DefaultMaxRunSpeed,
 		SpawnProtection:     DefaultSpawnProtection,
+		// General.ini GridNeighborTurnOnTime and GridNeighborTurnOffTime.
+		GridTurnOnTime:  Duration(time.Second),
+		GridTurnOffTime: Duration(90 * time.Second),
 	}
 }
 
@@ -250,13 +279,382 @@ type NPCs struct {
 	// InteractionRange is how close a player must be to talk to an NPC, in
 	// game units (Mobius Npc.INTERACTION_DISTANCE).
 	InteractionRange int `json:"interactionRange"`
+	// DefaultCorpseTime is how long a dead NPC's corpse stays, for example
+	// "7s" (Mobius DefaultCorpseTime).
+	DefaultCorpseTime Duration `json:"defaultCorpseTime"`
+	// SpoiledCorpseExtendTime is added to the corpse time of a spoiled
+	// monster, for example "10s" (Mobius SpoiledCorpseExtendTime).
+	SpoiledCorpseExtendTime Duration `json:"spoiledCorpseExtendTime"`
+	// MaxAggroRange caps the aggro range of monsters, in game units (Mobius
+	// MaxAggroRange).
+	MaxAggroRange int `json:"maxAggroRange"`
+	// MaxDriftRange is how far a monster may wander from its spawn, in game
+	// units (Mobius MaxDriftRange).
+	MaxDriftRange int `json:"maxDriftRange"`
+	// MobAggroInPeaceZone lets aggressive monsters attack players in peace
+	// zones (Mobius AltMobAgroInPeaceZone).
+	MobAggroInPeaceZone bool `json:"mobAggroInPeaceZone"`
+	// AggroDistanceCheck makes monsters give up when pulled farther than
+	// AggroDistanceCheckRange from their spawn (Mobius
+	// AggroDistanceCheckEnabled).
+	AggroDistanceCheck bool `json:"aggroDistanceCheck"`
+	// AggroDistanceCheckRange is that distance, in game units (Mobius
+	// AggroDistanceCheckRange).
+	AggroDistanceCheckRange int `json:"aggroDistanceCheckRange"`
+	// AttackablesCampPlayerCorpses keeps monsters next to the player they
+	// killed (Mobius AttackablesCampPlayerCorpses).
+	AttackablesCampPlayerCorpses bool `json:"attackablesCampPlayerCorpses"`
 }
 
 // DefaultNPCs returns the Mobius defaults.
 func DefaultNPCs() NPCs {
 	return NPCs{
-		MaxFreeTeleportLevel: DefaultMaxFreeTeleportLevel,
-		InteractionRange:     DefaultNPCInteractionRange,
+		MaxFreeTeleportLevel:    DefaultMaxFreeTeleportLevel,
+		InteractionRange:        DefaultNPCInteractionRange,
+		DefaultCorpseTime:       Duration(7 * time.Second),
+		SpoiledCorpseExtendTime: Duration(10 * time.Second),
+		MaxAggroRange:           450,
+		MaxDriftRange:           300,
+		MobAggroInPeaceZone:     true,
+		AggroDistanceCheckRange: 2000,
+	}
+}
+
+// Items configures items on the ground and in inventories.
+type Items struct {
+	Comment string `json:"_comment,omitempty"`
+	// AllowDiscardItem lets players drop items on the ground and destroy
+	// them (Mobius AllowDiscardItem).
+	AllowDiscardItem bool `json:"allowDiscardItem"`
+	// AutoDestroyDroppedItemAfter removes items from the ground after this
+	// time, for example "10m". 0 keeps them (Mobius
+	// AutoDestroyDroppedItemAfter).
+	AutoDestroyDroppedItemAfter Duration `json:"autoDestroyDroppedItemAfter"`
+	// AutoDestroyHerbTime removes herbs from the ground after this time, for
+	// example "1m" (Mobius AutoDestroyHerbTime).
+	AutoDestroyHerbTime Duration `json:"autoDestroyHerbTime"`
+	// ListOfProtectedItems are item IDs never removed from the ground
+	// (Mobius ListOfProtectedItems).
+	ListOfProtectedItems []int `json:"listOfProtectedItems"`
+	// DestroyPlayerDroppedItem also auto-destroys items players dropped,
+	// not only monster drops (Mobius DestroyPlayerDroppedItem).
+	DestroyPlayerDroppedItem bool `json:"destroyPlayerDroppedItem"`
+	// DestroyEquipableItem also auto-destroys equipable items players
+	// dropped (Mobius DestroyEquipableItem).
+	DestroyEquipableItem bool `json:"destroyEquipableItem"`
+	// MultipleItemDrop drops a non-stackable item count as that many
+	// items (Mobius MultipleItemDrop).
+	MultipleItemDrop bool `json:"multipleItemDrop"`
+	// MaxAdena is the most adena a player can hold (Mobius MaxAdena).
+	MaxAdena int64 `json:"maxAdena"`
+	// WarehouseSlotsNoDwarf and WarehouseSlotsDwarf are the private
+	// warehouse sizes (Mobius MaximumWarehouseSlotsForNoDwarf and
+	// MaximumWarehouseSlotsForDwarf).
+	WarehouseSlotsNoDwarf int `json:"warehouseSlotsNoDwarf"`
+	WarehouseSlotsDwarf   int `json:"warehouseSlotsDwarf"`
+}
+
+// DefaultItems returns the Mobius defaults (General.ini and Player.ini).
+// Mobius's ListOfProtectedItems = 0 names no real item, so the list is
+// empty.
+func DefaultItems() Items {
+	return Items{
+		AllowDiscardItem:            true,
+		AutoDestroyDroppedItemAfter: Duration(600 * time.Second),
+		AutoDestroyHerbTime:         Duration(60 * time.Second),
+		ListOfProtectedItems:        []int{},
+		MultipleItemDrop:            true,
+		MaxAdena:                    2000000000,
+		WarehouseSlotsNoDwarf:       100,
+		WarehouseSlotsDwarf:         120,
+	}
+}
+
+// Economy configures shops, warehouses, multisell and their flood limits.
+type Economy struct {
+	Comment string `json:"_comment,omitempty"`
+	// AltKarmaPlayerCanShop lets players with karma use shops (Mobius
+	// AltKarmaPlayerCanShop).
+	AltKarmaPlayerCanShop bool `json:"altKarmaPlayerCanShop"`
+	// AltKarmaPlayerCanUseWarehouse lets players with karma use warehouses
+	// (Mobius AltKarmaPlayerCanUseWareHouse).
+	AltKarmaPlayerCanUseWarehouse bool `json:"altKarmaPlayerCanUseWarehouse"`
+	// OnlyGMItemsFree makes only GMs get shop items for free; other players
+	// with free access pay as usual (Mobius OnlyGMItemsFree).
+	OnlyGMItemsFree bool `json:"onlyGMItemsFree"`
+	// MultisellAmountLimit is the most exchanges in one multisell request
+	// (Mobius MultisellAmountLimit).
+	MultisellAmountLimit int `json:"multisellAmountLimit"`
+	// CustomMultisell also loads the custom multisell lists (Mobius
+	// CustomMultisellLoad, data/multisell/custom).
+	CustomMultisell bool `json:"customMultisell"`
+	// FloodDropItem, FloodTransaction and FloodMultisell are the shortest
+	// time between two item drops, two trades or shop actions, and two
+	// multisell exchanges, for example "1s". 0 turns the limit off (Mobius
+	// FloodProtectorDropItemInterval, FloodProtectorTransactionInterval and
+	// FloodProtectorMultiSellInterval, in 100 ms ticks).
+	FloodDropItem    Duration `json:"floodDropItem"`
+	FloodTransaction Duration `json:"floodTransaction"`
+	FloodMultisell   Duration `json:"floodMultisell"`
+}
+
+// DefaultEconomy returns the Mobius defaults (Player.ini, General.ini and
+// FloodProtector.ini, whose 10 ticks are 1 s). CustomMultisell is off,
+// unlike the shipped General.ini: the custom lists belong to custom NPCs,
+// which aren't spawned by default (Plan 08 I10).
+func DefaultEconomy() Economy {
+	return Economy{
+		AltKarmaPlayerCanShop:         true,
+		AltKarmaPlayerCanUseWarehouse: true,
+		OnlyGMItemsFree:               true,
+		MultisellAmountLimit:          10000,
+		FloodDropItem:                 Duration(time.Second),
+		FloodTransaction:              Duration(time.Second),
+		FloodMultisell:                Duration(time.Second),
+	}
+}
+
+// ItemRates maps item IDs to rate multipliers; in the file an object such
+// as {"57": 1}. A map in the file replaces the default map instead of
+// adding to it, as an item listed here ignores the general rate.
+type ItemRates map[int]float64
+
+// UnmarshalJSON replaces the map with the one in the file.
+func (r *ItemRates) UnmarshalJSON(b []byte) error {
+	var m map[int]float64
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	*r = m
+	return nil
+}
+
+// Rates configures experience and drop rates (Mobius Rates.ini). Mobius
+// reads the multipliers as Java floats.
+type Rates struct {
+	Comment string `json:"_comment,omitempty"`
+	// XP and SP multiply the experience and SP from monsters (Mobius
+	// RateXp, RateSp).
+	XP float64 `json:"xp"`
+	SP float64 `json:"sp"`
+	// DeathDropChance and DeathDropAmount multiply the chance and amount of
+	// monster drops (Mobius DeathDropChanceMultiplier,
+	// DeathDropAmountMultiplier).
+	DeathDropChance float64 `json:"deathDropChance"`
+	DeathDropAmount float64 `json:"deathDropAmount"`
+	// HerbDropChance and HerbDropAmount do the same for herbs (Mobius
+	// HerbDropChanceMultiplier, HerbDropAmountMultiplier).
+	HerbDropChance float64 `json:"herbDropChance"`
+	HerbDropAmount float64 `json:"herbDropAmount"`
+	// DropChanceByItem and DropAmountByItem replace the general multipliers
+	// for the items they list (Mobius DropChanceMultiplierByItemId,
+	// DropAmountMultiplierByItemId).
+	DropChanceByItem ItemRates `json:"dropChanceByItem"`
+	DropAmountByItem ItemRates `json:"dropAmountByItem"`
+	// DropMaxOccurrencesNormal is the most drops under 100 % chance from
+	// one monster (Mobius DropMaxOccurrencesNormal).
+	DropMaxOccurrencesNormal int `json:"dropMaxOccurrencesNormal"`
+	// The adena drop chance falls from 100 % to DropAdenaMinLevelGapChance %
+	// as the killer is DropAdenaMinLevelDifference to
+	// DropAdenaMaxLevelDifference levels above the monster; the Item fields
+	// do the same for items (Mobius keys of the same names).
+	DropAdenaMinLevelDifference int     `json:"dropAdenaMinLevelDifference"`
+	DropAdenaMaxLevelDifference int     `json:"dropAdenaMaxLevelDifference"`
+	DropAdenaMinLevelGapChance  float64 `json:"dropAdenaMinLevelGapChance"`
+	DropItemMinLevelDifference  int     `json:"dropItemMinLevelDifference"`
+	DropItemMaxLevelDifference  int     `json:"dropItemMaxLevelDifference"`
+	DropItemMinLevelGapChance   float64 `json:"dropItemMinLevelGapChance"`
+	// MonsterExpMaxLevelDifference: a killer this many levels or more above
+	// the monster gets no exp or SP (Mobius MonsterExpMaxLevelDifference).
+	MonsterExpMaxLevelDifference int `json:"monsterExpMaxLevelDifference"`
+	// KarmaLost divides the exp that burns karma; -1 means XP (Mobius
+	// RateKarmaLost).
+	KarmaLost float64 `json:"karmaLost"`
+	// KarmaExpLost multiplies the exp lost on death with karma (Mobius
+	// RateKarmaExpLost).
+	KarmaExpLost float64 `json:"karmaExpLost"`
+}
+
+// DefaultRates returns the Mobius defaults (x1).
+func DefaultRates() Rates {
+	return Rates{
+		XP:              1,
+		SP:              1,
+		DeathDropChance: 1,
+		DeathDropAmount: 1,
+		HerbDropChance:  1,
+		HerbDropAmount:  1,
+		// Rates.ini DropChanceMultiplierByItemId and DropAmountMultiplierByItemId.
+		DropChanceByItem:             ItemRates{57: 1},
+		DropAmountByItem:             ItemRates{57: 1, 6656: 1, 6657: 1, 6658: 1, 6659: 1, 6660: 1, 6661: 1, 6662: 1, 8191: 1},
+		DropMaxOccurrencesNormal:     2,
+		DropAdenaMinLevelDifference:  8,
+		DropAdenaMaxLevelDifference:  15,
+		DropAdenaMinLevelGapChance:   10,
+		DropItemMinLevelDifference:   5,
+		DropItemMaxLevelDifference:   10,
+		DropItemMinLevelGapChance:    10,
+		MonsterExpMaxLevelDifference: 11,
+		KarmaLost:                    -1,
+		KarmaExpLost:                 1,
+	}
+}
+
+// KarmaLostRate returns KarmaLost, or XP when KarmaLost is -1, as Mobius
+// resolves RateKarmaLost.
+func (r Rates) KarmaLostRate() float64 {
+	if r.KarmaLost == -1 {
+		return r.XP
+	}
+	return r.KarmaLost
+}
+
+// CancelByHit says what a hit interrupts (Mobius AltGameCancelByHit),
+// written in lower case. The file may use any case.
+type CancelByHit string
+
+// The CancelByHit values.
+const (
+	CancelByHitCast CancelByHit = "cast" // casting skills (Mobius default)
+	CancelByHitBow  CancelByHit = "bow"  // drawing a bow
+	CancelByHitAll  CancelByHit = "all"  // both
+	CancelByHitNone CancelByHit = "none" // neither (any other Mobius value)
+)
+
+// Valid reports whether c is one of the CancelByHit values.
+func (c CancelByHit) Valid() bool {
+	switch c {
+	case CancelByHitCast, CancelByHitBow, CancelByHitAll, CancelByHitNone:
+		return true
+	}
+	return false
+}
+
+// UnmarshalText reads a value in any case.
+func (c *CancelByHit) UnmarshalText(b []byte) error {
+	*c = CancelByHit(strings.ToLower(strings.TrimSpace(string(b))))
+	return nil
+}
+
+// Combat configures fighting, regeneration, death and loot.
+type Combat struct {
+	Comment string `json:"_comment,omitempty"`
+	// RandomizeAutoAttackDamage applies Mobius's random factors to
+	// auto-attack damage (Mobius RandomizeAutoAttackDamage).
+	RandomizeAutoAttackDamage bool `json:"randomizeAutoAttackDamage"`
+	// ShieldBlocks picks the damage of a shield-blocked hit: P.Atk minus
+	// shield defence when true, P.Atk / (shield defence + P.Def) when false
+	// (Mobius AltShieldBlocks).
+	ShieldBlocks bool `json:"shieldBlocks"`
+	// PerfectShieldBlockRate is the chance in percent that a shield block
+	// is perfect (Mobius AltPerfectShieldBlockRate).
+	PerfectShieldBlockRate int `json:"perfectShieldBlockRate"`
+	// CancelByHit says what a hit interrupts: "cast", "bow", "all" or
+	// "none" (Mobius AltGameCancelByHit).
+	CancelByHit CancelByHit `json:"cancelByHit"`
+	// DistanceBowDamage makes bow damage depend on the distance (Mobius
+	// DistanceBowDamage).
+	DistanceBowDamage bool `json:"distanceBowDamage"`
+	// HPRegenMultiplier, MPRegenMultiplier and CPRegenMultiplier scale the
+	// players' regeneration, in percent (Mobius HpRegenMultiplier,
+	// MpRegenMultiplier, CpRegenMultiplier).
+	HPRegenMultiplier float64 `json:"hpRegenMultiplier"`
+	MPRegenMultiplier float64 `json:"mpRegenMultiplier"`
+	CPRegenMultiplier float64 `json:"cpRegenMultiplier"`
+	// RespawnRestoreHP, RespawnRestoreCP and RespawnRestoreMP are the
+	// percent of HP, CP and MP a player revives with (Mobius
+	// RespawnRestoreHP, RespawnRestoreCP, RespawnRestoreMP).
+	RespawnRestoreHP float64 `json:"respawnRestoreHP"`
+	RespawnRestoreCP float64 `json:"respawnRestoreCP"`
+	RespawnRestoreMP float64 `json:"respawnRestoreMP"`
+	// Delevel lets players lose a level through death exp loss (Mobius
+	// Delevel).
+	Delevel bool `json:"delevel"`
+	// DeathPenaltyChance is the chance in percent that a death raises the
+	// Death Penalty level (Mobius DeathPenaltyChance).
+	DeathPenaltyChance int `json:"deathPenaltyChance"`
+	// PartyRange is how close party members must be to share exp and
+	// items, in game units (Mobius AltPartyRange). It is the only party
+	// range key; quests and party exp use it too.
+	PartyRange int `json:"partyRange"`
+	// RandomRespawnInTown picks a random restart point of the town (Mobius
+	// RandomRespawnInTownEnabled).
+	RandomRespawnInTown bool `json:"randomRespawnInTown"`
+	// AutoLoot and AutoLootHerbs put monster drops and herbs straight into
+	// the killer's inventory (Mobius AutoLoot, AutoLootHerbs).
+	AutoLoot      bool `json:"autoLoot"`
+	AutoLootHerbs bool `json:"autoLootHerbs"`
+}
+
+// DefaultCombat returns the Mobius defaults.
+func DefaultCombat() Combat {
+	return Combat{
+		RandomizeAutoAttackDamage: true,
+		PerfectShieldBlockRate:    10,
+		CancelByHit:               CancelByHitCast,
+		HPRegenMultiplier:         100,
+		MPRegenMultiplier:         100,
+		CPRegenMultiplier:         100,
+		RespawnRestoreHP:          65,
+		Delevel:                   true,
+		DeathPenaltyChance:        20,
+		PartyRange:                1500,
+		RandomRespawnInTown:       true,
+	}
+}
+
+// PvP configures the PvP flag and karma (Mobius PVP.ini and the karma drop
+// rates of Rates.ini).
+type PvP struct {
+	Comment string `json:"_comment,omitempty"`
+	// PvPVsNormalTime is how long a player stays flagged after hitting a
+	// player who is not flagged, for example "2m" (Mobius PvPVsNormalTime).
+	PvPVsNormalTime Duration `json:"pvpVsNormalTime"`
+	// PvPVsPvPTime is how long after hitting a flagged player (Mobius
+	// PvPVsPvPTime).
+	PvPVsPvPTime Duration `json:"pvpVsPvpTime"`
+	// MinimumPkRequiredToDrop is the PK count from which a player with karma
+	// drops items on death (Mobius MinimumPKRequiredToDrop).
+	MinimumPkRequiredToDrop int `json:"minimumPkRequiredToDrop"`
+	// KarmaDropLimit is the most items dropped on one death; KarmaRateDrop
+	// is the chance in percent to drop at all; KarmaRateDropItem,
+	// KarmaRateDropEquip and KarmaRateDropEquipWeapon are the chances in
+	// percent for each unequipped item, equipped item and equipped weapon
+	// (Mobius keys of the same names).
+	KarmaDropLimit           int `json:"karmaDropLimit"`
+	KarmaRateDrop            int `json:"karmaRateDrop"`
+	KarmaRateDropItem        int `json:"karmaRateDropItem"`
+	KarmaRateDropEquip       int `json:"karmaRateDropEquip"`
+	KarmaRateDropEquipWeapon int `json:"karmaRateDropEquipWeapon"`
+	// ListOfNonDroppableItems and ListOfPetItems are item IDs a player with
+	// karma never drops (Mobius ListOfNonDroppableItems, ListOfPetItems).
+	ListOfNonDroppableItems []int `json:"listOfNonDroppableItems"`
+	ListOfPetItems          []int `json:"listOfPetItems"`
+	// CanGMDropEquipment lets GMs with karma drop items too (Mobius
+	// CanGMDropEquipment).
+	CanGMDropEquipment bool `json:"canGMDropEquipment"`
+	// AwardPKKillPVPPoint gives a PvP point for killing a player with karma
+	// (Mobius AwardPKKillPVPPoint).
+	AwardPKKillPVPPoint bool `json:"awardPKKillPVPPoint"`
+	// KarmaPlayerCanBeKilledInPeaceZone lets players attack players with
+	// karma in peace zones (Mobius AltKarmaPlayerCanBeKilledInPeaceZone).
+	KarmaPlayerCanBeKilledInPeaceZone bool `json:"karmaPlayerCanBeKilledInPeaceZone"`
+}
+
+// DefaultPvP returns the Mobius defaults.
+func DefaultPvP() PvP {
+	return PvP{
+		PvPVsNormalTime:          Duration(120 * time.Second),
+		PvPVsPvPTime:             Duration(60 * time.Second),
+		MinimumPkRequiredToDrop:  6,
+		KarmaDropLimit:           10,
+		KarmaRateDrop:            40,
+		KarmaRateDropItem:        50,
+		KarmaRateDropEquip:       40,
+		KarmaRateDropEquipWeapon: 10,
+		// PVP.ini, as written there (7694 twice).
+		ListOfNonDroppableItems: []int{57, 1147, 425, 1146, 461, 10, 2368, 7, 6, 2370, 2369, 6842, 6611, 6612, 6613, 6614, 6615, 6616, 6617, 6618, 6619, 6620, 6621, 7694, 8181, 5575, 7694},
+		ListOfPetItems:          []int{2375, 3500, 3501, 3502, 4422, 4423, 4424, 4425, 6648, 6649, 6650},
 	}
 }
 
@@ -388,6 +786,11 @@ func Default() Config {
 			World:                   DefaultWorld(),
 			Chat:                    DefaultChat(),
 			NPCs:                    DefaultNPCs(),
+			Items:                   DefaultItems(),
+			Economy:                 DefaultEconomy(),
+			Rates:                   DefaultRates(),
+			Combat:                  DefaultCombat(),
+			PvP:                     DefaultPvP(),
 		}},
 	}
 }
@@ -423,7 +826,8 @@ func Load(path string) (Config, error) {
 // Parse decodes a config file. Fields left out of the file stay at their
 // zero value, except the listen addresses, internal networks, scripts
 // folder, event timeout and the game rule sections of each game server
-// (world, chat, npcs), which get their defaults.
+// (world, chat, npcs, items, economy, rates, combat, pvp), which get their
+// defaults.
 //
 // Before decoding, ${NAME} and ${NAME:-default} are replaced with the
 // environment variable NAME (or default when NAME is unset or empty). A
@@ -611,6 +1015,144 @@ func (g GameServer) validateGame() []error {
 	if g.NPCs.InteractionRange <= 0 {
 		add("npcs.interactionRange: %d is not positive", g.NPCs.InteractionRange)
 	}
+	errs = append(errs, g.validateItemsAndCombat()...)
+	return errs
+}
+
+// validateItemsAndCombat checks the items, economy, rates, combat and pvp
+// sections and the region and monster keys of world and npcs.
+func (g GameServer) validateItemsAndCombat() []error {
+	var errs []error
+	add := func(format string, args ...any) {
+		errs = append(errs, fmt.Errorf(format, args...))
+	}
+	nonNegDur := func(name string, d Duration) {
+		if d < 0 {
+			add("%s: %v is negative", name, time.Duration(d))
+		}
+	}
+	nonNeg := func(name string, v int) {
+		if v < 0 {
+			add("%s: %d is negative", name, v)
+		}
+	}
+	nonNegF := func(name string, v float64) {
+		if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+			add("%s: %v is not a finite number of 0 or more", name, v)
+		}
+	}
+	percent := func(name string, v float64) {
+		if !(v >= 0 && v <= 100) {
+			add("%s: %v is not in 0-100", name, v)
+		}
+	}
+	itemIDs := func(name string, ids []int) {
+		for _, id := range ids {
+			if id < 0 {
+				add("%s: item ID %d is negative", name, id)
+			}
+		}
+	}
+	itemRates := func(name string, r ItemRates) {
+		for id, v := range r {
+			if id <= 0 {
+				add("%s: item ID %d is not positive", name, id)
+			}
+			nonNegF(fmt.Sprintf("%s[%d]", name, id), v)
+		}
+	}
+
+	w := g.World
+	nonNegDur("world.gridTurnOnTime", w.GridTurnOnTime)
+	nonNegDur("world.gridTurnOffTime", w.GridTurnOffTime)
+
+	n := g.NPCs
+	nonNegDur("npcs.defaultCorpseTime", n.DefaultCorpseTime)
+	nonNegDur("npcs.spoiledCorpseExtendTime", n.SpoiledCorpseExtendTime)
+	nonNeg("npcs.maxAggroRange", n.MaxAggroRange)
+	nonNeg("npcs.maxDriftRange", n.MaxDriftRange)
+	if n.AggroDistanceCheckRange <= 0 {
+		add("npcs.aggroDistanceCheckRange: %d is not positive", n.AggroDistanceCheckRange)
+	}
+
+	it := g.Items
+	nonNegDur("items.autoDestroyDroppedItemAfter", it.AutoDestroyDroppedItemAfter)
+	nonNegDur("items.autoDestroyHerbTime", it.AutoDestroyHerbTime)
+	itemIDs("items.listOfProtectedItems", it.ListOfProtectedItems)
+	if it.MaxAdena <= 0 {
+		add("items.maxAdena: %d is not positive", it.MaxAdena)
+	}
+	if it.WarehouseSlotsNoDwarf <= 0 {
+		add("items.warehouseSlotsNoDwarf: %d is not positive", it.WarehouseSlotsNoDwarf)
+	}
+	if it.WarehouseSlotsDwarf <= 0 {
+		add("items.warehouseSlotsDwarf: %d is not positive", it.WarehouseSlotsDwarf)
+	}
+
+	e := g.Economy
+	if e.MultisellAmountLimit < 1 {
+		add("economy.multisellAmountLimit: %d is less than 1", e.MultisellAmountLimit)
+	}
+	nonNegDur("economy.floodDropItem", e.FloodDropItem)
+	nonNegDur("economy.floodTransaction", e.FloodTransaction)
+	nonNegDur("economy.floodMultisell", e.FloodMultisell)
+
+	r := g.Rates
+	nonNegF("rates.xp", r.XP)
+	nonNegF("rates.sp", r.SP)
+	nonNegF("rates.deathDropChance", r.DeathDropChance)
+	nonNegF("rates.deathDropAmount", r.DeathDropAmount)
+	nonNegF("rates.herbDropChance", r.HerbDropChance)
+	nonNegF("rates.herbDropAmount", r.HerbDropAmount)
+	itemRates("rates.dropChanceByItem", r.DropChanceByItem)
+	itemRates("rates.dropAmountByItem", r.DropAmountByItem)
+	nonNeg("rates.dropMaxOccurrencesNormal", r.DropMaxOccurrencesNormal)
+	// Mobius scales the gap chance over max − min levels, so max must be
+	// above min.
+	nonNeg("rates.dropAdenaMinLevelDifference", r.DropAdenaMinLevelDifference)
+	if r.DropAdenaMaxLevelDifference <= r.DropAdenaMinLevelDifference {
+		add("rates.dropAdenaMaxLevelDifference: %d is not above dropAdenaMinLevelDifference %d", r.DropAdenaMaxLevelDifference, r.DropAdenaMinLevelDifference)
+	}
+	percent("rates.dropAdenaMinLevelGapChance", r.DropAdenaMinLevelGapChance)
+	nonNeg("rates.dropItemMinLevelDifference", r.DropItemMinLevelDifference)
+	if r.DropItemMaxLevelDifference <= r.DropItemMinLevelDifference {
+		add("rates.dropItemMaxLevelDifference: %d is not above dropItemMinLevelDifference %d", r.DropItemMaxLevelDifference, r.DropItemMinLevelDifference)
+	}
+	percent("rates.dropItemMinLevelGapChance", r.DropItemMinLevelGapChance)
+	nonNeg("rates.monsterExpMaxLevelDifference", r.MonsterExpMaxLevelDifference)
+	// Exp is divided by the karma rate.
+	if k := r.KarmaLostRate(); !(k > 0) || math.IsInf(k, 0) {
+		add("rates.karmaLost: %v is not -1 (rates.xp) or a positive number, or rates.xp is 0", r.KarmaLost)
+	}
+	nonNegF("rates.karmaExpLost", r.KarmaExpLost)
+
+	c := g.Combat
+	percent("combat.perfectShieldBlockRate", float64(c.PerfectShieldBlockRate))
+	if !c.CancelByHit.Valid() {
+		add("combat.cancelByHit: %q is not one of cast, bow, all, none", c.CancelByHit)
+	}
+	nonNegF("combat.hpRegenMultiplier", c.HPRegenMultiplier)
+	nonNegF("combat.mpRegenMultiplier", c.MPRegenMultiplier)
+	nonNegF("combat.cpRegenMultiplier", c.CPRegenMultiplier)
+	percent("combat.respawnRestoreHP", c.RespawnRestoreHP)
+	percent("combat.respawnRestoreCP", c.RespawnRestoreCP)
+	percent("combat.respawnRestoreMP", c.RespawnRestoreMP)
+	percent("combat.deathPenaltyChance", float64(c.DeathPenaltyChance))
+	if c.PartyRange <= 0 {
+		add("combat.partyRange: %d is not positive", c.PartyRange)
+	}
+
+	p := g.PvP
+	nonNegDur("pvp.pvpVsNormalTime", p.PvPVsNormalTime)
+	nonNegDur("pvp.pvpVsPvpTime", p.PvPVsPvPTime)
+	nonNeg("pvp.minimumPkRequiredToDrop", p.MinimumPkRequiredToDrop)
+	nonNeg("pvp.karmaDropLimit", p.KarmaDropLimit)
+	percent("pvp.karmaRateDrop", float64(p.KarmaRateDrop))
+	percent("pvp.karmaRateDropItem", float64(p.KarmaRateDropItem))
+	percent("pvp.karmaRateDropEquip", float64(p.KarmaRateDropEquip))
+	percent("pvp.karmaRateDropEquipWeapon", float64(p.KarmaRateDropEquipWeapon))
+	itemIDs("pvp.listOfNonDroppableItems", p.ListOfNonDroppableItems)
+	itemIDs("pvp.listOfPetItems", p.ListOfPetItems)
 	return errs
 }
 

@@ -45,12 +45,15 @@
       },
 
       "world": {
-        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off).",
+        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off). World regions become active when a player comes near (neighbours after gridTurnOnTime) and inactive gridTurnOffTime after the last one left; gridsAlwaysOn keeps them all active.",
         "tickInterval": "100ms",
         "autosaveInterval": "15m",
         "deleteCharAfterDays": 7,
         "maxRunSpeed": 250,
-        "spawnProtection": "10m"
+        "spawnProtection": "10m",
+        "gridsAlwaysOn": false,
+        "gridTurnOnTime": "1s",
+        "gridTurnOffTime": "90s"
       },
 
       "chat": {
@@ -62,15 +65,109 @@
       },
 
       "npcs": {
-        "_comment": "spawnCustom also spawns the custom spawn lists. Players up to maxFreeTeleportLevel teleport for free. Players talk to NPCs within interactionRange units.",
+        "_comment": "spawnCustom also spawns the custom spawn lists. Players up to maxFreeTeleportLevel teleport for free. Players talk to NPCs within interactionRange units. The other keys are the L2J Mobius NPC.ini monster settings of the same names (corpse times, aggro and drift ranges, the optional leash of aggroDistanceCheckRange).",
         "spawnCustom": false,
         "maxFreeTeleportLevel": 40,
-        "interactionRange": 250
+        "interactionRange": 250,
+        "defaultCorpseTime": "7s",
+        "spoiledCorpseExtendTime": "10s",
+        "maxAggroRange": 450,
+        "maxDriftRange": 300,
+        "mobAggroInPeaceZone": true,
+        "aggroDistanceCheck": false,
+        "aggroDistanceCheckRange": 2000,
+        "attackablesCampPlayerCorpses": false
       },
 
       "geodata": {
         "_comment": "dir is the geodata folder; empty means no geodata.",
         "dir": ""
+      },
+
+      "items": {
+        "_comment": "L2J Mobius General.ini/Player.ini item settings of the same names. Ground items vanish after autoDestroyDroppedItemAfter (0 = never), herbs after autoDestroyHerbTime.",
+        "allowDiscardItem": true,
+        "autoDestroyDroppedItemAfter": "600s",
+        "autoDestroyHerbTime": "60s",
+        "listOfProtectedItems": [],
+        "destroyPlayerDroppedItem": false,
+        "destroyEquipableItem": false,
+        "multipleItemDrop": true,
+        "maxAdena": 2000000000,
+        "warehouseSlotsNoDwarf": 100,
+        "warehouseSlotsDwarf": 120
+      },
+
+      "economy": {
+        "_comment": "Shops, warehouses and multisell (L2J Mobius names). The flood* keys are the shortest time between two item drops, trades or shop actions, and multisell exchanges (0 = no limit).",
+        "altKarmaPlayerCanShop": true,
+        "altKarmaPlayerCanUseWarehouse": true,
+        "onlyGMItemsFree": true,
+        "multisellAmountLimit": 10000,
+        "customMultisell": false,
+        "floodDropItem": "1s",
+        "floodTransaction": "1s",
+        "floodMultisell": "1s"
+      },
+
+      "rates": {
+        "_comment": "L2J Mobius Rates.ini. The *ByItem maps (item ID: multiplier) replace the general drop rate for the items they list. karmaLost -1 means the xp rate.",
+        "xp": 1,
+        "sp": 1,
+        "deathDropChance": 1,
+        "deathDropAmount": 1,
+        "herbDropChance": 1,
+        "herbDropAmount": 1,
+        "dropChanceByItem": {"57": 1},
+        "dropAmountByItem": {"57": 1, "6656": 1, "6657": 1, "6658": 1, "6659": 1, "6660": 1, "6661": 1, "6662": 1, "8191": 1},
+        "dropMaxOccurrencesNormal": 2,
+        "dropAdenaMinLevelDifference": 8,
+        "dropAdenaMaxLevelDifference": 15,
+        "dropAdenaMinLevelGapChance": 10,
+        "dropItemMinLevelDifference": 5,
+        "dropItemMaxLevelDifference": 10,
+        "dropItemMinLevelGapChance": 10,
+        "monsterExpMaxLevelDifference": 11,
+        "karmaLost": -1,
+        "karmaExpLost": 1
+      },
+
+      "combat": {
+        "_comment": "L2J Mobius Player.ini combat, regeneration and death settings. Regen multipliers and respawnRestore* are percents. partyRange (Mobius AltPartyRange) is the only party range key.",
+        "randomizeAutoAttackDamage": true,
+        "shieldBlocks": false,
+        "perfectShieldBlockRate": 10,
+        "cancelByHit": "cast",
+        "distanceBowDamage": false,
+        "hpRegenMultiplier": 100,
+        "mpRegenMultiplier": 100,
+        "cpRegenMultiplier": 100,
+        "respawnRestoreHP": 65,
+        "respawnRestoreCP": 0,
+        "respawnRestoreMP": 0,
+        "delevel": true,
+        "deathPenaltyChance": 20,
+        "partyRange": 1500,
+        "randomRespawnInTown": true,
+        "autoLoot": false,
+        "autoLootHerbs": false
+      },
+
+      "pvp": {
+        "_comment": "L2J Mobius PVP.ini and the karma drop rates of Rates.ini (percents).",
+        "pvpVsNormalTime": "120s",
+        "pvpVsPvpTime": "60s",
+        "minimumPkRequiredToDrop": 6,
+        "karmaDropLimit": 10,
+        "karmaRateDrop": 40,
+        "karmaRateDropItem": 50,
+        "karmaRateDropEquip": 40,
+        "karmaRateDropEquipWeapon": 10,
+        "listOfNonDroppableItems": [57, 1147, 425, 1146, 461, 10, 2368, 7, 6, 2370, 2369, 6842, 6611, 6612, 6613, 6614, 6615, 6616, 6617, 6618, 6619, 6620, 6621, 7694, 8181, 5575, 7694],
+        "listOfPetItems": [2375, 3500, 3501, 3502, 4422, 4423, 4424, 4425, 6648, 6649, 6650],
+        "canGMDropEquipment": false,
+        "awardPKKillPVPPoint": false,
+        "karmaPlayerCanBeKilledInPeaceZone": false
       }
     }
   ]

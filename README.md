@@ -176,7 +176,7 @@ The "Default" column is what a key gets when it is left out of the file. Keys wi
 | `scripts.devReload` | | `true` reloads the scripts when a file changes. |
 | `scripts.eventTimeout` | `"50ms"` | Time limit for the script handlers of one event. |
 
-The game rules of a game server are in four more sections: `world`, `chat`, `npcs` and `geodata`. A section or key left out keeps its default, the L2J Mobius value.
+The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `geodata`, `items`, `economy`, `rates`, `combat` and `pvp`. A section or key left out keeps its default, the L2J Mobius value. Most keys are L2J Mobius settings with the same name in camel case; the tables name the Mobius key where it differs. Durations are strings such as `"1s"` or `"10m"`. Some keys are read only once the feature using them is built.
 
 `world`:
 
@@ -187,6 +187,8 @@ The game rules of a game server are in four more sections: `world`, `chat`, `npc
 | `deleteCharAfterDays` | `7` | How long a deleted character can be restored (0-3650 days). After that it is removed for good the next time its account's character list is shown. `0` deletes at once. |
 | `maxRunSpeed` | `250` | Highest run speed of players. |
 | `spawnProtection` | `"10m"` | How long a player that entered the world is safe from aggressive monsters. Its first click, attack or walk ends it, with a message outside peace zones. `"0s"` turns it off. |
+| `gridsAlwaysOn` | `false` | `true` keeps every world region active, so monsters think even where no player is. |
+| `gridTurnOnTime`, `gridTurnOffTime` | `"1s"`, `"90s"` | Delay before the regions next to a player become active, and before regions with no player around become inactive (Mobius `GridNeighborTurnOnTime`/`TurnOffTime`). |
 
 `chat`:
 
@@ -204,12 +206,83 @@ The game rules of a game server are in four more sections: `world`, `chat`, `npc
 | `spawnCustom` | `false` | `true` also spawns the custom spawn lists (Mobius `spawns/custom/`). The Interlude datapack has none at the moment. |
 | `maxFreeTeleportLevel` | `40` | Players up to this level use the normal gatekeeper lists for free. |
 | `interactionRange` | `250` | How close a player must be to an NPC to talk to it, in game units. |
+| `defaultCorpseTime`, `spoiledCorpseExtendTime` | `"7s"`, `"10s"` | How long a dead NPC's corpse stays, and how much longer when it was spoiled. |
+| `maxAggroRange`, `maxDriftRange` | `450`, `300` | Cap of the monsters' aggro range, and how far they wander from their spawn. |
+| `mobAggroInPeaceZone` | `true` | Aggressive monsters also attack players in peace zones (Mobius `AltMobAgroInPeaceZone`). |
+| `aggroDistanceCheck`, `aggroDistanceCheckRange` | `false`, `2000` | `true` makes monsters give up when pulled farther than the range from their spawn (Mobius `AggroDistanceCheckEnabled`). |
+| `attackablesCampPlayerCorpses` | `false` | `true` keeps monsters next to the player they killed. |
 
 `geodata`:
 
 | Key | Default | Meaning |
 |---|---|---|
 | `dir` | `""` | Folder of L2J geodata tiles, one `X_Y.l2j` file per map tile, as Mobius reads them. The files are not part of L2Go or Mobius: bring your own. With them, ground heights, walls and closed cells count for movement, teleports and spawns; a tile without a file has no geodata. Empty, or a folder without tiles, means no geodata: heights come from the client and the spawns, and everything is walkable and visible, as in Mobius without geodata files. A folder that does not exist stops the game server. |
+
+`items`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `allowDiscardItem` | `true` | Players may drop and destroy items. |
+| `autoDestroyDroppedItemAfter`, `autoDestroyHerbTime` | `"600s"`, `"60s"` | Items, and herbs, on the ground vanish after this time; `"0s"` keeps them. |
+| `listOfProtectedItems` | `[]` | Item IDs that never vanish from the ground. |
+| `destroyPlayerDroppedItem`, `destroyEquipableItem` | `false`, `false` | Also let items dropped by players, and equipable ones among them, vanish. |
+| `multipleItemDrop` | `true` | A count of a non-stackable item drops as that many items. |
+| `maxAdena` | `2000000000` | Most adena a player can hold. |
+| `warehouseSlotsNoDwarf`, `warehouseSlotsDwarf` | `100`, `120` | Private warehouse size (Mobius `MaximumWarehouseSlotsForNoDwarf`/`ForDwarf`). |
+
+`economy`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `altKarmaPlayerCanShop`, `altKarmaPlayerCanUseWarehouse` | `true`, `true` | Players with karma may use shops, and warehouses. |
+| `onlyGMItemsFree` | `true` | Only GMs get shop items for free. |
+| `multisellAmountLimit` | `10000` | Most exchanges in one multisell request. |
+| `customMultisell` | `false` | Also load the custom multisell lists (Mobius `CustomMultisellLoad`). Their NPCs are custom spawns, off by default. |
+| `floodDropItem`, `floodTransaction`, `floodMultisell` | `"1s"` each | Shortest time between two item drops, two trades or shop actions, and two multisell exchanges; `"0s"` means no limit (Mobius `FloodProtector*Interval`). |
+
+`rates` (Mobius `Rates.ini`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `xp`, `sp` | `1`, `1` | Exp and SP from monsters (Mobius `RateXp`, `RateSp`). |
+| `deathDropChance`, `deathDropAmount` | `1`, `1` | Chance and amount of monster drops (Mobius `DeathDrop*Multiplier`). |
+| `herbDropChance`, `herbDropAmount` | `1`, `1` | The same for herbs. |
+| `dropChanceByItem`, `dropAmountByItem` | `{"57": 1}`, adena and the grand boss jewels at `1` | Item ID to multiplier; a listed item uses this instead of the general rate. A map in the file replaces the default one (Mobius `Drop*MultiplierByItemId`). |
+| `dropMaxOccurrencesNormal` | `2` | Most drops under 100 % chance from one monster. |
+| `dropAdenaMinLevelDifference`, `dropAdenaMaxLevelDifference`, `dropAdenaMinLevelGapChance` | `8`, `15`, `10` | Adena drop chance falls from 100 % to this percent as the killer is min to max levels above the monster. Max must be above min. |
+| `dropItemMinLevelDifference`, `dropItemMaxLevelDifference`, `dropItemMinLevelGapChance` | `5`, `10`, `10` | The same for items. |
+| `monsterExpMaxLevelDifference` | `11` | Killers this many levels above a monster get no exp. |
+| `karmaLost`, `karmaExpLost` | `-1`, `1` | Rate that divides the exp burning karma (`-1` means `xp`), and multiplier of the exp lost on death with karma (Mobius `RateKarmaLost`, `RateKarmaExpLost`). |
+
+`combat`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `randomizeAutoAttackDamage` | `true` | Random factors on auto-attack damage. |
+| `shieldBlocks` | `false` | Damage of a blocked hit: `true` P.Atk minus shield defence, `false` P.Atk / (shield defence + P.Def) (Mobius `AltShieldBlocks`). |
+| `perfectShieldBlockRate` | `10` | Percent of shield blocks that are perfect (Mobius `AltPerfectShieldBlockRate`). |
+| `cancelByHit` | `"cast"` | What a hit interrupts: `"cast"`, `"bow"`, `"all"` or `"none"` (Mobius `AltGameCancelByHit`). |
+| `distanceBowDamage` | `false` | Bow damage depends on distance. |
+| `hpRegenMultiplier`, `mpRegenMultiplier`, `cpRegenMultiplier` | `100` each | Player regeneration, in percent. |
+| `respawnRestoreHP`, `respawnRestoreCP`, `respawnRestoreMP` | `65`, `0`, `0` | Percent of HP, CP and MP a player revives with (0-100). |
+| `delevel` | `true` | Death exp loss may take a level away. |
+| `deathPenaltyChance` | `20` | Percent chance that a death raises the Death Penalty. |
+| `partyRange` | `1500` | How close party members must be to share exp and items (Mobius `AltPartyRange`). The only party range key. |
+| `randomRespawnInTown` | `true` | Restart at a random point of the town (Mobius `RandomRespawnInTownEnabled`). |
+| `autoLoot`, `autoLootHerbs` | `false`, `false` | Monster drops, and herbs, go straight into the killer's inventory. |
+
+`pvp` (Mobius `PVP.ini`, and the karma drop rates of `Rates.ini`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `pvpVsNormalTime`, `pvpVsPvpTime` | `"120s"`, `"60s"` | How long a player stays flagged after hitting a player who is not flagged, or one who is. |
+| `minimumPkRequiredToDrop` | `6` | PK count from which a player with karma drops items on death (Mobius `MinimumPKRequiredToDrop`). |
+| `karmaDropLimit` | `10` | Most items dropped on one death. |
+| `karmaRateDrop`, `karmaRateDropItem`, `karmaRateDropEquip`, `karmaRateDropEquipWeapon` | `40`, `50`, `40`, `10` | Percent chance to drop at all, and per unequipped item, equipped item and equipped weapon. |
+| `listOfNonDroppableItems`, `listOfPetItems` | Mobius's lists | Item IDs a player with karma never drops. |
+| `canGMDropEquipment` | `false` | GMs with karma drop items too. |
+| `awardPKKillPVPPoint` | `false` | Killing a player with karma gives a PvP point. |
+| `karmaPlayerCanBeKilledInPeaceZone` | `false` | Players with karma can be attacked in peace zones (Mobius `AltKarmaPlayerCanBeKilledInPeaceZone`). |
 
 Lua scripting
 ----
