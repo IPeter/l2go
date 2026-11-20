@@ -128,10 +128,18 @@ func (s *Server) movementEnter(p *Player) {
 	s.movement.maxOnline = max(s.movement.maxOnline, s.PlayerCount())
 }
 
-// movementLeave is the OnPlayerLeave hook: the player's movement state
-// goes; the core clears its walk and the tick drops it from the list. The
-// position is where the last tick left it, which is what Mobius saves.
-func (s *Server) movementLeave(p *Player) { delete(s.movement.players, p) }
+// movementLeave is the OnPlayerLeave hook: the players around get StopMove,
+// also when p stood still, and p's own client nothing (Mobius deleteMe calls
+// stopMove(null) after Disconnection detached the client); then the
+// player's movement state goes. The core clears its walk and the tick drops
+// it from the list. The position is where the last tick left it, which is
+// what Mobius saves.
+func (s *Server) movementLeave(p *Player) {
+	if p.InWorld() {
+		s.world.Broadcast(p, stopMovePacket(p), false)
+	}
+	delete(s.movement.players, p)
+}
 
 // movementTeleport is the OnTeleport hook: the walk ends where p stands,
 // and p and the players around get StopMove, also when p stood still

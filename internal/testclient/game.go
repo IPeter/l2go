@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/IPeter/l2go/internal/crypt/gamecrypt"
 	"github.com/IPeter/l2go/internal/packets"
@@ -44,6 +45,10 @@ type GameConn struct {
 
 	// sentCount and recvCount count the packets in each direction.
 	sentCount, recvCount atomic.Int64
+
+	// clickMu guards lastClick, when sendClick last sent a click.
+	clickMu   sync.Mutex
+	lastClick time.Time
 }
 
 // DialOption configures DialGame.

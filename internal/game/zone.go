@@ -16,7 +16,8 @@ import (
 // entering the world and after a teleport. Entering and leaving a zone
 // counts its Mobius ZoneId flags in Player.Zones. In Milestone 4 only water
 // changes behaviour (swim speeds), together with the swamp's slowness and
-// the danger icon of effect zones, which come for free.
+// the danger icon of effect zones, which come for free, and the client's
+// compass (ExSetCompassZoneCode).
 
 // zoneRevalidateDistance is how far a player moves before its zones are
 // worked out again (Mobius Player.revalidateZone).
@@ -327,6 +328,8 @@ type zoneTrack struct {
 	pos   world.Position
 	cell  int
 	force bool // the next move works them out again (after a teleport)
+	// compass is the last ExSetCompassZoneCode sent, 0 before the first.
+	compass serverpackets.CompassZone
 }
 
 // zonesMoved is the OnPlayerMoved hook: the zones are worked out again on
@@ -357,7 +360,7 @@ func (s *Server) revalidateZones(p *Player, force bool) {
 		pos.DistanceSq3D(st.zones.pos) < zoneRevalidateDistance*zoneRevalidateDistance {
 		return
 	}
-	st.zones = zoneTrack{done: true, pos: pos, cell: cell}
+	st.zones = zoneTrack{done: true, pos: pos, cell: cell, compass: st.zones.compass}
 
 	x, y, z := int(pos.X), int(pos.Y), int(pos.Z)
 	for _, id := range slices.Clone(p.Zones.IDs()) {
@@ -376,6 +379,26 @@ func (s *Server) revalidateZones(p *Player, force bool) {
 		}
 		s.enterZone(p, r)
 	}
+	if c := compassZone(p); c != st.zones.compass {
+		st.zones.compass = c
+		p.Send(serverpackets.NewExSetCompassZoneCodePacket(c))
+	}
+}
+
+// compassZone is the compass code of p's zones, in the order of Mobius
+// Player.revalidateZone (the Seven Signs dungeon is not there yet).
+func compassZone(p *Player) serverpackets.CompassZone {
+	switch {
+	case p.Zones.Inside(ZoneAltered):
+		return serverpackets.CompassAltered
+	case p.Zones.Inside(ZoneSiege):
+		return serverpackets.CompassSiegeWar2
+	case p.Zones.Inside(ZonePvP):
+		return serverpackets.CompassPvP
+	case p.Zones.Inside(ZonePeace), p.Zones.Inside(ZoneNoPvP):
+		return serverpackets.CompassPeace
+	}
+	return serverpackets.CompassGeneral
 }
 
 // enterZone records that p entered r's zone and does what the zone does on

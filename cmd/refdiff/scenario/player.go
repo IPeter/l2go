@@ -8,6 +8,7 @@ import (
 	"net"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/IPeter/l2go/internal/session"
 	"github.com/IPeter/l2go/internal/testclient"
@@ -26,7 +27,16 @@ type Player struct {
 	list     testclient.CharacterList
 	selected testclient.CharSelected
 	entered  testclient.EnterWorldResult
+	// selectedAt is when CharacterSelect last went out on the current
+	// game connection, zero before the first one.
+	selectedAt time.Time
 }
+
+// charSelectInterval is how long Mobius silently drops a CharacterSelect
+// after the previous one on the same connection: its flood protector allows
+// one per FloodProtectorCharacterSelectInterval (30 ticks of 100 ms). The
+// margin covers the tick granularity.
+const charSelectInterval = 3500 * time.Millisecond
 
 // Game returns the player's current game connection, nil before Connect.
 func (p *Player) Game() *testclient.GameConn { return p.game }
@@ -210,6 +220,7 @@ func (p *Player) Connect(ctx context.Context) error {
 		return err
 	}
 	p.game = gc
+	p.selectedAt = time.Time{}
 	list, err := gc.AuthLogin(ctx, p.Account, p.keys)
 	if err != nil {
 		return err
@@ -251,9 +262,17 @@ func (p *Player) Select(ctx context.Context) error {
 	if slot < 0 {
 		return fmt.Errorf("character %s is not in the character list", p.Char)
 	}
+	// A second selection on the connection (after a restart) waits out
+	// the reference server's flood protector, on both servers alike.
+	if !p.selectedAt.IsZero() {
+		if err := sleep(ctx, time.Until(p.selectedAt.Add(charSelectInterval))); err != nil {
+			return err
+		}
+	}
 	// After a restart the reader runs: leave nothing stale in its queue
 	// for SelectCharacter to trip over. The recorder has it already.
 	_, _ = p.game.Drain()
+	p.selectedAt = time.Now()
 	cs, err := p.game.SelectCharacter(ctx, int32(slot)) //nolint:gosec // at most 7 characters
 	if err != nil {
 		return err

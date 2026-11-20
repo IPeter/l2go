@@ -59,11 +59,14 @@ func TestPlayersSeeEachOtherOnEnter(t *testing.T) {
 		}
 	}
 
-	// Bob leaves: Alice forgets him.
+	// Bob leaves: Alice sees him stop and forgets him.
 	e.srv.Logout(sb)
 	pa = sa.take(t)
-	checkNames(t, "Alice after Bob's logout", pa, "DeleteObject")
-	if del := pa[0].(testclient.DeleteObject); del.ObjectID != b.ObjectID {
+	checkNames(t, "Alice after Bob's logout", pa, "StopMove", "DeleteObject")
+	if stop := pa[0].(testclient.StopMove); stop.ObjectID != b.ObjectID {
+		t.Errorf("Alice got StopMove %d, want Bob (%d)", stop.ObjectID, b.ObjectID)
+	}
+	if del := pa[1].(testclient.DeleteObject); del.ObjectID != b.ObjectID {
 		t.Errorf("Alice got DeleteObject %d, want Bob (%d)", del.ObjectID, b.ObjectID)
 	}
 }

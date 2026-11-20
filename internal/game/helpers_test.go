@@ -70,6 +70,9 @@ func newEnv(t *testing.T, configure func(gs *config.GameServer), setup ...func(s
 	cfg := config.Default()
 	gs := &cfg.GameServers[0]
 	gs.World.AutosaveInterval = 0
+	// The first click or walk would end it with a message; its own test
+	// turns it on.
+	gs.World.SpawnProtection = 0
 	if configure != nil {
 		configure(gs)
 	}

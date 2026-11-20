@@ -164,6 +164,7 @@ func newNpcEnvAt(t *testing.T, start time.Time, configure func(gs *config.GameSe
 	cfg := config.Default()
 	gs := &cfg.GameServers[0]
 	gs.World.AutosaveInterval = 0
+	gs.World.SpawnProtection = 0 // as in newEnv
 	if configure != nil {
 		configure(gs)
 	}

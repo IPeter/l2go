@@ -288,7 +288,7 @@ func TestChatBadMessagesDisconnect(t *testing.T) {
 			if e.inWorld(pa) {
 				t.Error("Alice is still in the world")
 			}
-			checkNames(t, "Bob sees Alice go", sb.take(t), "DeleteObject")
+			checkNames(t, "Bob sees Alice go", sb.take(t), "StopMove", "DeleteObject")
 		})
 	}
 }

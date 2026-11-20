@@ -84,11 +84,13 @@ func (s *Server) handleMoveToLocation(p *Player, body []byte) {
 	if p.Sitting {
 		// Mobius's AI rests while the player sits.
 		p.SendActionFailed()
+		s.onActionRequest(p)
 		return
 	}
 	if s.startWalk(p, m, world.Position{X: req.TargetX, Y: req.TargetY, Z: req.TargetZ}, 0) {
 		s.broadcastWalk(p, m, false)
 	}
+	s.onActionRequest(p)
 }
 
 // handleValidatePosition handles ValidatePosition (0x48), where the client

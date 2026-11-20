@@ -36,7 +36,7 @@ var scenarios = []Scenario{
 	},
 	{
 		Name:        "npc-talk",
-		Description: "enter in Talking Island, target the nearest NPC, talk to it, follow the first link of its page",
+		Description: "enter in Talking Island, target an NPC in reach (the lowest template), talk to it, follow the first link of its page",
 		Roles:       []string{"alice"},
 		Run:         npcTalk,
 	},
@@ -186,14 +186,14 @@ func npcTalk(ctx context.Context, s *Session) error {
 	return s.Steps(ctx,
 		// NPCs come with the enter-world sequence; let late ones arrive.
 		Idle(time.Second),
-		Step{"alice finds the nearest NPC", func(context.Context) error {
+		Step{"alice picks an NPC", func(context.Context) error {
 			w := a.Game().World()
-			o, d, ok := NearestTalkable(w.Me().Pos, w.Npcs())
+			o, d, ok := PickTalkable(w.Me().Pos, w.Npcs())
 			if !ok {
 				return errors.New("no NPC to talk to in sight")
 			}
 			npc = o
-			s.Note("nearest NPC: template %d %q, %.0f units away", o.NpcID, o.Name, d)
+			s.Note("NPC: template %d %q, %.0f units away", o.NpcID, o.Name, d)
 			return nil
 		}},
 		Step{"alice targets the NPC", func(ctx context.Context) error {

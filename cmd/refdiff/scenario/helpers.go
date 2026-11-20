@@ -80,10 +80,17 @@ func FirstLink(html string) (Link, bool) {
 	return Link{Bypass: !strings.EqualFold(m[1], "link"), Target: m[2]}, true
 }
 
-// NearestTalkable returns the NPC of objs (shown by NpcInfo, not
-// attackable) nearest to me, and its distance. Ties go to the lower
-// template ID, then the lower object ID.
-func NearestTalkable(me testclient.Position, objs []testclient.Object) (testclient.Object, float64, bool) {
+// talkRange is how near an NPC must be to talk to it without walking
+// (Mobius Npc.INTERACTION_DISTANCE).
+const talkRange = 250
+
+// PickTalkable returns the NPC of objs (shown by NpcInfo, not attackable)
+// to talk to, and its distance from me: the one with the lowest template ID
+// within talkRange, else the nearest. Picking by template keeps both
+// servers on the same NPC, although each puts a new character on one of
+// several start points with a different NPC nearest. Ties go to the nearer
+// NPC, then to the lower template ID and object ID.
+func PickTalkable(me testclient.Position, objs []testclient.Object) (testclient.Object, float64, bool) {
 	var (
 		best     testclient.Object
 		bestDist = math.Inf(1)
@@ -94,11 +101,27 @@ func NearestTalkable(me testclient.Position, objs []testclient.Object) (testclie
 			continue
 		}
 		d := o.Pos.DistanceTo(me)
-		if !found || d < bestDist || (d == bestDist && cmp.Or(cmp.Compare(o.NpcID, best.NpcID), cmp.Compare(o.ObjectID, best.ObjectID)) < 0) {
+		if !found || talkableBefore(o, d, best, bestDist) {
 			best, bestDist, found = o, d, true
 		}
 	}
 	return best, bestDist, found
+}
+
+// talkableBefore reports whether PickTalkable prefers NPC a at distance da
+// to NPC b at distance db.
+func talkableBefore(a testclient.Object, da float64, b testclient.Object, db float64) bool {
+	aIn, bIn := da <= talkRange, db <= talkRange
+	if aIn != bIn {
+		return aIn
+	}
+	if aIn && a.NpcID != b.NpcID {
+		return a.NpcID < b.NpcID
+	}
+	if da != db {
+		return da < db
+	}
+	return cmp.Or(cmp.Compare(a.NpcID, b.NpcID), cmp.Compare(a.ObjectID, b.ObjectID)) < 0
 }
 
 // walkDistance is how far enter-two-players walks.

@@ -49,7 +49,8 @@
         "tickInterval": "100ms",
         "autosaveInterval": "15m",
         "deleteCharAfterDays": 7,
-        "maxRunSpeed": 250
+        "maxRunSpeed": 250,
+        "spawnProtection": "10m"
       },
 
       "chat": {

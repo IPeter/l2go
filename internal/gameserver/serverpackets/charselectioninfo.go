@@ -39,8 +39,8 @@ const maxEnchantEffect = 127
 // key, which Mobius sends as the account ID. now is used for the time left
 // until a character is deleted.
 //
-// The character played last (the latest LastAccess) is marked active. A
-// list where nobody has entered the world yet has no active character.
+// The character played or created last (the latest LastAccess) is marked
+// active. A list where no character has a LastAccess has no active one.
 func NewCharSelectionInfoPacket(account string, sessionID int32, chars []storage.Character, now time.Time) []byte {
 	w := packets.NewWriter(5 + len(chars)*400)
 	w.WriteUint8(OpCharSelectionInfo)

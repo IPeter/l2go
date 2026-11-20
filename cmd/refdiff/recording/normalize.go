@@ -317,7 +317,7 @@ func (n *normalizer) item(p scenario.Packet) *item {
 		it.masks = rawMasks[p.Name]
 		it.objID = firstWord(v)
 	default:
-		it.leaves = n.leaves(p.Name, v)
+		it.leaves = n.leaves(p.Name, unordered(v))
 		for _, l := range it.leaves {
 			if l.path == "ObjectID" && l.kind != "" {
 				it.objID = l.id
@@ -326,6 +326,18 @@ func (n *normalizer) item(p scenario.Packet) *item {
 		}
 	}
 	return it
+}
+
+// unordered sorts the lists whose order is the server's iteration order:
+// the items of ItemList (Mobius keeps the inventory in a hash set) by item
+// ID, keeping the order of equal ones.
+func unordered(v any) any {
+	if l, ok := v.(testclient.ItemList); ok {
+		l.Items = slices.Clone(l.Items)
+		slices.SortStableFunc(l.Items, func(a, b testclient.Item) int { return cmp.Compare(a.ItemID, b.ItemID) })
+		return l
+	}
+	return v
 }
 
 // firstWord returns the first word of an unparsed body (after the

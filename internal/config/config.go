@@ -42,6 +42,8 @@ const (
 	// DefaultMaxFreeTeleportLevel is Player.ini MaxFreeTeleportLevel.
 	DefaultMaxFreeTeleportLevel = 40
 	DefaultNPCInteractionRange  = 250 // Npc.INTERACTION_DISTANCE
+	// DefaultSpawnProtection is Player.ini PlayerSpawnProtection.
+	DefaultSpawnProtection = Duration(10 * time.Minute)
 )
 
 // MaxDeleteCharAfterDays bounds World.DeleteCharAfterDays.
@@ -159,6 +161,10 @@ type World struct {
 	DeleteCharAfterDays int `json:"deleteCharAfterDays"`
 	// MaxRunSpeed caps the run speed of players (Mobius MaxRunSpeed).
 	MaxRunSpeed int `json:"maxRunSpeed"`
+	// SpawnProtection is how long a player that entered the world is safe
+	// from aggressive monsters, until its first action, for example "10m".
+	// 0 turns it off (Mobius PlayerSpawnProtection).
+	SpawnProtection Duration `json:"spawnProtection"`
 }
 
 // DefaultWorld returns the Mobius defaults.
@@ -168,6 +174,7 @@ func DefaultWorld() World {
 		AutosaveInterval:    DefaultAutosaveInterval,
 		DeleteCharAfterDays: DefaultDeleteCharAfterDays,
 		MaxRunSpeed:         DefaultMaxRunSpeed,
+		SpawnProtection:     DefaultSpawnProtection,
 	}
 }
 
@@ -582,6 +589,9 @@ func (g GameServer) validateGame() []error {
 	}
 	if w.MaxRunSpeed <= 0 {
 		add("world.maxRunSpeed: %d is not positive", w.MaxRunSpeed)
+	}
+	if w.SpawnProtection < 0 {
+		add("world.spawnProtection: %v is negative", time.Duration(w.SpawnProtection))
 	}
 	if g.Chat.GeneralRange <= 0 {
 		add("chat.generalRange: %d is not positive", g.Chat.GeneralRange)

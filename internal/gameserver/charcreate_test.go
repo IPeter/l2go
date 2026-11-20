@@ -195,7 +195,7 @@ func TestCharacterCreate(t *testing.T) {
 	if info.Level != 1 || info.ClassID != 0 || info.BaseClassID != 0 || info.Race != 0 || info.Sex != 0 ||
 		info.CurrentHP != 80 || info.MaxHP != 80 || info.CurrentMP != 30 || info.MaxMP != 30 ||
 		info.HairStyle != 1 || info.HairColor != 2 || info.Face != 1 || info.GameServer != 1 ||
-		info.DeleteTimer != 0 || info.Active || info.Enchant != 0 {
+		info.DeleteTimer != 0 || !info.Active || info.Enchant != 0 {
 		t.Errorf("listed character: %+v", info)
 	}
 	var wantObj, wantItem [testclient.NumEquipSlots]int32

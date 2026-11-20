@@ -108,7 +108,8 @@ func TestNormalizeObjectIDs(t *testing.T) {
 	checkFields(t, a[2], map[string]string{"ObjectID": "#npc1", "NpcTypeID": "1030001"})
 	checkFields(t, a[3], map[string]string{"ObjectID": "#npc2", "NpcTypeID": "1030002"})
 	checkFields(t, a[4], map[string]string{"ObjectID": "#npc2"})
-	checkFields(t, a[5], map[string]string{"Items[0].ObjectID": "#item1", "Items[1].ObjectID": "#item3", "Items.len": "2"})
+	// The items are sorted by item ID: the dagger (10) before the sword.
+	checkFields(t, a[5], map[string]string{"Items[0].ObjectID": "#item3", "Items[1].ObjectID": "#item1", "Items.len": "2"})
 	// The same object keeps its name in another stream.
 	checkFields(t, b[0], map[string]string{"ObjectID": "#player1"})
 	checkFields(t, b[1], map[string]string{"ObjectID": "#player2", "X": "start"})

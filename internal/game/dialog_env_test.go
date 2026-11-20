@@ -88,6 +88,7 @@ func newDialogEnv(t *testing.T, opts dialogEnvOptions) *testEnv {
 	cfg := config.Default()
 	gs := &cfg.GameServers[0]
 	gs.World.AutosaveInterval = 0
+	gs.World.SpawnProtection = 0 // as in newEnv
 	gs.DataDir = dataDir
 	out := NewScriptOutput()
 	var engine *scripting.Engine

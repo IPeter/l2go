@@ -10,7 +10,8 @@
 //     and #obj1 for IDs first seen elsewhere. 0 stays 0. Visibility bursts
 //     (consecutive NpcInfo, CharInfo, DeleteObject, ... packets) are first
 //     sorted by their content, because their order comes from the
-//     server's iteration order, not from the protocol.
+//     server's iteration order, not from the protocol. For the same
+//     reason the items of ItemList are sorted by item ID.
 //   - Random and time values become placeholders: the session ID
 //     (<session-id>), the login and play keys (<login-ok1> ... <play-ok2>),
 //     the Blowfish key, the RSA modulus, the XOR key and the game time.

@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
@@ -72,6 +73,9 @@ type Player struct {
 	CurHP, CurMP, CurCP float64
 	// PvPFlag is the PvP flag (Mobius pvpFlag), 0 until combat exists.
 	PvPFlag int32
+	// SpawnProtectedUntil ends the spawn protection (Mobius
+	// spawnProtectEndTime); zero when the player has none.
+	SpawnProtectedUntil time.Time
 
 	srv     *Server
 	session Session

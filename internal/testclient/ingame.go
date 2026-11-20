@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ErrRestartRefused is returned by Restart when the server answers
@@ -376,11 +377,39 @@ func (c *GameConn) RestoreCharacter(ctx context.Context, slot int32) (CharacterL
 	return CharacterList{}, unexpectedGame(body, want)
 }
 
+// clickGap is the least time the client leaves between two clicks (Action,
+// AttackRequest). Mobius drops a click that comes within its player-action
+// flood interval (FloodProtectorPlayerActionInterval: one 100 ms game tick,
+// read from a tick counter that may lag a tick) without any answer, so a
+// talk or attack click sent right after the target click would be lost. A
+// person never clicks that fast.
+const clickGap = 300 * time.Millisecond
+
+// sendClick sends the click packet op (Action or AttackRequest) on
+// objectID from the position the world model knows, at least clickGap
+// after the previous click.
+func (c *GameConn) sendClick(ctx context.Context, op byte, objectID int32, shift bool) error {
+	c.clickMu.Lock()
+	defer c.clickMu.Unlock()
+	if wait := time.Until(c.lastClick.Add(clickGap)); wait > 0 {
+		t := time.NewTimer(wait)
+		select {
+		case <-t.C:
+		case <-ctx.Done():
+			t.Stop()
+			return ctx.Err()
+		}
+	}
+	err := c.send(ctx, encodeAction(op, objectID, c.world.Me().Pos, shift))
+	c.lastClick = time.Now()
+	return err
+}
+
 // Action clicks objectID (Action), from the position the world model
 // knows; shift sends a shift click. The first click targets an object, the
-// second talks to an NPC or attacks.
+// second talks to an NPC or attacks. Clicks are clickGap apart.
 func (c *GameConn) Action(ctx context.Context, objectID int32, shift bool) error {
-	return c.send(ctx, encodeAction(OpAction, objectID, c.world.Me().Pos, shift))
+	return c.sendClick(ctx, OpAction, objectID, shift)
 }
 
 // Target clicks objectID once and returns the MyTargetSelected that
@@ -394,7 +423,8 @@ func (c *GameConn) Target(ctx context.Context, objectID int32) (MyTargetSelected
 
 // Talk opens the dialog of the NPC objectID the way a double click does:
 // it targets the NPC unless it is the target already, clicks it again and
-// returns the NpcHtmlMessage. Mobius first walks the character into
+// returns the NpcHtmlMessage. The second click waits clickGap after the
+// first, or Mobius drops it. Mobius first walks the character into
 // interaction range (MoveToPawn); the ActionFailed after the page stays
 // queued.
 func (c *GameConn) Talk(ctx context.Context, objectID int32) (NpcHtmlMessage, error) {
@@ -441,7 +471,7 @@ func (c *GameConn) RequestSocialAction(ctx context.Context, actionID int32) erro
 // Attack waits for the attack itself, SendAttackRequest for nothing.
 func (c *GameConn) AttackRequest(ctx context.Context, objectID int32, shift bool) error {
 	_, _ = c.Drain()
-	if err := c.send(ctx, encodeAction(OpAttackRequest, objectID, c.world.Me().Pos, shift)); err != nil {
+	if err := c.sendClick(ctx, OpAttackRequest, objectID, shift); err != nil {
 		return err
 	}
 	_, err := Await[ActionFailed](ctx, c, nil)

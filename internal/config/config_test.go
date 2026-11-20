@@ -174,11 +174,11 @@ func TestParseGameSections(t *testing.T) {
 			g.NPCs.MaxFreeTeleportLevel = 0
 		}},
 		{"everything", `{"id": 1,
-			"world": {"_comment": "w", "tickInterval": "50ms", "autosaveInterval": "1m", "deleteCharAfterDays": 3, "maxRunSpeed": 200},
+			"world": {"_comment": "w", "tickInterval": "50ms", "autosaveInterval": "1m", "deleteCharAfterDays": 3, "maxRunSpeed": 200, "spawnProtection": "0s"},
 			"chat": {"generalRange": 900, "shout": "global", "trade": "off", "maxLength": 80},
 			"npcs": {"spawnCustom": true, "maxFreeTeleportLevel": 20, "interactionRange": 150},
 			"geodata": {"dir": "/srv/geo"}}`, func(g *GameServer) {
-			g.World = World{Comment: "w", TickInterval: Duration(50 * time.Millisecond), AutosaveInterval: Duration(time.Minute), DeleteCharAfterDays: 3, MaxRunSpeed: 200}
+			g.World = World{Comment: "w", TickInterval: Duration(50 * time.Millisecond), AutosaveInterval: Duration(time.Minute), DeleteCharAfterDays: 3, MaxRunSpeed: 200, SpawnProtection: 0}
 			g.Chat = Chat{GeneralRange: 900, Shout: ChatModeGlobal, Trade: ChatModeOff, MaxLength: 80}
 			g.NPCs = NPCs{SpawnCustom: true, MaxFreeTeleportLevel: 20, InteractionRange: 150}
 			g.Geodata = Geodata{Dir: "/srv/geo"}
@@ -212,6 +212,7 @@ func TestDefaultGameSections(t *testing.T) {
 		AutosaveInterval:    Duration(15 * time.Minute),
 		DeleteCharAfterDays: 7,
 		MaxRunSpeed:         250,
+		SpawnProtection:     Duration(10 * time.Minute),
 	}
 	if gs.World != want {
 		t.Errorf("World = %+v, want %+v", gs.World, want)
@@ -282,6 +283,10 @@ func TestValidate(t *testing.T) {
 			c.GameServers[0].World.DeleteCharAfterDays = MaxDeleteCharAfterDays + 1
 		}, "world.deleteCharAfterDays"},
 		{"zero run speed", func(c *Config) { c.GameServers[0].World.MaxRunSpeed = 0 }, "world.maxRunSpeed"},
+		{"spawn protection off", func(c *Config) { c.GameServers[0].World.SpawnProtection = 0 }, ""},
+		{"negative spawn protection", func(c *Config) {
+			c.GameServers[0].World.SpawnProtection = Duration(-time.Second)
+		}, "world.spawnProtection"},
 		{"zero chat range", func(c *Config) { c.GameServers[0].Chat.GeneralRange = 0 }, "chat.generalRange"},
 		{"negative chat length", func(c *Config) { c.GameServers[0].Chat.MaxLength = -5 }, "chat.maxLength"},
 		{"global shout", func(c *Config) { c.GameServers[0].Chat.Shout = ChatModeGlobal }, ""},

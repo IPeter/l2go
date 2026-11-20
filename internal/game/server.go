@@ -65,8 +65,11 @@ type Settings struct {
 	DeleteCharAfterDays int
 	// MaxRunSpeed caps the run speed of players.
 	MaxRunSpeed int
-	Chat        config.Chat
-	NPCs        config.NPCs
+	// SpawnProtection is how long a player that entered the world is safe
+	// from aggressive monsters; 0 turns it off.
+	SpawnProtection time.Duration
+	Chat            config.Chat
+	NPCs            config.NPCs
 	// GeodataDir is the geodata folder, empty without geodata.
 	GeodataDir string
 	// DataDir is the game data folder; HTMLDir is its html subfolder, where
@@ -84,6 +87,7 @@ func settingsFrom(gs config.GameServer) Settings {
 		AutosaveInterval:    max(time.Duration(w.AutosaveInterval), 0),
 		DeleteCharAfterDays: w.DeleteCharAfterDays,
 		MaxRunSpeed:         w.MaxRunSpeed,
+		SpawnProtection:     max(time.Duration(w.SpawnProtection), 0),
 		Chat:                gs.Chat,
 		NPCs:                gs.NPCs,
 		GeodataDir:          gs.Geodata.Dir,

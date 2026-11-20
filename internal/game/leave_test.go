@@ -98,7 +98,7 @@ func TestRestartSavesBeforeTheCharacterList(t *testing.T) {
 
 func TestLogoutSavesAndClosesAfterLeaveWorld(t *testing.T) {
 	e := newEnv(t, nil)
-	sa, sb, pa, pb := twoPlayers(t, e)
+	sa, sb, _, pb := twoPlayers(t, e)
 	pos := e.position(pb)
 
 	e.srv.Logout(sb)
@@ -111,10 +111,18 @@ func TestLogoutSavesAndClosesAfterLeaveWorld(t *testing.T) {
 		t.Errorf("saved at %v, want %v", got, pos)
 	}
 	checkGone(t, e, sb, pb)
-	checkNames(t, "Alice after Bob's logout", sa.take(t), "DeleteObject")
-	// Bob's client forgot Alice too before LeaveWorld.
-	if ps := sb.take(t); len(ps) != 1 || ps[0].(testclient.DeleteObject).ObjectID != pa.ObjectID() {
-		t.Errorf("Bob got %q when leaving, want DeleteObject of Alice", testclient.Names(ps))
+	// Mobius deleteMe stops Bob (StopMove, also when he stood still) before
+	// it takes him out of the world.
+	seen := sa.take(t)
+	checkNames(t, "Alice after Bob's logout", seen, "StopMove", "DeleteObject")
+	want := testclient.StopMove{ObjectID: pb.ObjectID(), X: pos.X, Y: pos.Y, Z: pos.Z, Heading: pos.Heading}
+	if stop := seen[0].(testclient.StopMove); stop != want {
+		t.Errorf("Alice got %+v, want %+v", stop, want)
+	}
+	// Bob's client is detached first, as in Mobius: it gets no StopMove or
+	// DeleteObject, only the LeaveWorld that closes the connection.
+	if ps := sb.take(t); len(ps) != 0 {
+		t.Errorf("Bob got %q when leaving, want nothing", testclient.Names(ps))
 	}
 }
 
@@ -133,7 +141,7 @@ func TestDisconnectedSavesAndRemoves(t *testing.T) {
 	e.srv.Disconnected(sb)
 	e.store.waitSave(t, pb.ObjectID())
 	checkGone(t, e, sb, pb)
-	checkNames(t, "Alice after Bob's disconnection", sa.take(t), "DeleteObject")
+	checkNames(t, "Alice after Bob's disconnection", sa.take(t), "StopMove", "DeleteObject")
 	if _, _, closed := sb.closedWith(t); closed {
 		t.Error("the game closed a connection that was already lost")
 	}

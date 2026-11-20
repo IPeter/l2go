@@ -337,12 +337,17 @@ func (s *Server) stopWalk(p *Player, m *motion, at *world.Position) {
 
 // broadcastStop sends StopMove at p's position to p and the players around.
 func (s *Server) broadcastStop(p *Player) {
+	s.world.Broadcast(p, stopMovePacket(p), true)
+}
+
+// stopMovePacket is the StopMove of p at its position.
+func stopMovePacket(p *Player) []byte {
 	pos := p.Position()
-	s.world.Broadcast(p, serverpackets.NewStopMovePacket(serverpackets.StopMove{
+	return serverpackets.NewStopMovePacket(serverpackets.StopMove{
 		ObjectID: p.ObjectID(),
 		X:        pos.X, Y: pos.Y, Z: pos.Z,
 		Heading: pos.Heading,
-	}), true)
+	})
 }
 
 // syncWalk puts p where its client says and lets the walk go on from there

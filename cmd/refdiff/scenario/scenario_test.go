@@ -136,20 +136,30 @@ func TestFirstLink(t *testing.T) {
 	}
 }
 
-func TestNearestTalkable(t *testing.T) {
+func TestPickTalkable(t *testing.T) {
 	me := testclient.Position{X: 0, Y: 0, Z: 0}
-	objs := []testclient.Object{
-		{ObjectID: 1, Kind: testclient.KindNpc, NpcID: 20001, Attackable: true, Motion: testclient.Motion{Pos: testclient.Position{X: 10}}},
-		{ObjectID: 2, Kind: testclient.KindStatic, NpcID: 30001, Motion: testclient.Motion{Pos: testclient.Position{X: 20}}},
-		{ObjectID: 3, Kind: testclient.KindNpc, NpcID: 30500, Motion: testclient.Motion{Pos: testclient.Position{X: 300}}},
-		{ObjectID: 4, Kind: testclient.KindNpc, NpcID: 30400, Motion: testclient.Motion{Pos: testclient.Position{Y: -300}}},
-		{ObjectID: 5, Kind: testclient.KindNpc, NpcID: 30600, Motion: testclient.Motion{Pos: testclient.Position{X: 900}}},
+	npc := func(id, npcID int32, x, y int32) testclient.Object {
+		return testclient.Object{ObjectID: id, Kind: testclient.KindNpc, NpcID: npcID, Motion: testclient.Motion{Pos: testclient.Position{X: x, Y: y}}}
 	}
-	o, d, ok := NearestTalkable(me, objs)
+	monster := npc(1, 20001, 10, 0)
+	monster.Attackable = true
+	static := testclient.Object{ObjectID: 2, Kind: testclient.KindStatic, NpcID: 30001, Motion: testclient.Motion{Pos: testclient.Position{X: 20}}}
+	far := []testclient.Object{
+		monster, static,
+		npc(3, 30500, 300, 0),
+		npc(4, 30400, 0, -300),
+		npc(5, 30600, 900, 0),
+	}
+	o, d, ok := PickTalkable(me, far)
 	if !ok || o.ObjectID != 4 || d != 300 {
-		t.Errorf("NearestTalkable = %d at %v, %v; want object 4 (the lower template of two at 300)", o.ObjectID, d, ok)
+		t.Errorf("PickTalkable(out of reach) = %d at %v, %v; want object 4 (the lower template of the two nearest)", o.ObjectID, d, ok)
 	}
-	if _, _, ok := NearestTalkable(me, objs[:2]); ok {
+	near := slices.Concat(far, []testclient.Object{npc(6, 30009, 40, 0), npc(7, 30008, 0, 70)})
+	o, d, ok = PickTalkable(me, near)
+	if !ok || o.ObjectID != 7 || d != 70 {
+		t.Errorf("PickTalkable(in reach) = %d at %v, %v; want object 7 (the lowest template in reach)", o.ObjectID, d, ok)
+	}
+	if _, _, ok := PickTalkable(me, far[:2]); ok {
 		t.Error("a monster or a static object was taken as talkable")
 	}
 }

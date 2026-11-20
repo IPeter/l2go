@@ -139,6 +139,11 @@ func (s *Server) leave(p *Player, save bool, done func(error)) {
 	if save && inGame {
 		snap = p.Snapshot()
 	}
+	// The client is detached before the player leaves the world (Mobius
+	// Disconnection): its viewers get DeleteObject, the leaving client
+	// itself gets nothing for the objects it saw.
+	sess := p.session
+	p.session = nil
 	if p.InWorld() {
 		s.RemoveObject(p)
 	}
@@ -148,14 +153,13 @@ func (s *Server) leave(p *Player, save bool, done func(error)) {
 			delete(s.byName, key)
 		}
 	}
-	if sess := p.session; sess != nil && s.bySession[sess] == p {
+	if sess != nil && s.bySession[sess] == p {
 		delete(s.bySession, sess)
 	}
 	if s.byAccount[p.char.Account] == p {
 		delete(s.byAccount, p.char.Account)
 	}
 	p.state = stateLeft
-	p.session = nil
 
 	switch {
 	case save && inGame:

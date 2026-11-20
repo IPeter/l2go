@@ -88,7 +88,7 @@ type Character struct {
 	AccessLevel AccessLevel
 	DeleteTime  time.Time // when the character will be deleted; zero if not deleting
 	CreatedAt   time.Time
-	LastAccess  time.Time // zero if the character never entered the world
+	LastAccess  time.Time // creation or last save; zero if never set
 
 	// Items are stored inside the character, so creating a character with
 	// its starting items is one atomic write: a standalone MongoDB (as in

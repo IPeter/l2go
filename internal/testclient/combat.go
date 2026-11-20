@@ -40,9 +40,10 @@ func encodeRequestAutoSoulShot(itemID int32, on bool) []byte {
 }
 
 // SendAttackRequest sends AttackRequest for objectID from the position the
-// world model knows, without waiting; shift sends a shift click.
+// world model knows, without waiting for an answer (only for the clickGap
+// since the previous click); shift sends a shift click.
 func (c *GameConn) SendAttackRequest(ctx context.Context, objectID int32, shift bool) error {
-	return c.send(ctx, encodeAction(OpAttackRequest, objectID, c.world.Me().Pos, shift))
+	return c.sendClick(ctx, OpAttackRequest, objectID, shift)
 }
 
 // Attack attacks targetID and returns the character's first Attack with a

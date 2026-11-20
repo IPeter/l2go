@@ -303,6 +303,9 @@ func (s *Server) newCharacter(ctx context.Context, account string, req clientpac
 		Z:           int32(loc.Z), //nolint:gosec // world coordinates fit in int32
 		AccessLevel: storage.AccessLevelPlayer,
 		Items:       items,
+		// Mobius stores lastAccess at creation, so the new character is
+		// the active one of the list until another is played.
+		LastAccess: s.now(),
 	}, nil
 }
 

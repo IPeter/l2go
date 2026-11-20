@@ -186,6 +186,7 @@ The game rules of a game server are in four more sections: `world`, `chat`, `npc
 | `autosaveInterval` | `"15m"` | How often the players in the world are saved. They are also saved when they leave the world and when the server stops; `"0s"` saves only then. |
 | `deleteCharAfterDays` | `7` | How long a deleted character can be restored (0-3650 days). After that it is removed for good the next time its account's character list is shown. `0` deletes at once. |
 | `maxRunSpeed` | `250` | Highest run speed of players. |
+| `spawnProtection` | `"10m"` | How long a player that entered the world is safe from aggressive monsters. Its first click, attack or walk ends it, with a message outside peace zones. `"0s"` turns it off. |
 
 `chat`:
 

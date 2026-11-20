@@ -75,6 +75,7 @@ func (s *Server) handleAction(p *Player, body []byte) {
 		p.SendActionFailed()
 		return
 	}
+	s.onActionRequest(p)
 	switch req.ActionID {
 	case clientpackets.ActionClick:
 		s.onAction(p, obj, true)
@@ -105,6 +106,7 @@ func (s *Server) handleAttackRequest(p *Player, body []byte) {
 		p.SendActionFailed()
 		return
 	}
+	s.onActionRequest(p)
 	if p.Target != obj {
 		s.onAction(p, obj, true)
 		return
