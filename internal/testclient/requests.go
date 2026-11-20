@@ -123,12 +123,80 @@ var clientPacketNames = map[byte]string{
 	OpMultiSellChoose:           "MultiSellChoose",
 	OpBypassUserCmd:             "BypassUserCmd",
 	OpRequestShowMiniMap:        "RequestShowMiniMap",
+
+	// Party, friends and block list (M9, party.go).
+	OpRequestJoinParty:          "RequestJoinParty",
+	OpRequestAnswerJoinParty:    "RequestAnswerJoinParty",
+	OpRequestWithDrawalParty:    "RequestWithDrawalParty",
+	OpRequestOustPartyMember:    "RequestOustPartyMember",
+	OpRequestFriendInvite:       "RequestFriendInvite",
+	OpRequestAnswerFriendInvite: "RequestAnswerFriendInvite",
+	OpRequestFriendList:         "RequestFriendList",
+	OpRequestFriendDel:          "RequestFriendDel",
+	OpRequestPartyMatchConfig:   "RequestPartyMatchConfig",
+	OpRequestBlock:              "RequestBlock",
+	OpRequestSendFriendMsg:      "RequestSendFriendMsg",
+
+	// Trades and private stores (M9, trade.go).
+	OpTradeRequest:                  "TradeRequest",
+	OpAddTradeItem:                  "AddTradeItem",
+	OpTradeDone:                     "TradeDone",
+	OpAnswerTradeRequest:            "AnswerTradeRequest",
+	OpRequestPrivateStoreManageSell: "RequestPrivateStoreManageSell",
+	OpSetPrivateStoreListSell:       "SetPrivateStoreListSell",
+	OpRequestPrivateStoreQuitSell:   "RequestPrivateStoreQuitSell",
+	OpSetPrivateStoreMsgSell:        "SetPrivateStoreMsgSell",
+	OpRequestPrivateStoreBuy:        "RequestPrivateStoreBuy",
+	OpRequestPrivateStoreManageBuy:  "RequestPrivateStoreManageBuy",
+	OpSetPrivateStoreListBuy:        "SetPrivateStoreListBuy",
+	OpRequestPrivateStoreQuitBuy:    "RequestPrivateStoreQuitBuy",
+	OpSetPrivateStoreMsgBuy:         "SetPrivateStoreMsgBuy",
+	OpRequestPrivateStoreSell:       "RequestPrivateStoreSell",
+
+	// Clans, clan wars, crests and alliances (M9, clan.go).
+	OpRequestJoinPledge:              "RequestJoinPledge",
+	OpRequestAnswerJoinPledge:        "RequestAnswerJoinPledge",
+	OpRequestWithdrawalPledge:        "RequestWithdrawalPledge",
+	OpRequestOustPledgeMember:        "RequestOustPledgeMember",
+	OpRequestPledgeMemberList:        "RequestPledgeMemberList",
+	OpRequestStartPledgeWar:          "RequestStartPledgeWar",
+	OpRequestReplyStartPledgeWar:     "RequestReplyStartPledgeWar",
+	OpRequestStopPledgeWar:           "RequestStopPledgeWar",
+	OpRequestReplyStopPledgeWar:      "RequestReplyStopPledgeWar",
+	OpRequestSurrenderPledgeWar:      "RequestSurrenderPledgeWar",
+	OpRequestReplySurrenderPledgeWar: "RequestReplySurrenderPledgeWar",
+	OpRequestSetPledgeCrest:          "RequestSetPledgeCrest",
+	OpRequestGiveNickName:            "RequestGiveNickName",
+	OpRequestPledgeInfo:              "RequestPledgeInfo",
+	OpRequestPledgeExtendedInfo:      "RequestPledgeExtendedInfo",
+	OpRequestPledgeCrest:             "RequestPledgeCrest",
+	OpRequestJoinAlly:                "RequestJoinAlly",
+	OpRequestAnswerJoinAlly:          "RequestAnswerJoinAlly",
+	OpAllyLeave:                      "AllyLeave",
+	OpAllyDismiss:                    "AllyDismiss",
+	OpRequestDismissAlly:             "RequestDismissAlly",
+	OpRequestSetAllyCrest:            "RequestSetAllyCrest",
+	OpRequestAllyCrest:               "RequestAllyCrest",
+	OpRequestAllyInfo:                "RequestAllyInfo",
+	OpRequestPledgePower:             "RequestPledgePower",
 }
 
 // exClientPacketNames maps Ex client sub-opcodes to Mobius packet names.
 var exClientPacketNames = map[uint16]string{
 	ExOpRequestAutoSoulShot: "RequestAutoSoulShot",
 	ExOpRequestManorList:    "RequestManorList",
+
+	ExOpRequestChangePartyLeader: "RequestChangePartyLeader",
+
+	ExOpRequestExPledgeCrestLarge:        "RequestExPledgeCrestLarge",
+	ExOpRequestExSetPledgeCrestLarge:     "RequestExSetPledgeCrestLarge",
+	ExOpRequestPledgeSetAcademyMaster:    "RequestPledgeSetAcademyMaster",
+	ExOpRequestPledgePowerGradeList:      "RequestPledgePowerGradeList",
+	ExOpRequestPledgeMemberPowerInfo:     "RequestPledgeMemberPowerInfo",
+	ExOpRequestPledgeSetMemberPowerGrade: "RequestPledgeSetMemberPowerGrade",
+	ExOpRequestPledgeMemberInfo:          "RequestPledgeMemberInfo",
+	ExOpRequestPledgeWarList:             "RequestPledgeWarList",
+	ExOpRequestPledgeReorganizeMember:    "RequestPledgeReorganizeMember",
 }
 
 // clientPacketName returns the Mobius name of a raw client packet (opcode

@@ -180,7 +180,6 @@ var serverPackets = map[byte]serverPacket{
 	OpAbnormalStatusUpdate:    {"AbnormalStatusUpdate", readAbnormalStatusUpdate},
 	OpQuestList:               {"QuestList", readQuestList},
 	OpEnchantResult:           {"EnchantResult", readEnchantResult},
-	0x83:                      {name: "PledgeInfo"},
 	OpAcquireSkillList:        {"AcquireSkillList", readAcquireSkillList},
 	OpAcquireSkillInfo:        {"AcquireSkillInfo", readAcquireSkillInfo},
 	OpServerObjectInfo:        {"ServerObjectInfo", readServerObjectInfo},
@@ -208,6 +207,56 @@ var serverPackets = map[byte]serverPacket{
 	0xf5:                      {name: "SSQStatus"},
 	0xf9:                      {name: "GameGuardQuery"},
 	OpFriendList:              {"FriendList", readFriendList},
+
+	// Party, friends and party matching (M9, partypackets.go).
+	OpAskJoinParty:              {"AskJoinParty", readAskJoinParty},
+	OpJoinParty:                 {"JoinParty", readJoinParty},
+	OpPartySmallWindowAll:       {"PartySmallWindowAll", readPartySmallWindowAll},
+	OpPartySmallWindowAdd:       {"PartySmallWindowAdd", readPartySmallWindowAdd},
+	OpPartySmallWindowDeleteAll: {"PartySmallWindowDeleteAll", readPartySmallWindowDeleteAll},
+	OpPartySmallWindowDelete:    {"PartySmallWindowDelete", readPartySmallWindowDelete},
+	OpPartySmallWindowUpdate:    {"PartySmallWindowUpdate", readPartySmallWindowUpdate},
+	OpFriendAddRequest:          {"FriendAddRequest", readFriendAddRequest},
+	OpListPartyWating:           {"ListPartyWating", readListPartyWating},
+	OpPartyMemberPosition:       {"PartyMemberPosition", readPartyMemberPosition},
+	OpL2Friend:                  {"L2Friend", readL2Friend},
+	OpFriendStatus:              {"FriendStatusPacket", readFriendStatus},
+	OpL2FriendSay:               {"L2FriendSay", readL2FriendSay},
+
+	// Trades and private stores (M9, tradepackets.go).
+	OpTradeStart:                 {"TradeStart", readTradeStart},
+	OpTradeOwnAdd:                {"TradeOwnAdd", readTradeOwnAdd},
+	OpTradeOtherAdd:              {"TradeOtherAdd", readTradeOtherAdd},
+	OpTradeDoneServer:            {"TradeDone", readTradeDone},
+	OpSendTradeRequest:           {"SendTradeRequest", readSendTradeRequest},
+	OpTradeUpdate:                {"TradeUpdate", readTradeUpdate},
+	OpTradeOtherDone:             {"TradeOtherDone", readTradeOtherDone},
+	OpPrivateStoreManageListSell: {"PrivateStoreManageListSell", readPrivateStoreManageListSell},
+	OpPrivateStoreListSell:       {"PrivateStoreListSell", readPrivateStoreListSell},
+	OpPrivateStoreMsgSell:        {"PrivateStoreMsgSell", readPrivateStoreMsgSell},
+	OpPrivateStoreManageListBuy:  {"PrivateStoreManageListBuy", readPrivateStoreManageListBuy},
+	OpPrivateStoreListBuy:        {"PrivateStoreListBuy", readPrivateStoreListBuy},
+	OpPrivateStoreMsgBuy:         {"PrivateStoreMsgBuy", readPrivateStoreMsgBuy},
+
+	// Clans, clan wars, crests and alliances (M9, clanpackets.go).
+	OpManagePledgePower:             {"ManagePledgePower", readManagePledgePower},
+	OpAskJoinPledge:                 {"AskJoinPledge", readAskJoinPledge},
+	OpJoinPledge:                    {"JoinPledge", readJoinPledge},
+	OpPledgeShowMemberListAll:       {"PledgeShowMemberListAll", readPledgeShowMemberListAll},
+	OpPledgeShowMemberListUpdate:    {"PledgeShowMemberListUpdate", readPledgeShowMemberListUpdate},
+	OpPledgeShowMemberListAdd:       {"PledgeShowMemberListAdd", readPledgeShowMemberListAdd},
+	OpPledgeShowMemberListDelete:    {"PledgeShowMemberListDelete", readPledgeShowMemberListDelete},
+	OpStartPledgeWar:                {"StartPledgeWar", readStartPledgeWar},
+	OpStopPledgeWar:                 {"StopPledgeWar", readStopPledgeWar},
+	OpSurrenderPledgeWar:            {"SurrenderPledgeWar", readSurrenderPledgeWar},
+	OpPledgeCrest:                   {"PledgeCrest", readPledgeCrest},
+	OpPledgeShowMemberListDeleteAll: {"PledgeShowMemberListDeleteAll", readPledgeShowMemberListDeleteAll},
+	OpPledgeInfo:                    {"PledgeInfo", readPledgeInfo},
+	OpPledgeShowInfoUpdate:          {"PledgeShowInfoUpdate", readPledgeShowInfoUpdate},
+	OpAskJoinAlly:                   {"AskJoinAlly", readAskJoinAlly},
+	OpAllyCrest:                     {"AllyCrest", readAllyCrest},
+	OpAllianceInfo:                  {"AllianceInfo", readAllianceInfo},
+	OpPledgeStatusChanged:           {"PledgeStatusChanged", readPledgeStatusChanged},
 }
 
 // exServerPackets lists the Ex server packets by sub-opcode.
@@ -221,6 +270,16 @@ var exServerPackets = map[uint16]serverPacket{
 	0x32:                   {name: "ExSetCompassZoneCode"},
 	0x38:                   {"ExShowScreenMessage", readExShowScreenMessage},
 	ExOpUseSharedGroupItem: {"ExUseSharedGroupItem", readExUseSharedGroupItem},
+
+	// Clans (M9, clanpackets.go).
+	ExOpPledgeEmblem:                  {"ExPledgeEmblem", readExPledgeEmblem},
+	ExOpPledgeSkillList:               {"PledgeSkillList", readPledgeSkillList},
+	ExOpPledgeSkillListAdd:            {"PledgeSkillListAdd", readPledgeSkillListAdd},
+	ExOpPledgePowerGradeList:          {"PledgePowerGradeList", readPledgePowerGradeList},
+	ExOpPledgeReceivePowerInfo:        {"PledgeReceivePowerInfo", readPledgeReceivePowerInfo},
+	ExOpPledgeReceiveMemberInfo:       {"PledgeReceiveMemberInfo", readPledgeReceiveMemberInfo},
+	ExOpPledgeReceiveWarList:          {"PledgeReceiveWarList", readPledgeReceiveWarList},
+	ExOpPledgeReceiveSubPledgeCreated: {"PledgeReceiveSubPledgeCreated", readPledgeReceiveSubPledgeCreated},
 }
 
 // serverPacketName returns the Mobius name of a raw server packet (opcode
