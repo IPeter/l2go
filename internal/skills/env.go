@@ -59,6 +59,9 @@ type Config struct {
 	// PartyRange is the reach of party skills that name no affect range
 	// (AltPartyRange, 1500).
 	PartyRange int
+	// StoreDances and StoreToggles keep dances and toggles among the
+	// effects a player saves (AltStoreDances true, AltStoreToggles false).
+	StoreDances, StoreToggles bool
 }
 
 // DefaultConfig returns the Mobius defaults.
@@ -82,6 +85,8 @@ func DefaultConfig() Config {
 		CancelBowByHit:                false,
 		GMSkillRestriction:            true,
 		PartyRange:                    1500,
+		StoreDances:                   true,
+		StoreToggles:                  false,
 	}
 }
 
@@ -178,10 +183,10 @@ type World interface {
 	// CanSee reports line of sight (GeoEngine.canSeeTarget).
 	CanSee(from, to Creature) bool
 	// Party returns the members of c's party, leader first, or nil when c
-	// is in none.
+	// is in none. A summon answers with its owner's party.
 	Party(c Creature) []Creature
 	// SameParty reports whether a and b are in the same party (Mobius
-	// compares the leaders).
+	// compares the leaders). Summons count as their owners.
 	SameParty(a, b Creature) bool
 	// Summon returns the summon or pet of a player, nil without one.
 	Summon(owner Creature) Creature

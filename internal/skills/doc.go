@@ -19,6 +19,8 @@
 //     skill damage, of effect success and abnormal time are pure functions
 //     with Mobius's rounding points and draw order.
 //   - The target types (K11) are pure functions over the World interface.
+//   - internal/skills/skilltest has fakes of the game side (scheduler,
+//     world, creatures) for the tests.
 //
 // Creatures, the world and time come in through interfaces (Creature,
 // Player, World, Scheduler) that internal/game implements; nothing here
