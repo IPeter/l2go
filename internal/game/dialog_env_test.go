@@ -198,7 +198,7 @@ func (e *testEnv) enterChar(c testChar) (*fakeSession, *Player) {
 		ch.Items = append(ch.Items, extra...)
 	}
 	// Straight into the store, so that the test's saves stay unrecorded.
-	if err := e.store.Characters.Update(e.ctx, &ch); err != nil {
+	if err := e.store.Update(e.ctx, &ch); err != nil {
 		e.t.Fatalf("Update: %v", err)
 	}
 	sess := newSession(c.account)

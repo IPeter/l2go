@@ -48,7 +48,6 @@ func m(recv, name, args, lua, ret string) *mapEntry {
 func (e *mapEntry) w() *mapEntry            { e.world = true; return e }
 func (e *mapEntry) feat(f string) *mapEntry { e.feature = f; return e }
 func (e *mapEntry) k() *mapEntry            { e.keep = true; return e }
-func (e *mapEntry) st(s string) *mapEntry   { e.stmt = s; return e }
 func (e *mapEntry) or(alt string) *mapEntry { e.alt = alt; return e }
 func (e *mapEntry) asView() *mapEntry       { e.view = true; return e }
 

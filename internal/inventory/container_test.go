@@ -87,8 +87,10 @@ func TestCreate(t *testing.T) {
 		if it.Count() != DefaultMaxAdena {
 			t.Errorf("adena = %d, want %d", it.Count(), DefaultMaxAdena)
 		}
-		p, _ := f.inv.Create(idPotion, math.MaxInt32)
-		p, _ = f.inv.Create(idPotion, 5)
+		if _, err := f.inv.Create(idPotion, math.MaxInt32); err != nil {
+			t.Fatal(err)
+		}
+		p, _ := f.inv.Create(idPotion, 5)
 		if p.Count() != math.MaxInt32 {
 			t.Errorf("potions = %d, want the int range", p.Count())
 		}
@@ -423,7 +425,9 @@ func TestLimits(t *testing.T) {
 	}
 
 	wh := NewWarehouse(func() int { return 2 }, Options{Templates: f.tmpls, IDs: f.ids})
-	wh.Create(idSword, 1)
+	if _, err := wh.Create(idSword, 1); err != nil {
+		t.Fatal(err)
+	}
 	if !wh.ValidateCapacity(1) || wh.ValidateCapacity(2) {
 		t.Error("warehouse ValidateCapacity")
 	}
@@ -449,8 +453,14 @@ func TestUpdates(t *testing.T) {
 	a := f.give(t, idAdena, 10)
 	b, _ := f.inv.Create(idSword, 1) // added
 	f.inv.Equip(b, Wearer{})         // added then modified: stays added
-	f.inv.Create(idAdena, 5)         // a modified
-	f.inv.Destroy(a, 15)             // a removed
+
+	// a modified, then removed
+	if _, err := f.inv.Create(idAdena, 5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.inv.Destroy(a, 15); err != nil {
+		t.Fatal(err)
+	}
 	u := f.inv.TakeUpdates()
 	want := []Update{{b, Added}, {a, Removed}}
 	if !slices.Equal(u, want) {

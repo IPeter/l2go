@@ -581,7 +581,7 @@ func (t *translator) coerce(v lx, typ *jtype) lx {
 			// Only compound assignments narrow implicitly in Java.
 			return v
 		}
-		if !(isUnknown(v.t) || v.t.kind == tkNull) && isA(v.t, typ.name) && typ.kind == tkClass && len(typ.args) == 0 && len(v.t.args) > 0 {
+		if !isUnknown(v.t) && v.t.kind != tkNull && isA(v.t, typ.name) && typ.kind == tkClass && len(typ.args) == 0 && len(v.t.args) > 0 {
 			return v
 		}
 		v.t = typ

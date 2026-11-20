@@ -292,10 +292,12 @@ func (inv *Inventory) equipItem(it *Item, w Wearer) {
 		set(storage.PaperdollRHand, it)
 	case data.BodyPartLHand:
 		rh := pd[storage.PaperdollRHand]
-		if rh != nil && rh.tmpl.Part() == data.BodyPartLRHand &&
-			!((isWeapon(rh.tmpl, data.WeaponBow) && isEtc(it.tmpl, data.EtcArrow)) ||
-				(isWeapon(rh.tmpl, data.WeaponFishingrod) && isEtc(it.tmpl, data.EtcLure))) {
-			set(storage.PaperdollRHand, nil)
+		if rh != nil && rh.tmpl.Part() == data.BodyPartLRHand {
+			ammo := (isWeapon(rh.tmpl, data.WeaponBow) && isEtc(it.tmpl, data.EtcArrow)) ||
+				(isWeapon(rh.tmpl, data.WeaponFishingrod) && isEtc(it.tmpl, data.EtcLure))
+			if !ammo {
+				set(storage.PaperdollRHand, nil)
+			}
 		}
 		set(storage.PaperdollLHand, it)
 	case data.BodyPartRHand:

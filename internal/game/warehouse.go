@@ -108,7 +108,7 @@ func warehouseItemInfo(it *inventory.Item) serverpackets.ItemInfo {
 func depositAvailable(it *inventory.Item) bool {
 	t := it.Template()
 	return !it.Equipped() && t.Type2 != typeQuest &&
-		!(t.Type2 == itemType2Money && t.Type1 == itemType1ShieldArmor) &&
+		(t.Type2 != itemType2Money || t.Type1 != itemType1ShieldArmor) &&
 		it.Depositable(true)
 }
 

@@ -25,8 +25,12 @@ func TestSaveDiff(t *testing.T) {
 	t.Run("changed, then destroyed: a delete", func(t *testing.T) {
 		f := newFixture(t)
 		p := f.give(t, idPotion, 10)
-		f.inv.Destroy(p, 3)
-		f.inv.Destroy(p, 7)
+		if _, err := f.inv.Destroy(p, 3); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.inv.Destroy(p, 7); err != nil {
+			t.Fatal(err)
+		}
 		ch := f.inv.Tracker().Take()
 		if len(ch.Upserts) != 0 || !slices.Equal(ch.Destroyed, []int32{p.ObjectID()}) {
 			t.Errorf("diff = %+v", ch)
@@ -36,7 +40,9 @@ func TestSaveDiff(t *testing.T) {
 		a, b := newFixture(t), newFixture(t)
 		sword := a.give(t, idSword, 1)
 		dropped, _ := a.inv.Drop(sword.ObjectID(), 1)
-		b.inv.Add(dropped)
+		if _, err := b.inv.Add(dropped); err != nil {
+			t.Fatal(err)
+		}
 		if ch := a.inv.Tracker().Take(); !slices.Equal(ch.Left, []int32{sword.ObjectID()}) || len(ch.Upserts) != 0 {
 			t.Errorf("dropper diff = %+v", ch)
 		}
@@ -49,7 +55,9 @@ func TestSaveDiff(t *testing.T) {
 		aAdena := a.give(t, idAdena, 100)
 		bAdena := b.give(t, idAdena, 5)
 		dropped, _ := a.inv.Drop(aAdena.ObjectID(), 100)
-		b.inv.Add(dropped)
+		if _, err := b.inv.Add(dropped); err != nil {
+			t.Fatal(err)
+		}
 		if ch := a.inv.Tracker().Take(); !slices.Equal(ch.Left, []int32{aAdena.ObjectID()}) {
 			t.Errorf("dropper diff = %+v", ch)
 		}
@@ -61,8 +69,12 @@ func TestSaveDiff(t *testing.T) {
 	t.Run("deposit and withdraw before a save", func(t *testing.T) {
 		f := newFixture(t)
 		sword := f.give(t, idSword, 1)
-		f.inv.Transfer(sword.ObjectID(), 1, f.wh)
-		f.wh.Transfer(sword.ObjectID(), 1, &f.inv.Container)
+		if _, err := f.inv.Transfer(sword.ObjectID(), 1, f.wh); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.wh.Transfer(sword.ObjectID(), 1, &f.inv.Container); err != nil {
+			t.Fatal(err)
+		}
 		ch := f.inv.Tracker().Take()
 		if len(ch.Left) != 0 || len(ch.Upserts) != 1 || ch.Upserts[0].Loc != storage.LocInventory {
 			t.Errorf("diff = %+v", ch)
@@ -88,7 +100,9 @@ func TestSaveDiff(t *testing.T) {
 		a, _ := f.inv.Create(idSword, 1)
 		b, _ := f.inv.Create(idPotion, 2)
 		a.SetEnchant(2)
-		f.inv.Create(idPotion, 3)
+		if _, err := f.inv.Create(idPotion, 3); err != nil {
+			t.Fatal(err)
+		}
 		ch := f.inv.Tracker().Take()
 		if !slices.Equal(objectIDs(ch.Upserts), []int32{a.ObjectID(), b.ObjectID()}) || ch.Upserts[0].Enchant != 2 || ch.Upserts[1].Count != 5 {
 			t.Errorf("diff = %+v", ch)

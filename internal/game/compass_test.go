@@ -29,7 +29,7 @@ func TestCompassZoneCode(t *testing.T) {
 	sess := newSession("hero")
 	ch := e.createCharacter("hero", "Hero", classHumanFighter, 0)
 	ch.X, ch.Y, ch.Z = tiStart.X, tiStart.Y, tiStart.Z
-	if err := e.store.Characters.Update(e.ctx, &ch); err != nil {
+	if err := e.store.Update(e.ctx, &ch); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 	p := e.enter(sess, 0)

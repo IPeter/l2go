@@ -117,8 +117,8 @@ func (s *Server) randomWalk(n *Npc, home world.Position, terr *data.SpawnTerrito
 			dx := s.rnd.Get(drift * 2)
 			dy := s.rnd.Between(dx, drift*2)
 			dy = int(math.Sqrt(float64(dy*dy - dx*dx)))
-			x := int32(dx) + pos.X - int32(drift)
-			y := int32(dy) + pos.Y - int32(drift)
+			x := int32(dx) + pos.X - int32(drift) //nolint:gosec // within twice the drift range, a world distance
+			y := int32(dy) + pos.Y - int32(drift) //nolint:gosec // as above
 			if !territoryContainsXY(terr, x, y) {
 				continue
 			}
@@ -138,8 +138,8 @@ func (s *Server) randomWalk(n *Npc, home world.Position, terr *data.SpawnTerrito
 		dx := s.rnd.Get(drift * 2)
 		dy := s.rnd.Between(dx, drift*2)
 		dy = int(math.Sqrt(float64(dy*dy - dx*dx)))
-		to.X = int32(dx) + home.X - int32(drift)
-		to.Y = int32(dy) + home.Y - int32(drift)
+		to.X = int32(dx) + home.X - int32(drift) //nolint:gosec // within twice the drift range, a world distance
+		to.Y = int32(dy) + home.Y - int32(drift) //nolint:gosec // as above
 		to.Z = pos.Z
 	}
 	if !npcFlying(n) {
@@ -236,13 +236,13 @@ func (s *Server) npcThinkAttack(n *Npc) {
 	collision := npcCollision(n)
 	combined := collision + creatureCollision(most)
 	if s.rnd.Get(100) <= aiCrowdChance && s.crowded(n, most, collision) {
-		nx := int32(combined) + int32(s.rnd.Get(40))
+		nx := int32(combined) + int32(s.rnd.Get(40)) //nolint:gosec // below 40
 		if s.rnd.Bool() {
 			nx = tpos.X + nx
 		} else {
 			nx = tpos.X - nx
 		}
-		ny := int32(combined) + int32(s.rnd.Get(40))
+		ny := int32(combined) + int32(s.rnd.Get(40)) //nolint:gosec // below 40
 		if s.rnd.Bool() {
 			ny = tpos.Y + ny
 		} else {
@@ -273,7 +273,7 @@ func (s *Server) npcThinkAttack(n *Npc) {
 		}
 	}
 
-	rng := int32(n.Stats.PhysicalAttackRange()) + combined
+	rng := int32(n.Stats.PhysicalAttackRange()) + combined //nolint:gosec // a weapon's reach
 	if n.Move != nil {
 		rng *= 2
 	}
@@ -372,6 +372,7 @@ func (s *Server) movementDisabledThink(n *Npc) {
 	}
 	dist := n.Position().Distance2D(target.Position())
 	s.rnd.Get(100) // Mobius draws for its skill chances
+	//nolint:gosec // a weapon's reach
 	reach := int32(n.Stats.PhysicalAttackRange()) + npcCollision(n) + creatureCollision(target)
 	if dist <= float64(reach) && s.canSee(n, target) {
 		s.npcDoAttack(n, target)
@@ -415,7 +416,7 @@ func (s *Server) targetReconsider(n *Npc) Creature {
 		return best
 	}
 	r := s.npcAggroRange(n)
-	for v := range s.world.VisiblePlayersInRange(n, int32(r)) {
+	for v := range s.world.VisiblePlayersInRange(n, int32(r)) { //nolint:gosec // aggro ranges are small template values
 		if p, ok := v.(*Player); ok && s.checkTarget(n, p) {
 			return p
 		}
@@ -447,7 +448,7 @@ func isClan(a, b *aiClass) bool {
 // attacker, if they see it.
 func (s *Server) callClanHelp(n *Npc, attacker Creature) {
 	c := s.aiClassOf(n)
-	r := int32(c.clanHelpRange) + npcCollision(n)
+	r := int32(c.clanHelpRange) + npcCollision(n) //nolint:gosec // clan help ranges are small template values
 	for _, other := range s.clanCandidates(n, r) {
 		if !other.ai.attached || other.Dead || abs32(attacker.Position().Z-other.Position().Z) > aiClanHelpMaxDZ {
 			continue
@@ -480,7 +481,7 @@ func (s *Server) callClanOnKill(n *Npc, killer *Player) {
 	if len(c.clans) == 0 {
 		return
 	}
-	for _, other := range s.clanCandidates(n, int32(c.clanHelpRange)) {
+	for _, other := range s.clanCandidates(n, int32(c.clanHelpRange)) { //nolint:gosec // clan help ranges are small template values
 		if other.Dead || !other.ai.attached || abs32(killer.Position().Z-other.Position().Z) > aiClanHelpMaxDZ {
 			continue
 		}

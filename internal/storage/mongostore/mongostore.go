@@ -237,7 +237,7 @@ type faultHook struct {
 }
 
 // arm makes the next write transaction fail with err.
-func (h *faultHook) arm(err error) {
+func (h *faultHook) arm(err error) { //nolint:unused // used by the integration tests
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.err = err

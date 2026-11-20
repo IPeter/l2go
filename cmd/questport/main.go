@@ -73,7 +73,7 @@ func run(args []string) error {
 		return err
 	}
 	text := rep.String()
-	if err := os.WriteFile(filepath.Join(*out, "REPORT.txt"), []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(*out, "REPORT.txt"), []byte(text), 0o644); err != nil { //nolint:gosec // the report is meant to be read
 		return fmt.Errorf("write report: %w", err)
 	}
 	if *report {

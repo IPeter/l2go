@@ -314,7 +314,7 @@ func (e *Engine) Death(ctx context.Context, script string, killer any, victim Pl
 	if reg, ok := s.handlerFor(hookDeath, 0); ok {
 		defer e.settle()
 		_, err := v.handlerCall(ctx, e.opts.Timeout, s, reg.handler, "on_death", func() []lua.LValue {
-			var st lua.LValue = lua.LNil
+			st := lua.LNil
 			if v.quest.world != nil {
 				st = v.newQuestState(v.L, victim, v.quest.world.QuestState(victim, s.name))
 			}

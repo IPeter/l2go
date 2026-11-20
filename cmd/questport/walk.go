@@ -216,28 +216,6 @@ func mentionsName(n any, name string) bool {
 	return found
 }
 
-// hasSideEffects reports whether evaluating e may change state: calls
-// (other than a few pure getters), assignments, increments, new objects.
-func hasSideEffects(e expr) bool {
-	found := false
-	inspect(e, func(x any) bool {
-		switch v := x.(type) {
-		case *assignExpr:
-			found = true
-		case *unaryExpr:
-			if v.op == "++" || v.op == "--" {
-				found = true
-			}
-		case *callExpr:
-			found = true
-		case *newExpr:
-			found = true
-		}
-		return !found
-	})
-	return found
-}
-
 // loopJumps finds the break and continue statements that leave the loop
 // body s itself: those not inside a nested loop (or, for break, a nested
 // switch).
@@ -285,21 +263,6 @@ func loopJumps(s stmt) (breaks, continues []stmt) {
 	}
 	walk(s, false)
 	return breaks, continues
-}
-
-// labeledJumps reports whether the tree has labeled break or continue.
-func labeledJumps(n any) bool {
-	found := false
-	inspect(n, func(x any) bool {
-		switch v := x.(type) {
-		case *breakStmt:
-			found = found || v.label != ""
-		case *continueStmt:
-			found = found || v.label != ""
-		}
-		return !found
-	})
-	return found
 }
 
 // endsAbruptly reports whether control cannot fall off the end of the

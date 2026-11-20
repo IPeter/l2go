@@ -130,7 +130,7 @@ func CheckAreaOffensive(env *Env, caster, target Creature, s *Skill, inArena boo
 			if inParty(env, caster) && inParty(env, target) && sameParty(env, caster, target) {
 				return false
 			}
-			if !inArena && !(target.InsideZone(ZonePvP) && !target.InsideZone(ZoneSiege)) {
+			if !inArena && (!target.InsideZone(ZonePvP) || target.InsideZone(ZoneSiege)) {
 				if player.AllyID() != 0 && player.AllyID() == tp.AllyID() {
 					return false
 				}
@@ -202,7 +202,7 @@ func targetAura(env *Env, s *Skill, caster Creature, onlyFirst bool, _ Creature)
 // and the origin of the area (the target for a skill with a cast range,
 // else the caster). done is set when the list is final.
 func areaOrigin(env *Env, s *Skill, caster Creature, onlyFirst bool, target Creature, firstBeforeAdd bool) (list []Creature, origin Creature, done bool) {
-	if target == nil || ((same(target, caster) || target.IsAlikeDead()) && s.CastRange >= 0) || !(isAttackable(target) || isPlayable(target)) {
+	if target == nil || ((same(target, caster) || target.IsAlikeDead()) && s.CastRange >= 0) || (!isAttackable(target) && !isPlayable(target)) {
 		return incorrectTarget(caster), nil, true
 	}
 	if s.CastRange < 0 {
@@ -229,7 +229,7 @@ func targetArea(env *Env, s *Skill, caster Creature, onlyFirst bool, target Crea
 	inArena := srcInArena(caster)
 	limit := s.RollAffectLimit(env.Rand)
 	for _, obj := range visible(env, caster) {
-		if !(isAttackable(obj) || isPlayable(obj)) || same(obj, origin) {
+		if (!isAttackable(obj) && !isPlayable(obj)) || same(obj, origin) {
 			continue
 		}
 		if !inRange(s.AffectRange, origin, obj, true) {
@@ -258,7 +258,7 @@ func targetFrontArea(env *Env, s *Skill, caster Creature, onlyFirst bool, target
 	inArena := srcInArena(caster)
 	limit := s.RollAffectLimit(env.Rand)
 	for _, obj := range visible(env, caster) {
-		if !(isAttackable(obj) || isPlayable(obj)) || same(obj, origin) {
+		if (!isAttackable(obj) && !isPlayable(obj)) || same(obj, origin) {
 			continue
 		}
 		if !inRange(s.AffectRange, origin, obj, true) {
@@ -284,7 +284,7 @@ func targetAuraSide(env *Env, s *Skill, caster Creature, onlyFirst bool, front b
 	inArena := srcInArena(caster)
 	limit := s.RollAffectLimit(env.Rand)
 	for _, obj := range visibleInRange(env, caster, s.AffectRange) {
-		if !(isAttackable(obj) || isPlayable(obj)) {
+		if !isAttackable(obj) && !isPlayable(obj) {
 			continue
 		}
 		if front && !isInFrontOf(obj, caster) || !front && !isBehind(obj, caster) {
@@ -434,7 +434,7 @@ func targetAreaCorpseMob(env *Env, s *Skill, caster Creature, onlyFirst bool, ta
 	}
 	inArena := srcInArena(caster)
 	for _, obj := range visible(env, caster) {
-		if !(isAttackable(obj) || isPlayable(obj)) || !inRange(s.AffectRange, target, obj, true) {
+		if (!isAttackable(obj) && !isPlayable(obj)) || !inRange(s.AffectRange, target, obj, true) {
 			continue
 		}
 		if !CheckAreaOffensive(env, caster, obj, s, inArena) {

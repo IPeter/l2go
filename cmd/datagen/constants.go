@@ -36,14 +36,14 @@ func init() { registerDomain("constants", genConstants) }
 func genConstants(o options) error {
 	readers := []func(options) (data.ConstantTable, error){
 		enumConstants(data.ConstCategory, "data/enums/CategoryType", data.NumCategoryTypes,
-			func(i int) string { return data.CategoryType(i).String() }),
+			func(i int) string { return data.CategoryType(i).String() }), //nolint:gosec // i < NumCategoryTypes
 		readChatTypes,
 		classConstants,
 		readPaperdoll,
 		readQuestSounds,
 		readQuestTypes,
 		enumConstants(data.ConstRace, "entity/actor/enums/creature/Race", data.NumRaces,
-			func(i int) string { return data.Race(i).String() }),
+			func(i int) string { return data.Race(i).String() }), //nolint:gosec // i < NumRaces
 		readSexes,
 		readQuestStates,
 		readSystemMessageIDs,

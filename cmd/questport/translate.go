@@ -32,10 +32,10 @@ func translateAll(dir string, names []string, out string) (*report, error) {
 			continue
 		}
 		target := filepath.Join(out, name, name+".lua")
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil { //nolint:gosec // the script folder is meant to be readable
 			return nil, fmt.Errorf("create output folder: %w", err)
 		}
-		if err := os.WriteFile(target, []byte(lua), 0o644); err != nil {
+		if err := os.WriteFile(target, []byte(lua), 0o644); err != nil { //nolint:gosec // generated scripts are public
 			return nil, fmt.Errorf("write %s: %w", target, err)
 		}
 		res.out = target
@@ -297,7 +297,6 @@ type jumpTarget struct {
 	luaLoop   bool   // a Lua loop stands for it: break works directly
 	contBreak bool   // continue is written as break (the body runs in repeat ... until true)
 	brkFlag   string // break sets this flag before leaving the repeat block
-	contTail  bool   // continue handled by the if-rewrite: never reached
 }
 
 type scope struct {
@@ -765,7 +764,7 @@ func (t *translator) collectFields(inits []member) {
 			if t.inner[f.lua] != nil || f.lua == "K" {
 				f.lua += "_"
 			}
-			if isRef(typ) && !(f.final && f.static) {
+			if isRef(typ) && (!f.final || !f.static) {
 				f.ref = true
 			}
 			if (isMap(typ) || isSequence(typ) || isSet(typ)) && containsRefType(typ) {
@@ -813,9 +812,8 @@ func (t *translator) pureInit(e expr) bool {
 		}
 		switch v := x.(type) {
 		case *callExpr:
-			switch {
-			case v.name == "getSimpleName":
-			case v.name == "asList" || v.name == "of":
+			switch v.name {
+			case "getSimpleName", "asList", "of":
 			default:
 				pure = false
 			}

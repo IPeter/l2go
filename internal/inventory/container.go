@@ -201,7 +201,7 @@ func (c *Container) record(it *Item, ch Change) {
 	}
 	for i := range c.updates {
 		if c.updates[i].Item.objectID == it.objectID {
-			if !(c.updates[i].Change == Added && ch == Modified) {
+			if c.updates[i].Change != Added || ch != Modified {
 				c.updates[i] = Update{Item: it, Change: ch}
 			}
 			return

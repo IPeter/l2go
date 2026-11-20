@@ -29,10 +29,9 @@ var waveB = []data.EffectName{
 
 // The skill values the Wave B tests use.
 var (
-	bDebuff   = map[string]string{"operateType": "A2", "abnormalTime": "10", "isDebuff": "true", "effectPoint": "-100", "targetType": "ONE"}
-	bToggle   = map[string]string{"operateType": "T"}
-	bMagic    = map[string]string{"operateType": "A1", "isMagic": "1", "power": "12", "magicLevel": "1", "targetType": "ONE", "effectPoint": "-100"}
-	bPhysical = map[string]string{"operateType": "A1", "power": "100", "targetType": "ONE", "effectPoint": "-100"}
+	bDebuff = map[string]string{"operateType": "A2", "abnormalTime": "10", "isDebuff": "true", "effectPoint": "-100", "targetType": "ONE"}
+	bToggle = map[string]string{"operateType": "T"}
+	bMagic  = map[string]string{"operateType": "A1", "isMagic": "1", "power": "12", "magicLevel": "1", "targetType": "ONE", "effectPoint": "-100"}
 )
 
 // bTicking returns the GENERAL effects of one ticking effect.

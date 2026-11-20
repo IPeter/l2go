@@ -197,10 +197,9 @@ type catchClause struct {
 
 type tryStmt struct {
 	stmtBase
-	resources []stmt
-	body      *blockStmt
-	catches   []*catchClause
-	finally   *blockStmt
+	body    *blockStmt
+	catches []*catchClause
+	finally *blockStmt
 }
 
 type labeledStmt struct {

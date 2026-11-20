@@ -423,8 +423,7 @@ func TestWeightPenalty(t *testing.T) {
 		halved  bool
 	}{{55, 1, false}, {70, 2, true}, {90, 3, true}, {105, 4, true}} {
 		e.give(p, itemMithrilOre, ore(step.percent))
-		var etc []testclient.EtcStatusUpdate
-		etc = only[testclient.EtcStatusUpdate](sess.take(t))
+		etc := only[testclient.EtcStatusUpdate](sess.take(t))
 		if len(etc) != 1 || etc[0].WeightPenalty != step.level {
 			t.Errorf("at %d%%: EtcStatusUpdate %+v, want level %d", step.percent, etc, step.level)
 		}

@@ -116,7 +116,7 @@ func (e *testEnv) enterDeathChar(c deathChar) (*fakeSession, *Player) {
 		}
 		ch.Items = append(ch.Items, c.items...)
 	}
-	if err := e.store.Characters.Update(e.ctx, &ch); err != nil {
+	if err := e.store.Update(e.ctx, &ch); err != nil {
 		e.t.Fatalf("Update: %v", err)
 	}
 	sess := newSession(c.account)
@@ -368,7 +368,7 @@ func TestEnterWorldDead(t *testing.T) {
 	e := newEnv(t, nil)
 	c := e.createCharacter("alice", "Alice", classHumanFighter, storage.AccessLevelPlayer)
 	c.CurHP = 0
-	if err := e.store.Characters.Update(e.ctx, &c); err != nil {
+	if err := e.store.Update(e.ctx, &c); err != nil {
 		t.Fatal(err)
 	}
 	sess := newSession("alice")

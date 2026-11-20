@@ -100,13 +100,13 @@ func (v *vm) timeFuncs() map[string]lua.LGFunction {
 func (v *vm) worldFuncs() map[string]lua.LGFunction {
 	return map[string]lua.LGFunction{
 		"find_object": func(L *lua.LState) int {
-			id := checkInt(L, 1, "world.find_object")
-			L.Push(v.objectValue(L, v.needWorld(L, "world.find_object").FindObject(int32(id))))
+			id := checkObjectID(L, 1, "world.find_object")
+			L.Push(v.objectValue(L, v.needWorld(L, "world.find_object").FindObject(id)))
 			return 1
 		},
 		"get_player": func(L *lua.LState) int {
-			id := checkInt(L, 1, "world.get_player")
-			obj := v.needWorld(L, "world.get_player").FindObject(int32(id))
+			id := checkObjectID(L, 1, "world.get_player")
+			obj := v.needWorld(L, "world.get_player").FindObject(id)
 			if p, ok := obj.(PlayerRef); ok {
 				L.Push(v.newPlayer(L, p))
 			} else {
@@ -115,6 +115,16 @@ func (v *vm) worldFuncs() map[string]lua.LGFunction {
 			return 1
 		},
 	}
+}
+
+// checkObjectID returns argument n as an object ID (a Java int).
+func checkObjectID(L *lua.LState, n int, fn string) int32 {
+	id := checkInt(L, n, fn)
+	if id < math.MinInt32 || id > math.MaxInt32 {
+		L.ArgError(n, fn+": an object ID expected, got "+L.Get(n).String())
+		return 0
+	}
+	return int32(id)
 }
 
 // objectValue returns the Lua value of a world object: a Player, an Npc or

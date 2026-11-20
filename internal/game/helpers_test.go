@@ -426,7 +426,7 @@ func (s *recordingStore) Save(ctx context.Context, c *storage.Character, changes
 	if err := s.Characters.Save(ctx, c, changes); err != nil {
 		return err
 	}
-	snap, err := s.Characters.Get(ctx, c.ObjectID)
+	snap, err := s.Get(ctx, c.ObjectID)
 	if err != nil {
 		return err
 	}

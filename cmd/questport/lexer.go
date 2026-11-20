@@ -226,7 +226,7 @@ func (lx *lexer) next() (token, error) {
 	case isIdentStart(c):
 		for lx.pos < len(lx.src) {
 			r, size := utf8.DecodeRuneInString(lx.src[lx.pos:])
-			if !(r == '_' || r == '$' || unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			if r != '_' && r != '$' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
 				break
 			}
 			lx.advance(size)
@@ -306,7 +306,7 @@ func (lx *lexer) number() (tokKind, string, error) {
 			return 0, "", lx.errf("bad number %q", s[start:lx.pos])
 		}
 		if kind == tInt && v <= 0xFFFFFFFF && v > 0x7FFFFFFF {
-			return kind, strconv.FormatInt(int64(int32(uint32(v))), 10), nil
+			return kind, strconv.FormatInt(int64(int32(uint32(v))), 10), nil //nolint:gosec // same bits: a Java int hex literal
 		}
 		return kind, strconv.FormatUint(v, 10), nil
 	}
@@ -320,7 +320,7 @@ func (lx *lexer) number() (tokKind, string, error) {
 		for lx.pos < len(s) && isDigit(s[lx.pos], false) {
 			lx.advance(1)
 		}
-	} else if lx.pos < len(s) && s[lx.pos] == '.' && !(lx.pos+1 < len(s) && isIdentStart(s[lx.pos+1])) {
+	} else if lx.pos < len(s) && s[lx.pos] == '.' && (lx.pos+1 >= len(s) || !isIdentStart(s[lx.pos+1])) {
 		// "1." is a double literal.
 		isFloat = true
 		lx.advance(1)
@@ -411,7 +411,7 @@ func (lx *lexer) quoted(q byte) (string, error) {
 				v = v*8 + int(lx.src[lx.pos]-'0')
 				lx.advance(1)
 			}
-			b.WriteRune(rune(v))
+			b.WriteRune(rune(v)) //nolint:gosec // at most three octal digits
 		case 'u':
 			for lx.pos < len(lx.src) && lx.src[lx.pos] == 'u' {
 				lx.advance(1)
@@ -424,7 +424,7 @@ func (lx *lexer) quoted(q byte) (string, error) {
 				return "", lx.errf("bad unicode escape")
 			}
 			lx.advance(4)
-			b.WriteRune(rune(v))
+			b.WriteRune(rune(v)) //nolint:gosec // four hex digits
 		default:
 			b.WriteByte(e)
 		}

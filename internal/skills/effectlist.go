@@ -348,7 +348,9 @@ func (l *EffectList) evictForLimit(sk *Skill) {
 	total := l.BuffCount() + l.DanceCount()
 	maxDances := l.env.Config.MaxDanceAmount
 	dances := l.DanceCount()
-	if !(total >= l.MaxBuffCount() && !sk.IsHealingPotion()) && !(sk.IsDance() && dances >= maxDances) {
+	buffsFull := total >= l.MaxBuffCount() && !sk.IsHealingPotion()
+	dancesFull := sk.IsDance() && dances >= maxDances
+	if !buffsFull && !dancesFull {
 		return
 	}
 	var oldest *BuffInfo

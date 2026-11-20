@@ -685,8 +685,7 @@ func rewriteContinues(stmts []stmt) ([]stmt, bool) {
 }
 
 func (t *translator) whileStmt(v *whileStmt) {
-	var cond lx
-	cond = t.noHoisting(func() lx { return t.expr(v.cond) })
+	cond := t.noHoisting(func() lx { return t.expr(v.cond) })
 	t.emitLine("while " + cond.code + " do")
 	t.loopBody(v.body, nil)
 	t.w.line("end")

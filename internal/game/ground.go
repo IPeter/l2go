@@ -150,7 +150,7 @@ func (s *Server) groundTime(t *data.Item, playerDrop bool) (time.Duration, bool)
 		if after <= 0 || !cfg.DestroyPlayerDroppedItem || (t.Equipable() && !cfg.DestroyEquipableItem) {
 			return 0, false
 		}
-	} else if !((after > 0 && !herb) || (herbTime > 0 && herb)) {
+	} else if (after <= 0 || herb) && (herbTime <= 0 || !herb) {
 		return 0, false
 	}
 	switch {

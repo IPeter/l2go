@@ -622,7 +622,8 @@ func (p *parser) statementInner() stmt {
 // starts here, or nil (position unchanged) when this is an expression.
 func (p *parser) tryLocalVarType() *typeRef {
 	t := p.tok()
-	if !(t.kind == tIdent || (t.kind == tKeyword && primitiveTypes[t.text] && t.text != "void")) {
+	startsType := t.kind == tIdent || (t.kind == tKeyword && primitiveTypes[t.text] && t.text != "void")
+	if !startsType {
 		return nil
 	}
 	save := p.p
