@@ -51,6 +51,7 @@
         "deleteCharAfterDays": 7,
         "maxRunSpeed": 250,
         "spawnProtection": "10m",
+        "autoLearnSkills": false,
         "gridsAlwaysOn": false,
         "gridTurnOnTime": "1s",
         "gridTurnOffTime": "90s"

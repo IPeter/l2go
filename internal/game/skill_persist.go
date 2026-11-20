@@ -52,7 +52,8 @@ func (a *skillPlayer) unstoreSkill(id int) bool {
 // loadSkills gives a selected player its skills, as Mobius Player.load
 // does before it sets the HP: the saved skills of the active class (a level
 // the data does not have is skipped but kept saved, as Mobius keeps its
-// row), then the auto-get skills; then the HP, MP and CP of the character
+// row), then the auto-get skills (with AutoLearnSkills every skill its class
+// can have at its level, without packets); then the HP, MP and CP of the character
 // within the maxima the passives give. It runs on the loop, before
 // CharSelected shows them.
 func (s *Server) loadSkills(p *Player) {
@@ -70,7 +71,11 @@ func (s *Server) loadSkills(p *Player) {
 			s.log.Warn("game: skipping a saved skill the data does not have", append(p.logArgs(), "skill", r.ID, "level", r.Level)...)
 		}
 	}
-	s.giveAutoGetSkills(p)
+	if s.settings.AutoLearnSkills {
+		s.learnAvailableSkills(p, false, false, false) // rewardSkills (skill_known.go)
+	} else {
+		s.giveAutoGetSkills(p)
+	}
 	if !p.IsGM() {
 		s.checkPlayerSkills(p) // the rest of rewardSkills (skill_learn.go)
 	}

@@ -247,13 +247,20 @@ func (s *Server) addTemplateSkills(n *Npc) {
 	}
 }
 
-// RewardSkills is Mobius Player.rewardSkills with AutoLearnSkills off: the
-// auto-get skills of p's class tree up to its level, saved; for a non-GM
-// the skills too far above its level drop (checkPlayerSkills,
-// skill_learn.go); then SkillList. Login and every level change run it.
-// Loop-only.
+// RewardSkills is Mobius Player.rewardSkills: the auto-get skills of p's
+// class tree up to its level, saved; with AutoLearnSkills every skill of
+// its class it can have at its level instead (giveAvailableSkills without
+// Forgotten Scroll and spellbook skills, as Mobius AutoLearnForgottenScrolls
+// and AutoLearnSkillsWithoutItems default to false); for a non-GM the
+// skills too far above its level drop (checkPlayerSkills, skill_learn.go);
+// then SkillList. Login and every level change run it. Loop-only.
 func (s *Server) RewardSkills(p *Player) {
-	changed := s.giveAutoGetSkills(p)
+	var changed bool
+	if s.settings.AutoLearnSkills {
+		s.giveAvailableSkills(p, false, false) // AddSkill saves what it adds
+	} else {
+		changed = s.giveAutoGetSkills(p)
+	}
 	if !p.IsGM() && s.checkPlayerSkills(p) {
 		changed = true
 	}

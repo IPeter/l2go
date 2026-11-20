@@ -187,6 +187,7 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `deleteCharAfterDays` | `7` | How long a deleted character can be restored (0-3650 days). After that it is removed for good the next time its account's character list is shown. `0` deletes at once. |
 | `maxRunSpeed` | `250` | Highest run speed of players. |
 | `spawnProtection` | `"10m"` | How long a player that entered the world is safe from aggressive monsters. Its first click, attack or walk ends it, with a message outside peace zones. `"0s"` turns it off. |
+| `autoLearnSkills` | `false` | `true` gives players every skill of their class up to their level, without SP or spellbooks, at login and on every level change (Mobius `AutoLearnSkills`). Forgotten Scroll skills are not included. The Docker Compose test server turns it on. |
 | `gridsAlwaysOn` | `false` | `true` keeps every world region active, so monsters think even where no player is. |
 | `gridTurnOnTime`, `gridTurnOffTime` | `"1s"`, `"90s"` | Delay before the regions next to a player become active, and before regions with no player around become inactive (Mobius `GridNeighborTurnOnTime`/`TurnOffTime`). |
 

@@ -30,8 +30,8 @@ const (
 )
 
 // newLearnEnv starts a server with the skill data, the world data and
-// Baulro's pages.
-func newLearnEnv(t *testing.T) *testEnv {
+// Baulro's pages; opts change the game server config.
+func newLearnEnv(t *testing.T, opts ...func(*config.GameServer)) *testEnv {
 	t.Helper()
 	d := testGameData(t)
 	dataDir := t.TempDir()
@@ -46,6 +46,9 @@ func newLearnEnv(t *testing.T) *testEnv {
 	gs.World.AutosaveInterval = 0
 	gs.World.SpawnProtection = 0
 	gs.DataDir = dataDir
+	for _, opt := range opts {
+		opt(gs)
+	}
 	store := newRecordingStore()
 	clock := world.NewFakeClock(testStart)
 	ids := memstore.NewIDs()

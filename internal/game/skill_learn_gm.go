@@ -209,8 +209,17 @@ func (s *Server) gmGiveAllSkills(gm *Player, args []string) {
 // giveAvailableSkills is Mobius Player.giveAvailableSkills(byFS, autoGet
 // true, withItems): every skill level getAllAvailableSkills finds that p
 // does not know yet is added and saved (a toggle of it that runs is stopped
-// first). It returns how many of them p did not know at all.
+// first). With AutoLearnSkills the shortcuts of each skill take its new
+// level, and when a skill was new p gets ShortcutInit and "You have learned
+// N new skills.". It returns how many of them p did not know at all.
 func (s *Server) giveAvailableSkills(p *Player, byFS, withItems bool) int {
+	return s.learnAvailableSkills(p, byFS, withItems, true)
+}
+
+// learnAvailableSkills is giveAvailableSkills; without send p gets no
+// packet, as at character selection, where Mobius Player.load runs
+// rewardSkills before the client is attached.
+func (s *Server) learnAvailableSkills(p *Player, byFS, withItems, send bool) int {
 	all := s.allAvailableSkills(p, byFS, withItems)
 	ids := make([]int, 0, len(all))
 	for id := range all {
@@ -230,6 +239,13 @@ func (s *Server) giveAvailableSkills(p *Player, byFS, withItems bool) int {
 			p.Effects().StopSkill(skills.FinishRemoved, id)
 		}
 		s.AddSkill(p, sk, true)
+		if s.settings.AutoLearnSkills && send {
+			s.UpdateSkillShortcuts(p, sk.ID, sk.Level)
+		}
+	}
+	if s.settings.AutoLearnSkills && send && count > 0 {
+		p.Send(shortcutInitPacket(p))
+		p.SendMessage("You have learned " + strconv.Itoa(count) + " new skills.")
 	}
 	return count
 }

@@ -45,12 +45,13 @@
       },
 
       "world": {
-        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off). World regions become active when a player comes near (neighbours after gridTurnOnTime) and inactive gridTurnOffTime after the last one left; gridsAlwaysOn keeps them all active.",
+        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off). autoLearnSkills gives players every skill of their class up to their level at login and level-up, without SP or spellbooks (true on this test server; Mobius default false). World regions become active when a player comes near (neighbours after gridTurnOnTime) and inactive gridTurnOffTime after the last one left; gridsAlwaysOn keeps them all active.",
         "tickInterval": "100ms",
         "autosaveInterval": "15m",
         "deleteCharAfterDays": 7,
         "maxRunSpeed": 250,
         "spawnProtection": "10m",
+        "autoLearnSkills": true,
         "gridsAlwaysOn": false,
         "gridTurnOnTime": "1s",
         "gridTurnOffTime": "90s"

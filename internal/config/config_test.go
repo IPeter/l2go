@@ -49,6 +49,10 @@ func TestComposeFileIsValid(t *testing.T) {
 	if got := cfg.LoginServer.GameServerAddr(); got != "login:9413" {
 		t.Errorf("GameServerAddr = %q, want login:9413", got)
 	}
+	// The Docker test server learns skills on level-up.
+	if !cfg.GameServers[0].World.AutoLearnSkills {
+		t.Error("compose world.autoLearnSkills = false, want true")
+	}
 }
 
 func TestLoadMissingFileUsesDefaults(t *testing.T) {
@@ -195,7 +199,7 @@ func TestParseGameSections(t *testing.T) {
 			g.Geodata = Geodata{Dir: "/srv/geo"}
 		}},
 		{"every new key", `{"id": 1,
-			"world": {"gridsAlwaysOn": true, "gridTurnOnTime": "2s", "gridTurnOffTime": "1m"},
+			"world": {"autoLearnSkills": true, "gridsAlwaysOn": true, "gridTurnOnTime": "2s", "gridTurnOffTime": "1m"},
 			"npcs": {"defaultCorpseTime": "5s", "spoiledCorpseExtendTime": "0s", "maxAggroRange": 600, "maxDriftRange": 0,
 				"mobAggroInPeaceZone": false, "aggroDistanceCheck": true, "aggroDistanceCheckRange": 3000, "attackablesCampPlayerCorpses": true},
 			"items": {"_comment": "i", "allowDiscardItem": false, "autoDestroyDroppedItemAfter": "0s", "autoDestroyHerbTime": "30s", "listOfProtectedItems": [57, 1060],
@@ -214,6 +218,7 @@ func TestParseGameSections(t *testing.T) {
 			"pvp": {"pvpVsNormalTime": "1m", "pvpVsPvpTime": "0s", "minimumPkRequiredToDrop": 0, "karmaDropLimit": 1, "karmaRateDrop": 100,
 				"karmaRateDropItem": 0, "karmaRateDropEquip": 1, "karmaRateDropEquipWeapon": 2, "listOfNonDroppableItems": [], "listOfPetItems": [1],
 				"canGMDropEquipment": true, "awardPKKillPVPPoint": true, "karmaPlayerCanBeKilledInPeaceZone": true}}`, func(g *GameServer) {
+			g.World.AutoLearnSkills = true
 			g.World.GridsAlwaysOn = true
 			g.World.GridTurnOnTime = Duration(2 * time.Second)
 			g.World.GridTurnOffTime = Duration(time.Minute)
@@ -298,6 +303,7 @@ func TestDefaultGameSections(t *testing.T) {
 		DeleteCharAfterDays: 7,
 		MaxRunSpeed:         250,
 		SpawnProtection:     Duration(10 * time.Minute),
+		AutoLearnSkills:     false,
 		GridsAlwaysOn:       false,
 		GridTurnOnTime:      Duration(time.Second),
 		GridTurnOffTime:     Duration(90 * time.Second),

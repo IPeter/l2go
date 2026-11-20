@@ -69,6 +69,9 @@ type Settings struct {
 	// SpawnProtection is how long a player that entered the world is safe
 	// from aggressive monsters; 0 turns it off.
 	SpawnProtection time.Duration
+	// AutoLearnSkills gives players every skill of their class up to their
+	// level at login and on every level change (Mobius AutoLearnSkills).
+	AutoLearnSkills bool
 	Chat            config.Chat
 	NPCs            config.NPCs
 	// GeodataDir is the geodata folder, empty without geodata.
@@ -89,6 +92,7 @@ func settingsFrom(gs config.GameServer) Settings {
 		DeleteCharAfterDays: w.DeleteCharAfterDays,
 		MaxRunSpeed:         w.MaxRunSpeed,
 		SpawnProtection:     max(time.Duration(w.SpawnProtection), 0),
+		AutoLearnSkills:     w.AutoLearnSkills,
 		Chat:                gs.Chat,
 		NPCs:                gs.NPCs,
 		GeodataDir:          gs.Geodata.Dir,
@@ -170,12 +174,13 @@ type Server struct {
 	quest    questFeature // quest.go
 
 	// multisell and warehouse are in multisell.go and warehouse.go.
-	multisell multisellFeature
-	warehouse warehouseFeature
-	skills    skillsFeature    // skill_feature.go
-	learn     learnFeature     // skill_learn.go
-	itemSkill itemSkillFeature // item_skill.go
-	adminChar adminCharFeature // admin_char.go
+	multisell  multisellFeature
+	warehouse  warehouseFeature
+	skills     skillsFeature     // skill_feature.go
+	learn      learnFeature      // skill_learn.go
+	itemSkill  itemSkillFeature  // item_skill.go
+	adminChar  adminCharFeature  // admin_char.go
+	adminWorld adminWorldFeature // admin_world.go
 }
 
 var _ Service = (*Server)(nil)

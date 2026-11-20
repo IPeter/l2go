@@ -181,6 +181,10 @@ type World struct {
 	// from aggressive monsters, until its first action, for example "10m".
 	// 0 turns it off (Mobius PlayerSpawnProtection).
 	SpawnProtection Duration `json:"spawnProtection"`
+	// AutoLearnSkills gives players every skill of their class up to their
+	// level, without SP or spellbooks, at login and on every level change
+	// (Mobius AutoLearnSkills; Forgotten Scroll skills are not included).
+	AutoLearnSkills bool `json:"autoLearnSkills"`
 	// GridsAlwaysOn keeps every world region active, so monsters think
 	// even where no player is (Mobius GridsAlwaysOn).
 	GridsAlwaysOn bool `json:"gridsAlwaysOn"`
