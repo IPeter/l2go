@@ -96,6 +96,10 @@ func runJava(t *testing.T, chunk string) {
 func TestJavaErrorsPointAtCaller(t *testing.T) {
 	for _, call := range []struct{ code, msg string }{
 		{`local n = J.parse_int("x")`, `NumberFormatException: For input string: "x"`},
+		{`local n = J.parse_long("x")`, `NumberFormatException: For input string: "x"`},
+		{`local s = J.replace_all("ab", "b", "$")`, "IllegalArgumentException: Illegal group reference"},
+		{`local s = J.replace_first("ab", "b", "$1")`, "IndexOutOfBoundsException: No group 1"},
+		{`local p = J.split_ws(nil)`, "NullPointerException: split on null"},
 		{`local s = J.trim(nil)`, "NullPointerException: trim on null"},
 		{`local n = J.idiv(1, 0)`, "ArithmeticException: / by zero"},
 		{`J.todo("lambda")`, "not translated: lambda"},
@@ -217,8 +221,19 @@ check("parse_int", J.parse_int("123"), 123)
 check("parse_int negative", J.parse_int("-5"), -5)
 check("parse_int plus", J.parse_int("+7"), 7)
 check("parse_int zeros", J.parse_int("007"), 7)
-check("parse_int long", J.parse_int("1700000000000"), 1700000000000)
+check("parse_int max", J.parse_int("2147483647"), 2147483647)
+check("parse_int min", J.parse_int("-2147483648"), -2147483648)
+throws("parse_int above int", function() return J.parse_int("2147483648") end, 'NumberFormatException: For input string: "2147483648"')
+throws("parse_int below int", function() return J.parse_int("-2147483649") end, "NumberFormatException")
+throws("parse_int long", function() return J.parse_int("1700000000000") end, "NumberFormatException")
 check("parse_int number", J.parse_int(42), 42)
+check("parse_long", J.parse_long("1700000000000"), 1700000000000)
+check("parse_long small", J.parse_long("-5"), -5)
+check("parse_long plus", J.parse_long("+2147483648"), 2147483648)
+check("parse_long number", J.parse_long(42), 42)
+throws("parse_long word", function() return J.parse_long("abc") end, 'NumberFormatException: For input string: "abc"')
+throws("parse_long nil", function() return J.parse_long(nil) end, "NumberFormatException: Cannot parse null string")
+throws("parse_long too big", function() return J.parse_long("99999999999999999999") end, "NumberFormatException")
 throws("parse_int empty", function() return J.parse_int("") end, 'NumberFormatException: For input string: ""')
 throws("parse_int space", function() return J.parse_int(" 1") end, "NumberFormatException")
 throws("parse_int trailing space", function() return J.parse_int("1 ") end, "NumberFormatException")
@@ -380,6 +395,14 @@ check("replace_first group 0", J.replace_first("abc", "b", "[$0]"), "a[b]c")
 throws("replace_first group 1", function() return J.replace_first("abc", "b", "$1") end, "IndexOutOfBoundsException: No group 1")
 throws("replace_first lone dollar", function() return J.replace_first("abc", "b", "$") end, "IllegalArgumentException")
 
+check("replace_all", J.replace_all("a.b.a", "a", "X"), "X.b.X")
+check("replace_all escape", J.replace_all("abcb", "b", "\\$"), "a$c$")
+check("replace_all group 0", J.replace_all("aXa", "a", "[$0]"), "[a]X[a]")
+check("replace_all empty target", J.replace_all("ab", "", "-"), "-a-b-")
+check("replace_all missing skips replacement", J.replace_all("abc", "z", "$1"), "abc")
+throws("replace_all group 1", function() return J.replace_all("abc", "b", "$1") end, "IndexOutOfBoundsException: No group 1")
+throws("replace_all trailing backslash", function() return J.replace_all("abc", "b", "x\\") end, "IllegalArgumentException")
+
 check("split", J.split("a,b,c", ","), {"a", "b", "c"})
 check("split inner empty", J.split("a,,b", ","), {"a", "", "b"})
 check("split trailing empty", J.split("a,b,,", ","), {"a", "b"})
@@ -391,6 +414,17 @@ check("split dot", J.split("a.b", "."), {"a", "b"})
 check("split chars", J.split("abc", ""), {"a", "b", "c"})
 check("split long separator", J.split("a||b", "||"), {"a", "b"})
 check("split space", J.split("1 2 3", " "), {"1", "2", "3"})
+
+check("split_ws runs", J.split_ws("a  b\tc"), {"a", "b", "c"})
+check("split_ws leading", J.split_ws(" a b"), {"", "a", "b"})
+check("split_ws trailing", J.split_ws("a b  \n"), {"a", "b"})
+check("split_ws empty string", J.split_ws(""), {""})
+check("split_ws only spaces", J.split_ws("   "), {})
+check("split_ws none", J.split_ws("abc"), {"abc"})
+check("split_ws all kinds", J.split_ws("a\r\n\v\fb"), {"a", "b"})
+check("split_ws not utf-8 bytes", J.split_ws("\195\160 \194\133"), {"\195\160", "\194\133"})
+check("split_ws single", J.split_ws("a  b", true), {"a", "", "b"})
+check("split_ws single crlf", J.split_ws("a\r\nb", true), {"a", "", "b"})
 `)
 }
 

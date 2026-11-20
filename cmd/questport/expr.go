@@ -560,7 +560,7 @@ func (t *translator) cast(v *castExpr) lx {
 	case target.kind == tkPrim && isIntegral(target):
 		if isFloating(x.t) {
 			t.useAPI("J.int")
-			return lx{code: "J.int(" + x.code + ")", prec: precAtom, t: target, call: true, safe: true, pure: x.pure, todo: x.todo}
+			return lx{code: intCast(x.code, target), prec: precAtom, t: target, call: true, safe: true, pure: x.pure, todo: x.todo}
 		}
 		x.t = target
 		return x
@@ -689,9 +689,18 @@ func (t *translator) assignedValue(v *assignExpr, lv lvalue) lx {
 	// Compound assignments narrow back to the target type.
 	if isIntegral(lv.t) && isFloating(res.t) {
 		t.useAPI("J.int")
-		res = lx{code: "J.int(" + res.code + ")", prec: precAtom, t: lv.t, call: true}
+		res = lx{code: intCast(res.code, lv.t), prec: precAtom, t: lv.t, call: true}
 	}
 	return res
+}
+
+// intCast is the J.int call that narrows a floating value to an integral
+// type: a long clamps to the long range, the others to the int range.
+func intCast(code string, target *jtype) string {
+	if target.name == "long" || target.name == "Long" {
+		return "J.int(" + code + `, "long")`
+	}
+	return "J.int(" + code + ")"
 }
 
 // incDecValue translates ++x, x++, --x, x-- used as values.

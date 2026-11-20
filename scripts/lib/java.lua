@@ -231,23 +231,44 @@ end
 -- Number parsing and printing
 -------------------------------------------------------------------------------
 
--- J.parse_int(s) is Integer.parseInt and Long.parseLong: an optional sign
--- and ASCII digits, nothing else (no spaces). Anything else raises a
--- NumberFormatException. The range is a long's; values beyond 2^53 lose
--- precision.
-function J.parse_int(s)
+-- parse_integral parses an optional sign and ASCII digits within lo .. hi
+-- for parse_int and parse_long. It returns the number, or nil and the
+-- NumberFormatException message (the helpers throw, so the error points
+-- at their caller).
+local function parse_integral(s, lo, hi)
   if s == nil then
-    throw("NumberFormatException", "Cannot parse null string: null")
+    return nil, "Cannot parse null string: null"
   end
   if type(s) == "number" then
     s = tostring(s)
   end
   if type(s) ~= "string" or not sfind(s, "^[+-]?%d+$") then
-    throw("NumberFormatException", 'For input string: "' .. tostring(s) .. '"')
+    return nil, 'For input string: "' .. tostring(s) .. '"'
   end
   local n = tonumber(ssub(s, 1, 1) == "+" and ssub(s, 2) or s)
-  if n == nil or n < LONG_MIN or n > LONG_MAX then
-    throw("NumberFormatException", 'For input string: "' .. s .. '"')
+  if n == nil or n < lo or n > hi then
+    return nil, 'For input string: "' .. s .. '"'
+  end
+  return n
+end
+
+-- J.parse_int(s) is Integer.parseInt: an optional sign and ASCII digits,
+-- nothing else (no spaces), within the int range. Anything else raises a
+-- NumberFormatException.
+function J.parse_int(s)
+  local n, err = parse_integral(s, INT_MIN, INT_MAX)
+  if n == nil then
+    throw("NumberFormatException", err)
+  end
+  return n
+end
+
+-- J.parse_long(s) is Long.parseLong: as parse_int, within the long range.
+-- Values beyond 2^53 lose precision.
+function J.parse_long(s)
+  local n, err = parse_integral(s, LONG_MIN, LONG_MAX)
+  if n == nil then
+    throw("NumberFormatException", err)
   end
   return n
 end
@@ -541,27 +562,31 @@ end
 
 -- regex_replacement expands a Java regex replacement string for a match of
 -- a pattern without groups: \x is x, $0 is the match, other groups do not
--- exist.
+-- exist. It is called by J helpers, so its errors point one frame further
+-- up than throw's.
 local function regex_replacement(rep, match)
   if not sfind(rep, "[\\$]") then
     return rep
+  end
+  local function fail(name, msg)
+    error(name .. ": " .. msg, HELPER_CALLER + 1)
   end
   local out, i, n = {}, 1, #rep
   while i <= n do
     local c = ssub(rep, i, i)
     if c == "\\" then
       if i == n then
-        throw("IllegalArgumentException", "character to be escaped is missing")
+        fail("IllegalArgumentException", "character to be escaped is missing")
       end
       out[#out + 1] = ssub(rep, i + 1, i + 1)
       i = i + 2
     elseif c == "$" then
       local digits = rep:match("^%d+", i + 1)
       if not digits then
-        throw("IllegalArgumentException", "Illegal group reference")
+        fail("IllegalArgumentException", "Illegal group reference")
       end
       if tonumber(digits) ~= 0 then
-        throw("IndexOutOfBoundsException", "No group " .. digits)
+        fail("IndexOutOfBoundsException", "No group " .. digits)
       end
       out[#out + 1] = match
       i = i + 1 + #digits
@@ -588,6 +613,20 @@ function J.replace_first(s, target, replacement)
   return ssub(s, 1, i - 1) .. regex_replacement(replacement, target) .. ssub(s, j + 1)
 end
 
+-- J.replace_all(s, target, replacement) is String.replaceAll with a
+-- pattern made of literal characters only: every occurrence of target is
+-- replaced, the replacement following Java's rules as in replace_first.
+-- Without a match the replacement is not checked, as in Java.
+function J.replace_all(s, target, replacement)
+  need_string(s, "replaceAll")
+  need_string(target, "replaceAll")
+  need_string(replacement, "replaceAll")
+  if target ~= "" and not sfind(s, target, 1, true) then
+    return s
+  end
+  return J.replace(s, target, regex_replacement(replacement, target))
+end
+
 -- J.split(s, sep) is String.split with a literal separator: trailing empty
 -- strings are dropped, a leading one is kept, and a string without the
 -- separator is returned whole ("" gives {""}). An empty separator splits
@@ -608,6 +647,32 @@ function J.split(s, sep)
   local init = 1
   while true do
     local i, j = sfind(s, sep, init, true)
+    if not i then
+      break
+    end
+    parts[#parts + 1] = ssub(s, init, i - 1)
+    init = j + 1
+  end
+  if #parts == 0 then
+    return { s }
+  end
+  parts[#parts + 1] = ssub(s, init)
+  while #parts > 0 and parts[#parts] == "" do
+    parts[#parts] = nil
+  end
+  return parts
+end
+
+-- J.split_ws(s[, single]) is String.split("\\s+"): runs of ASCII
+-- whitespace (space, \t, \n, \v, \f, \r) separate, with split's rules for
+-- empty strings (a leading one is kept, trailing ones dropped). With
+-- single true it is split("\\s"): each whitespace char separates.
+function J.split_ws(s, single)
+  need_string(s, "split")
+  local ws = single and "[ \t\n\v\f\r]" or "[ \t\n\v\f\r]+"
+  local parts, init = {}, 1
+  while true do
+    local i, j = sfind(s, ws, init)
     if not i then
       break
     end

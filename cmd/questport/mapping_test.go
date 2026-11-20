@@ -82,6 +82,69 @@ func TestMappingRules(t *testing.T) {
 	}
 }
 
+// typedHelpersSource uses the Java methods whose int and long, or literal
+// and regex, forms map to different helpers.
+const typedHelpersSource = `package quests.Q09998_TypedHelpers;
+
+public class Q09998_TypedHelpers extends Quest
+{
+	public Q09998_TypedHelpers()
+	{
+		super(9998);
+	}
+
+	@Override
+	public String onEvent(String event, Npc npc, Player player)
+	{
+		final double rate = 1.5;
+		final int i = (int) (rate * 10);
+		final long l = (long) (rate * 10);
+		long total = 3;
+		total *= rate;
+		int count = 3;
+		count *= rate;
+		final int a = Integer.parseInt(event);
+		final long b = Long.parseLong(event);
+		final String[] words = event.split("\\s+");
+		final String[] chars = event.split("\\s");
+		final String[] dots = event.split("\\.");
+		final String x = event.replace("a", "$");
+		final String y = event.replaceAll("a", "\\$");
+		return x + y + words.length + chars.length + dots.length + i + l + total + count + a + b;
+	}
+}
+`
+
+func TestTypedHelpers(t *testing.T) {
+	lua, res := translateQuest("Q09998_TypedHelpers.java", typedHelpersSource, "Q09998_TypedHelpers")
+	if res.err != nil {
+		t.Fatal(res.err)
+	}
+	for _, n := range res.todos {
+		t.Errorf("unexpected todo at java:%d: %s", n.line, n.reason)
+	}
+	for _, want := range []string{
+		"local i = J.int(rate * 10)\n",
+		`local l = J.int(rate * 10, "long")`,
+		`total = J.int(total * rate, "long")`,
+		"count = J.int(count * rate)\n",
+		"J.parse_int(event)",
+		"J.parse_long(event)",
+		"J.split_ws(event)",
+		"J.split_ws(event, true)",
+		`J.split(event, ".")`,
+		`J.replace(event, "a", "$")`,
+		`J.replace_all(event, "a", "\\$")`,
+	} {
+		if !strings.Contains(lua, want) {
+			t.Errorf("output lacks %q", want)
+		}
+	}
+	if t.Failed() {
+		t.Log(lua)
+	}
+}
+
 func TestRegexReplaceUnknownPatternStaysTodo(t *testing.T) {
 	src := strings.Replace(mappingTestSource, `replaceAll("\\D", "")`, `replaceAll("\\w+", "")`, 1)
 	_, res := translateQuest("Q09999_MappingTest.java", src, "Q09999_MappingTest")

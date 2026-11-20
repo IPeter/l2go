@@ -636,8 +636,8 @@ var mappings = []*mapEntry{
 	m("static:Integer", "parseInt", "str", "J.parse_int($1)", "int"),
 	m("static:Integer", "valueOf", "str", "J.parse_int($1)", "int"),
 	fnm("static:Integer", "valueOf", "int", "int", argAs("int")),
-	m("static:Long", "parseLong", "str", "J.parse_int($1)", "long"),
-	m("static:Long", "valueOf", "str", "J.parse_int($1)", "long"),
+	m("static:Long", "parseLong", "str", "J.parse_long($1)", "long"),
+	m("static:Long", "valueOf", "str", "J.parse_long($1)", "long"),
 	fnm("static:Long", "valueOf", "int", "long", argAs("long")),
 	m("static:Double", "parseDouble", "str", "J.parse_double($1)", "double"),
 	m("static:Boolean", "parseBoolean", "str", "J.parse_bool($1)", "boolean"),
@@ -1418,12 +1418,18 @@ func splitFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) lx {
 	if regexMeta.MatchString(pattern) {
 		// A few regular expressions are just literal characters.
 		switch pattern {
-		case `\\.`, `\.`:
+		case `\.`:
 			pattern = "."
-		case `\\|`, `\|`:
+		case `\|`:
 			pattern = "|"
-		case `\\s+`, `\s+`, `\\s`, `\s`:
-			pattern = " "
+		case `\s+`, `\s`:
+			// Whitespace: runs of it with \s+, each char with \s.
+			t.useAPI("J.split_ws")
+			code := "J.split_ws(" + recv.code + ")"
+			if pattern == `\s` {
+				code = "J.split_ws(" + recv.code + ", true)"
+			}
+			return lx{code: code, prec: precAtom, t: arrayOf(tyString), call: true, safe: true}
 		default:
 			return t.todo(c.line, "split with a regex", "String.split with the regular expression "+sep.value)
 		}
@@ -1459,7 +1465,8 @@ func regexReplaceFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool)
 	if !ok || pat.kind != litString || regexMeta.MatchString(pat.value) {
 		return t.todo(c.line, "String."+c.name+" with a regex", "String."+c.name+" with a regular expression")
 	}
-	fn := "J.replace"
+	// Unlike String.replace, the replacement follows the regex rules ($0, \x).
+	fn := "J.replace_all"
 	if c.name == "replaceFirst" {
 		fn = "J.replace_first"
 	}
