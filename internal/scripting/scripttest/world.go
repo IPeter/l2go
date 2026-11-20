@@ -54,6 +54,14 @@ type World struct {
 	// MissingSkills lists the skill IDs skills.get finds no level of; every
 	// other skill has every level.
 	MissingSkills []int
+
+	// The AI world (ai.go).
+	ai         aiWorld
+	cinematics []Cinematic
+	// onGone tells the engine an NPC left the world (the game's NpcGone);
+	// onSpawn runs the spawn handlers of a new NPC.
+	onGone  func(objectID int32)
+	onSpawn func(npc scripting.NpcRef)
 }
 
 var (
@@ -168,6 +176,7 @@ func (w *World) SoundsOf(p *Player) []string {
 // ClearRecords forgets what scripts did so far.
 func (w *World) ClearRecords() {
 	w.Sounds, w.Replies, w.Actions, w.Messages, w.Spawned, w.QuestMarks, w.Given = nil, nil, nil, nil, nil, nil, nil
+	w.cinematics = nil
 	clear(w.QuestLists)
 }
 
@@ -463,6 +472,9 @@ func (w *World) DeleteNpc(npc scripting.NpcRef) {
 		delete(w.npcs, n.ObjectID)
 	}
 	w.act(Action{Kind: "delete", Object: npc.ObjectID()})
+	if w.onGone != nil {
+		w.onGone(npc.ObjectID())
+	}
 }
 
 // AddSpawn makes a new fake NPC. A heading of -1 (random) stays -1.
@@ -471,18 +483,27 @@ func (w *World) AddSpawn(npcID int, loc scripting.Location, _ bool, _ time.Durat
 	n := &Npc{ObjectID: w.nextID, ID: npcID, X: loc.X, Y: loc.Y, Z: loc.Z, Heading: loc.Heading}
 	w.npcs[n.ObjectID] = n
 	w.Spawned = append(w.Spawned, n)
+	if w.ai.spawnEvents && w.onSpawn != nil {
+		w.onSpawn(n.Ref())
+	}
 	return n.Ref()
 }
 
 // --- NpcActions ---
 
-// NpcAttack records an attack order.
+// NpcAttack records an attack order; the intention becomes ATTACK.
 func (w *World) NpcAttack(npc scripting.NpcRef, target any) {
+	if n := npcOf(npc); n != nil {
+		n.Intention = "ATTACK"
+	}
 	w.act(Action{Kind: "attack", Object: npc.ObjectID(), Target: objectID(target)})
 }
 
-// NpcAddDamageHate records hate.
+// NpcAddDamageHate records hate and adds it to the NPC's Hate list.
 func (w *World) NpcAddDamageHate(npc scripting.NpcRef, target any, damage, hate int64) {
+	if n := npcOf(npc); n != nil {
+		n.addHate(fakeOf(target), damage, hate)
+	}
 	w.act(Action{Kind: "hate", Object: npc.ObjectID(), Target: objectID(target), Value: int(hate), Damage: damage})
 }
 
@@ -496,8 +517,13 @@ func (w *World) NpcAbortAttack(npc scripting.NpcRef) {
 	w.act(Action{Kind: "abort_attack", Object: npc.ObjectID()})
 }
 
-// NpcMoveTo records the walk; the NPC stays where it is.
+// NpcMoveTo records the walk; the NPC stays where it is until
+// Harness.Arrive.
 func (w *World) NpcMoveTo(npc scripting.NpcRef, loc scripting.Location) {
+	if n := npcOf(npc); n != nil {
+		dest := loc
+		n.Dest, n.Moving, n.Intention = &dest, true, "MOVE_TO"
+	}
 	w.act(Action{Kind: "move", Object: npc.ObjectID(), Loc: loc})
 }
 

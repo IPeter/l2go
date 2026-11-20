@@ -30,8 +30,11 @@ func checkObject(L *lua.LState, n int, fn string) any {
 	}
 	if ud, ok := L.Get(n).(*lua.LUserData); ok {
 		switch ud.Value.(type) {
-		case *playerBox, *npcBox:
-			L.ArgError(n, fn+": this object was passed to an earlier handler; keep its object_id() instead")
+		case *playerBox:
+			L.ArgError(n, fn+": this player was passed to an earlier handler; keep its object_id() instead")
+			return nil
+		case *npcBox:
+			L.ArgError(n, fn+": "+goneNpcMsg)
 			return nil
 		}
 	}

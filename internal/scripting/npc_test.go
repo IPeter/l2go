@@ -409,7 +409,9 @@ end)`}
 	}
 }
 
-// Player and Npc values work only during the run that handed them out.
+// Player values work only during the run that handed them out. Npc values
+// are handles: without a world to look them up in, they work again only
+// when a later run hands out the same NPC.
 func TestRefsExpire(t *testing.T) {
 	e := newEngine(t, map[string]string{"keep.lua": `
 local kept_player, kept_npc
@@ -426,13 +428,19 @@ end)`}, Options{})
 	if _, ok := firstTalk(t, e, 30733, hero(), guardNpc()); !ok {
 		t.Fatal("first talk failed")
 	}
-	for _, event := range []string{"player", "npc"} {
-		if reply, ok := scriptEvent(t, e, "Keeper", event, hero(), guardNpc()); ok || reply.Err == nil || !strings.Contains(reply.Err.Error(), "earlier handler") {
-			t.Errorf("%s: reply = %+v, %v; want an expired value error", event, reply, ok)
-		}
+	other := &fakeNpc{id: 0x60000002, npcID: 30734, name: "Other"}
+	if reply, ok := scriptEvent(t, e, "Keeper", "player", hero(), other); ok || reply.Err == nil || !strings.Contains(reply.Err.Error(), "earlier handler") {
+		t.Errorf("player: reply = %+v, %v; want an expired value error", reply, ok)
 	}
-	if reply, _ := scriptEvent(t, e, "Keeper", "tostring", hero(), guardNpc()); reply.Content != "player (expired)/npc (expired)" {
+	if reply, ok := scriptEvent(t, e, "Keeper", "npc", hero(), other); ok || reply.Err == nil || !strings.Contains(reply.Err.Error(), "npc:valid()") {
+		t.Errorf("npc: reply = %+v, %v; want a gone NPC error", reply, ok)
+	}
+	if reply, _ := scriptEvent(t, e, "Keeper", "tostring", hero(), other); reply.Content != "player (expired)/npc 30733 (object 1610612737, gone)" {
 		t.Errorf("tostring = %q", reply.Content)
+	}
+	// The same NPC handed out again: the kept handle is that NPC.
+	if reply, _ := scriptEvent(t, e, "Keeper", "npc", hero(), guardNpc()); reply.Content != "Guard" {
+		t.Errorf("npc again = %+v", reply)
 	}
 }
 

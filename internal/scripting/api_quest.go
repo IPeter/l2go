@@ -101,10 +101,11 @@ func optNpcArg(L *lua.LState, n int, fn string) NpcRef {
 		return nil
 	case *lua.LUserData:
 		if b, ok := x.Value.(*npcBox); ok {
-			if b.ref == nil {
-				L.ArgError(n, fn+": this NPC was passed to an earlier handler; keep npc:object_id() instead of the NPC")
+			ref := b.resolve()
+			if ref == nil {
+				L.ArgError(n, fn+": "+goneNpcMsg)
 			}
-			return b.ref
+			return ref
 		}
 	}
 	L.ArgError(n, fn+": an NPC expected, got "+L.Get(n).Type().String())
@@ -124,8 +125,8 @@ func objectArg(L *lua.LState, n int) any {
 			return b.ref
 		}
 	case *npcBox:
-		if b.ref != nil {
-			return b.ref
+		if ref := b.resolve(); ref != nil {
+			return ref
 		}
 	}
 	return nil

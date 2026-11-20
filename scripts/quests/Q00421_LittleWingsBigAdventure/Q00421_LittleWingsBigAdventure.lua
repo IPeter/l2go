@@ -145,7 +145,7 @@ end)
 q:on_attack(function(npc, attacker, damage, isPet)
   -- Minions scream no matter current quest state.
   if npc:has_minions() then
-    for _, ghost in ipairs(npc:spawned_minions()) do
+    for _, ghost in ipairs(npc:minions()) do
       if not ghost:is_dead() and rnd(100) < 1 then
         ghost:broadcast_say(ChatType.GENERAL, "We must protect the fairy tree!")
       end

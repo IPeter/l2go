@@ -61,6 +61,8 @@ type vm struct {
 	depth     int                            // runs in progress (nested runs count too)
 	refs      []*lua.LUserData               // Player, Npc and QuestState values handed out in this run
 	refCache  map[refKey]*lua.LUserData      // the same values by object, so one object is one value per run
+	npcs      map[int32]*lua.LUserData       // Npc handles by object ID; they outlive runs (L4)
+	runSeq    uint64                         // counts outermost runs; an Npc handle checks its NPC once per run
 	timers    map[timerKey]*questTimer       // running quest timers
 	timerSeq  uint64                         // start order of quest timers
 	quest     questEnv                       // what the quest API works with
@@ -137,6 +139,7 @@ func load(ctx context.Context, opts Options) (*vm, error) {
 		questIDs:  make(map[int]*npcScript),
 		firstTalk: make(map[int]firstTalkOwner),
 		refCache:  make(map[refKey]*lua.LUserData),
+		npcs:      make(map[int32]*lua.LUserData),
 		timers:    make(map[timerKey]*questTimer),
 		quest: questEnv{
 			world:  opts.World,

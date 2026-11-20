@@ -112,6 +112,8 @@ func start(t testing.TB, opts scripting.Options) *Harness {
 	}
 	t.Cleanup(e.Close)
 	h.engine = e
+	h.world.onGone = e.NpcGone
+	h.world.onSpawn = func(n scripting.NpcRef) { _ = e.Spawn(context.Background(), n) }
 	h.syncCustom()
 	return h
 }
@@ -343,6 +345,10 @@ type Player struct {
 	UserInfos int
 	// PkKills is player:pk_kills(); player:set_pk_kills sets it.
 	PkKills int
+	// HP and MaxHP are player:hp() and player:max_hp().
+	HP, MaxHP float64
+	// Summon is player:summon(): a *Npc or nil.
+	Summon *Npc
 
 	quests map[string]*QuestState
 }
@@ -539,6 +545,38 @@ type Npc struct {
 	// Effects are the IDs of the skills whose effects are on the NPC;
 	// skills.apply_effects adds to them.
 	Effects []int
+
+	// The AI state the NpcControl calls read and write (Plan 13).
+	Walking, CoreAIDisabled, Immobilized, Invul, Immortal, NoRandomWalk bool
+	// Moving, InCombat and CastingNow are npc:is_moving() and the like.
+	Moving, InCombat, CastingNow bool
+	// Intention is npc:intention(); "" reads as "ACTIVE". attack, move_to,
+	// follow and set_intention set it.
+	Intention string
+	// Dest is where the last npc:move_to sent the NPC; Harness.Arrive puts
+	// it there.
+	Dest *scripting.Location
+	// Spawn is the spawn point (npc:spawn_location()); nil for none.
+	Spawn *scripting.Location
+	// AIData are the spawn's AI values (npc:ai_value), Params the template
+	// parameters (npc:param).
+	AIData map[string]int
+	Params map[string]string
+	// Hate is the aggro list, most hated first; add_damage_hate adds to it.
+	Hate []Hate
+	// Leader and Minions are the minion group; npc:add_minion spawns into
+	// Minions.
+	Leader  *Npc
+	Minions []*Npc
+	// Box, Interacted and Bombed are a treasure chest's state.
+	Box, Interacted, Bombed bool
+}
+
+// Hate is one row of a fake NPC's aggro list. Target is a *Player or *Npc.
+type Hate struct {
+	Target any
+	Hate   int64
+	Damage int64
 }
 
 // Ref returns the NPC as the engine sees it; nil for a nil Npc.

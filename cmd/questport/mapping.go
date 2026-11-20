@@ -284,8 +284,8 @@ var mappings = []*mapEntry{
 	m("Quest", "teleportPlayer", "Player,Location,int", "$1:teleport($2)", ""),
 	m("Quest", "teleportPlayer", "Player,Location,int,bool", "$1:teleport($2)", ""),
 	m("Quest", "getGameTicks", "", "time.game_ticks()", "int"),
-	m("Quest", "openDoor", "int,int", "q:open_door($1)", "").w().feat("doors"),
-	m("Quest", "closeDoor", "int,int", "q:close_door($1)", "").w().feat("doors"),
+	m("Quest", "openDoor", "int,int", "doors.open($1)", "").w().feat("doors"),
+	m("Quest", "closeDoor", "int,int", "doors.close($1)", "").w().feat("doors"),
 
 	// --- QuestState ---
 	m("QuestState", "getState", "", "$r:get_state()", "int"),
@@ -519,7 +519,7 @@ var mappings = []*mapEntry{
 	m("Npc", "dropItem", "Player,int,int", "$r:drop_item($1, $2, $3)", "").w(),
 	m("Monster", "getMinionList", "", "$r", "MinionList").asView(),
 	m("Monster", "hasMinions", "", "$r:has_minions()", "boolean"),
-	m("MinionList", "getSpawnedMinions", "", "$b:spawned_minions()", "List<Monster>"),
+	m("MinionList", "getSpawnedMinions", "", "$b:minions()", "List<Monster>"),
 	m("Npc", "abortAttack", "", "$r:abort_attack()", ""),
 	m("Npc", "isSpawned", "", "$r:is_spawned()", "boolean"),
 	m("Npc", "isSweepActive", "", "$r:is_sweep_active()", "boolean"),
@@ -856,7 +856,7 @@ var (
 )
 
 func init() {
-	for _, e := range mappings {
+	for _, e := range allMappings() {
 		key := e.recv + "." + e.name
 		mappingIndex[key] = append(mappingIndex[key], e)
 		if e.recv != "Quest" && !strings.HasPrefix(e.recv, "static:") {
@@ -944,7 +944,7 @@ func (e *mapEntry) matches(args []lx) bool {
 	return true
 }
 
-var apiPattern = regexp.MustCompile(`(q|J|rnd|util|world|globals|time|math|table|string|skills|items|ClassId|seven_signs|clan_halls|\$r|\$b|\$1|\$2)([.:])([a-z_0-9]+)\(`)
+var apiPattern = regexp.MustCompile(`(q|J|rnd|util|world|globals|time|math|table|string|skills|items|ClassId|seven_signs|clan_halls|zones|doors|grandboss|cinematics|\$r|\$b|\$1|\$2)([.:])([a-z_0-9]+)\(`)
 
 // apiName names the Lua function a template calls, for the report.
 func (e *mapEntry) apiName() string {
@@ -1615,12 +1615,13 @@ func broadcastPacketFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bo
 	case p.packet == "CreatureSay" && len(pa) >= 3:
 		t.useAPI("Npc:broadcast_say")
 		code = r + ":broadcast_say(" + pa[len(pa)-2].code + ", " + pa[len(pa)-1].code + ")"
-	case p.packet == "PlaySound" && len(pa) == 1:
-		t.useAPI("Creature:broadcast_sound")
-		code = r + ":broadcast_sound(" + pa[0].code + ")"
-	case p.packet == "Earthquake" && len(pa) >= 5:
-		t.useAPI("Creature:earthquake")
-		code = r + ":earthquake(" + pa[3].code + ", " + pa[4].code + ")"
+	case p.packet == "PlaySound" || p.packet == "Earthquake" || p.packet == "SpecialCamera" || p.packet == "ExShowScreenMessage":
+		lx, ok := cinematicCall(t, recv, p)
+		if !ok {
+			return t.todo(c.line, "broadcast "+p.packet, "broadcastPacket(new "+p.packet+") with these arguments")
+		}
+		t.consumePacket(p)
+		return lx
 	case p.packet == "TeleportToLocation" && len(pa) >= 4:
 		// The teleport animation of the object (first argument) to x, y, z;
 		// Mobius moves it with setXYZ right after.
@@ -1654,6 +1655,13 @@ func sendPacketFn(t *translator, c *callExpr, recv lx, args []lx, asStmt bool) l
 	case p.packet == "PlaySound" && len(pa) == 1:
 		t.useAPI("q:play_sound")
 		code = "q:play_sound(" + recv.code + ", " + pa[0].code + ")"
+	case p.packet == "PlaySound" || p.packet == "Earthquake" || p.packet == "SpecialCamera" || p.packet == "ExShowScreenMessage":
+		lx, ok := cinematicCall(t, recv, p)
+		if !ok {
+			return t.todo(c.line, "send "+p.packet, "sendPacket(new "+p.packet+") with these arguments")
+		}
+		t.consumePacket(p)
+		return lx
 	case p.packet == "SocialAction" && len(pa) == 2:
 		t.review(c.line, "social action sent to one player", "sendPacket(new SocialAction) becomes a broadcast")
 		t.useAPI("Creature:social_action")

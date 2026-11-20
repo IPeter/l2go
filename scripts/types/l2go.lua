@@ -12,9 +12,16 @@
 -- print() writes to the server log.
 --
 -- Handlers run on the server's world loop, one at a time, with a time
--- limit (50 ms by default). Player, Npc and QuestState values are valid only
+-- limit (50 ms by default). Player and QuestState values are valid only
 -- while the handler that received them runs; within it, one object is
--- always the same value.
+-- always the same value. Npc values are handles: they may be kept in
+-- fields across handlers, and stay the same value while the NPC is in the
+-- world; npc:valid() tells whether it still is.
+--
+-- Most NPC events (on_attack, on_kill, on_spawn, on_move_finished,
+-- on_event_received, ...) are asynchronous, as in Mobius: one raised while
+-- a handler runs (npc:broadcast_event, q:add_spawn) runs after it, in
+-- order, with its own time limit. on_npc_hate runs at once.
 
 -------------------------------------------------------------------------------
 -- log
@@ -387,11 +394,101 @@ function Script:on_check_party_member_state(fn) end
 ---@param fn fun(player: Player, npc: Npc?, is_summon: boolean)
 function Script:on_action_for_each_player(fn) end
 
+---What on_start handlers get.
+---@class StartEvent
+---@field reload boolean true after a reload: the world kept the NPCs the scripts spawned before, but not their timers
+
 ---Runs on the world loop once the scripts are in place, at startup and
 ---after each reload: what Mobius scripts do in their constructors (spawns,
----timers, global variables). Loading itself cannot touch the world.
----@param fn fun()
+---timers, global variables). Loading itself cannot touch the world. After
+---a reload, ev.reload is true: a boss script then finds its live boss
+---(grandboss.boss, world.npcs_by_id) and starts its timers again instead
+---of spawning a second one.
+---@param fn fun(ev: StartEvent)
 function Script:on_start(fn) end
+
+-- The AI handlers (Mobius Quest callbacks).
+
+---The monsters whose faction calls reach on_faction_call.
+---@param ... integer|integer[]
+function Script:add_faction_call_id(...) end
+
+---The NPCs whose sightings reach on_creature_see.
+---@param ... integer|integer[]
+function Script:add_creature_see_id(...) end
+
+---The NPCs whose script events reach on_event_received.
+---@param ... integer|integer[]
+function Script:add_event_received_id(...) end
+
+---The NPCs whose arrivals reach on_move_finished.
+---@param ... integer|integer[]
+function Script:add_move_finished_id(...) end
+
+---The walkers whose route nodes reach on_node_arrived.
+---@param ... integer|integer[]
+function Script:add_node_arrived_id(...) end
+
+---The walkers whose route ends reach on_route_finished.
+---@param ... integer|integer[]
+function Script:add_route_finished_id(...) end
+
+---The NPCs whose teleports reach on_teleport.
+---@param ... integer|integer[]
+function Script:add_teleport_id(...) end
+
+---The monsters whose hate on_npc_hate decides.
+---@param ... integer|integer[]
+function Script:add_npc_hate_id(...) end
+
+---A monster was called to help caller against attacker (Mobius
+---onFactionCall).
+---@param npc_ids integer|integer[]|fun(npc: Npc, caller: Npc, attacker: Player, is_summon: boolean)
+---@param fn? fun(npc: Npc, caller: Npc, attacker: Player, is_summon: boolean)
+function Script:on_faction_call(npc_ids, fn) end
+
+---An NPC saw a player or an NPC come into range (Mobius onCreatureSee).
+---@param npc_ids integer|integer[]|fun(npc: Npc, creature: Player|Npc)
+---@param fn? fun(npc: Npc, creature: Player|Npc)
+function Script:on_creature_see(npc_ids, fn) end
+
+---An NPC got a script event from npc:broadcast_event or npc:send_event
+---(Mobius onEventReceived).
+---@param npc_ids integer|integer[]|fun(event: string, sender: Npc, receiver: Npc, reference: Player|Npc|nil)
+---@param fn? fun(event: string, sender: Npc, receiver: Npc, reference: Player|Npc|nil)
+function Script:on_event_received(npc_ids, fn) end
+
+---An NPC arrived where it was sent (Mobius onMoveFinished).
+---@param npc_ids integer|integer[]|fun(npc: Npc)
+---@param fn? fun(npc: Npc)
+function Script:on_move_finished(npc_ids, fn) end
+
+---A walker reached a node of its route (Mobius onNodeArrived).
+---@param npc_ids integer|integer[]|fun(npc: Npc)
+---@param fn? fun(npc: Npc)
+function Script:on_node_arrived(npc_ids, fn) end
+
+---A walker reached the end of its route (Mobius onRouteFinished).
+---@param npc_ids integer|integer[]|fun(npc: Npc)
+---@param fn? fun(npc: Npc)
+function Script:on_route_finished(npc_ids, fn) end
+
+---An NPC was teleported (Mobius onTeleport).
+---@param npc_ids integer|integer[]|fun(npc: Npc)
+---@param fn? fun(npc: Npc)
+function Script:on_teleport(npc_ids, fn) end
+
+---Decides at once whether a monster may hate a player: return false to
+---veto (Mobius onNpcHate). Anything else allows.
+---@param npc_ids integer|integer[]|fun(npc: Npc, player: Player, is_summon: boolean): boolean?
+---@param fn? fun(npc: Npc, player: Player, is_summon: boolean): boolean?
+function Script:on_npc_hate(npc_ids, fn) end
+
+---Game night began (true, 00:00) or ended (false, 06:00) (Mobius
+---OnDayNightChange, a global event: every script with this handler gets
+---it).
+---@param fn fun(is_night: boolean)
+function Script:on_day_night_change(fn) end
 
 -- Quest helpers (Mobius Quest methods). They need the world, so they work
 -- in handlers, not while the scripts load.
@@ -834,6 +931,11 @@ function Skill:id() end
 ---@return integer
 function Skill:level() end
 
+---The skill's target type, Mobius's TargetType name, e.g. "ONE" or
+---"UNLOCKABLE".
+---@return string
+function Skill:target_type() end
+
 -------------------------------------------------------------------------------
 -- Player and Npc
 -------------------------------------------------------------------------------
@@ -1062,9 +1164,49 @@ function Player:is_inside_radius_2d(other, radius) end
 ---@return boolean
 function Player:is_inside_radius_3d(other, radius) end
 
----An NPC, as handlers receive it. Valid only while that handler runs.
+---The current HP (Mobius getCurrentHp).
+---@return number
+function Player:hp() end
+
+---The maximum HP (Mobius getMaxHp).
+---@return number
+function Player:max_hp() end
+
+---The player's summon or pet, nil for none (Mobius getSummon).
+---@return Player|Npc|nil
+function Player:summon() end
+
+---Whether the player is inside the zone.
+---@param zone_id integer
+---@return boolean
+function Player:is_inside_zone(zone_id) end
+
+---The distance to a position, a player or an NPC, without height.
+---@param other Player|Npc|Position
+---@return number
+function Player:calculate_distance_2d(other) end
+
+---The distance to a position, a player or an NPC, with height.
+---@param other Player|Npc|Position
+---@return number
+function Player:calculate_distance_3d(other) end
+
+---An NPC handle, as handlers receive it. It may be kept across handlers:
+---while the NPC is in the world it is the same value. Once the NPC is gone
+---(dead and decayed, deleted) every method but valid() raises an error.
 ---@class Npc
 local Npc = {}
+
+---A position: a table with x, y, z and optionally heading.
+---@class Position
+---@field x integer
+---@field y integer
+---@field z integer
+---@field heading? integer
+
+---Whether the NPC is still in the world (a dead NPC is, until it decays).
+---@return boolean
+function Npc:valid() end
 
 ---@return integer
 function Npc:object_id() end
@@ -1226,6 +1368,230 @@ function Npc:teleport(x, y, z) end
 ---@param count? integer 1 when left out
 function Npc:drop_item(player, item_id, count) end
 
+-- NPC variables (Mobius NpcVariables). Values are strings; they last
+-- until the NPC is gone (a respawn starts empty) and survive reloads.
+
+---A variable, or default when it is not set.
+---@param name string
+---@param default? string
+---@return string?
+function Npc:var(name, default) end
+
+---A variable as an integer, or default (0) when it is not set.
+---@param name string
+---@param default? integer
+---@return integer
+function Npc:var_int(name, default) end
+
+---A variable as a boolean ("true"), or default when it is not set.
+---@param name string
+---@param default? boolean
+---@return boolean
+function Npc:var_bool(name, default) end
+
+---@param name string
+---@param value string|number|boolean
+function Npc:set_var(name, value) end
+
+---@param name string
+function Npc:unset_var(name) end
+
+---@param name string
+---@return boolean
+function Npc:has_var(name) end
+
+-- The NPC's AI (Mobius Npc, Attackable, Creature and their AI).
+
+---Makes the NPC walk instead of run (Mobius setWalking).
+function Npc:set_walking() end
+
+---@return boolean
+function Npc:is_running() end
+
+---Stops (true) or restarts (false) the NPC's own AI; scripts move it
+---meanwhile (Mobius disableCoreAI).
+---@param disabled? boolean true when left out
+function Npc:disable_core_ai(disabled) end
+
+---@return boolean
+function Npc:is_core_ai_disabled() end
+
+---@param immobilized? boolean true when left out
+function Npc:set_immobilized(immobilized) end
+
+---@param invul? boolean true when left out
+function Npc:set_invul(invul) end
+
+---@return boolean
+function Npc:is_invul() end
+
+---An immortal NPC keeps 1 HP (Mobius setMortal).
+---@param mortal? boolean true when left out
+function Npc:set_mortal(mortal) end
+
+---@return boolean
+function Npc:is_mortal() end
+
+---@param enabled? boolean true when left out
+function Npc:set_random_walking(enabled) end
+
+---Back to the spawn point, hate forgotten (Mobius Attackable.returnHome).
+function Npc:return_home() end
+
+---The AI intention, an Intention value such as Intention.ATTACK.
+---@return string
+function Npc:intention() end
+
+---Sets the AI intention (Mobius getAI().setIntention), with a target or a
+---position when it takes one.
+---@param intention string an Intention value
+---@param arg? Player|Npc|Position
+function Npc:set_intention(intention, arg) end
+
+---@param target Player|Npc
+function Npc:follow(target) end
+
+function Npc:stop_follow() end
+
+---Stops where it is (Mobius clientStopMoving).
+function Npc:stop_moving() end
+
+---@return boolean
+function Npc:is_moving() end
+
+---@return boolean
+function Npc:is_in_combat() end
+
+---@return boolean
+function Npc:is_casting_now() end
+
+---Turns the NPC.
+---@param heading integer
+function Npc:set_heading(heading) end
+
+---An entry of npc:hate_list().
+---@class HateEntry
+---@field target Player|Npc
+---@field hate integer
+---@field damage integer
+
+---The aggro list, most hated first (Mobius getAggroList).
+---@return HateEntry[]
+function Npc:hate_list() end
+
+---The most hated creature, nil for none (Mobius getMostHated).
+---@return Player|Npc|nil
+function Npc:most_hated() end
+
+---Forgets every hate (Mobius clearAggroList).
+function Npc:clear_aggro_list() end
+
+---Forgets the hate for target (Mobius stopHating).
+---@param target Player|Npc
+function Npc:stop_hating(target) end
+
+---Lowers the hate for target (Mobius reduceHate).
+---@param target Player|Npc
+---@param amount integer
+function Npc:reduce_hate(target, amount) end
+
+-- Spawn data and template parameters.
+
+---The spawn point, nil for an NPC without a spawn.
+---@return Position?
+function Npc:spawn_location() end
+
+---Whether the NPC stands on its spawn point's x and y (Mobius
+---staysInSpawnLoc).
+---@return boolean
+function Npc:stays_in_spawn_loc() end
+
+---A value of the spawn's AI data, nil when it has none (Mobius
+---getAIValue).
+---@param name string
+---@return integer?
+function Npc:ai_value(name) end
+
+---@param name string
+---@return boolean
+function Npc:has_ai_value(name) end
+
+---A template parameter (Mobius getParameters()), or default.
+---@param name string
+---@param default? string
+---@return string?
+function Npc:param(name, default) end
+
+---A template parameter as an integer, or default (0).
+---@param name string
+---@param default? integer
+---@return integer
+function Npc:param_int(name, default) end
+
+-- Leaders and minions (Mobius MinionList).
+
+---The NPC's leader, nil for none.
+---@return Npc?
+function Npc:leader() end
+
+---The leader's living minions.
+---@return Npc[]
+function Npc:minions() end
+
+---@return boolean
+function Npc:has_minions() end
+
+---Spawns a minion of the template for this leader (Mobius addMinion).
+---@param npc_id integer
+---@return Npc?
+function Npc:add_minion(npc_id) end
+
+-- Script events.
+
+---Sends on_event_received(name, npc, receiver, reference) to every NPC
+---within radius whose template a script listens for (Mobius
+---broadcastEvent). The handlers run after the current one.
+---@param name string
+---@param radius integer
+---@param reference? Player|Npc
+function Npc:broadcast_event(name, radius, reference) end
+
+---Sends on_event_received(name, npc, receiver, reference) to one NPC
+---(Mobius sendScriptEvent).
+---@param name string
+---@param receiver Npc
+---@param reference? Player|Npc
+function Npc:send_event(name, receiver, reference) end
+
+-- Treasure chests (Mobius Chest).
+
+---Whether the chest is a box (a mimic is not).
+---@return boolean
+function Npc:is_box() end
+
+---@return boolean
+function Npc:is_interacted() end
+
+function Npc:set_interacted() end
+
+---The box explodes (Mobius treasureBomb).
+function Npc:treasure_bomb() end
+
+---Whether the NPC is inside the zone.
+---@param zone_id integer
+---@return boolean
+function Npc:is_inside_zone(zone_id) end
+
+---The distance to a position, a player or an NPC, without height.
+---@param other Player|Npc|Position
+---@return number
+function Npc:calculate_distance_2d(other) end
+
+---The distance to a position, a player or an NPC, with height.
+---@param other Player|Npc|Position
+---@return number
+function Npc:calculate_distance_3d(other) end
+
 -------------------------------------------------------------------------------
 -- rnd, time, world, globals, util
 -------------------------------------------------------------------------------
@@ -1265,6 +1631,23 @@ time = {}
 ---@return integer
 function time.now_ms() end
 
+---The game ticks (Mobius GameTimeTaskManager.getGameTicks).
+---@return integer
+function time.game_ticks() end
+
+---The game time: minutes since game midnight, 0 to 1439 (Mobius
+---getGameTime). A game day lasts 4 real hours.
+---@return integer
+function time.game_time() end
+
+---The game hour, 0 to 23.
+---@return integer
+function time.game_hour() end
+
+---Whether it is game night (hour < 6).
+---@return boolean
+function time.is_night() end
+
 ---World objects by object ID. Keep object IDs in fields across handlers,
 ---and turn them back into values here.
 world = {}
@@ -1284,6 +1667,42 @@ function world.get_player(object_id) end
 ---@param npc_id integer
 ---@return boolean
 function world.npc_exists(npc_id) end
+
+---The NPCs of a template in the world. Restart-safe scripts find the
+---NPCs they spawned before a reload here.
+---@param npc_id integer
+---@return Npc[]
+function world.npcs_by_id(npc_id) end
+
+---The NPCs within radius of obj, obj left out (Mobius
+---World.getVisibleObjectsInRange).
+---@param obj Player|Npc
+---@param radius? integer the visible range when left out
+---@return Npc[]
+function world.npcs_around(obj, radius) end
+
+---The players within radius of obj.
+---@param obj Player|Npc
+---@param radius? integer the visible range when left out
+---@return Player[]
+function world.players_around(obj, radius) end
+
+---The objects of a Mobius class around obj (World.getVisibleObjects(obj,
+---class)): "Player" and "Playable" are players, "Npc" every NPC,
+---"Creature" and "WorldObject" both, any other class the NPCs of that
+---class (npc:is_type).
+---@param obj Player|Npc
+---@param class? string "WorldObject" when left out
+---@param radius? integer the visible range when left out
+---@return (Player|Npc)[]
+function world.visible_objects(obj, class, radius) end
+
+---The last point of a straight walk from from to to, stopped by geodata
+---(Mobius GeoEngine.getValidLocation). Without geodata, to.
+---@param from Position|Player|Npc
+---@param to Position|Player|Npc
+---@return Position
+function world.valid_location(from, to) end
 
 ---The skill data and effects (Mobius SkillData, Skill).
 skills = {}
@@ -1358,6 +1777,157 @@ util = {}
 ---@return boolean
 function util.in_range(range, a, b, include_z) end
 
+---Mobius LocationUtil.calculateAngleFrom: the angle in degrees, 0 to 360,
+---of the line from a to b.
+---@param a Player|Npc|Position
+---@param b Player|Npc|Position
+---@return number
+function util.calculate_angle_from(a, b) end
+
+-------------------------------------------------------------------------------
+-- zones, doors, grandboss, cinematics
+-------------------------------------------------------------------------------
+
+---Zones as boss scripts use them (Mobius ZoneType, BossZone).
+zones = {}
+
+---The players inside the zone.
+---@param zone_id integer
+---@return Player[]
+function zones.players_inside(zone_id) end
+
+---@param zone_id integer
+---@param obj Player|Npc
+---@return boolean
+function zones.is_inside(zone_id, obj) end
+
+---Teleports every player inside to pos (Mobius movePlayersTo).
+---@param zone_id integer
+---@param pos Position|Player|Npc
+function zones.move_players(zone_id, pos) end
+
+---Sends every player inside to the zone's oust point, or town (Mobius
+---oustAllPlayers).
+---@param zone_id integer
+function zones.oust_all(zone_id) end
+
+---Lets the player enter a boss zone for seconds (Mobius
+---allowPlayerEntry).
+---@param zone_id integer
+---@param player Player
+---@param seconds integer
+function zones.allow_entry(zone_id, player, seconds) end
+
+---Takes the player off the zone's allowed list (Mobius removePlayer).
+---@param zone_id integer
+---@param player Player
+function zones.remove_player(zone_id, player) end
+
+---Doors (Mobius DoorData, Door).
+doors = {}
+
+---Opens a door; false for an unknown door.
+---@param door_id integer
+---@return boolean
+function doors.open(door_id) end
+
+---Closes a door; false for an unknown door.
+---@param door_id integer
+---@return boolean
+function doors.close(door_id) end
+
+---Whether the door is open; nil for an unknown door.
+---@param door_id integer
+---@return boolean?
+function doors.is_open(door_id) end
+
+---Grand boss state, saved (Mobius GrandBossManager). Statuses are the
+---script's numbers; Mobius scripts use 0 alive, 1 dead, 2 fighting, 3
+---waiting.
+grandboss = {}
+
+---The saved status, nil for an unknown boss.
+---@param boss_id integer
+---@return integer?
+function grandboss.status(boss_id) end
+
+---Saves the status at once (Mobius setStatus).
+---@param boss_id integer
+---@param status integer
+function grandboss.set_status(boss_id, status) end
+
+---A grand boss's saved data (Mobius StatSet).
+---@class BossInfo
+---@field respawn_time integer Unix milliseconds, 0 for none
+---@field x integer
+---@field y integer
+---@field z integer
+---@field heading integer
+---@field hp number
+---@field mp number
+
+---The saved data, nil for an unknown boss.
+---@param boss_id integer
+---@return BossInfo?
+function grandboss.info(boss_id) end
+
+---Saves the data (Mobius setStatSet).
+---@param boss_id integer
+---@param info BossInfo
+function grandboss.set_info(boss_id, info) end
+
+---The live boss, nil when it is not in the world (Mobius getBoss).
+---@param boss_id integer
+---@return Npc?
+function grandboss.boss(boss_id) end
+
+---Registers a spawned boss as the live boss of its template (Mobius
+---addBoss).
+---@param npc Npc
+function grandboss.add_boss(npc) end
+
+---What boss fights show. `to` is who sees it: a Player (that player), an
+---Npc (the players around it) or a zone ID (the players inside). Skill
+---animations are npc:magic_skill_use.
+cinematics = {}
+
+---Points the camera at target (Mobius SpecialCamera, same argument
+---order). Arguments left out are 0.
+---@param to Player|Npc|integer
+---@param target Player|Npc
+---@param force integer
+---@param angle1 integer
+---@param angle2 integer
+---@param time integer
+---@param range integer
+---@param duration integer
+---@param rel_yaw? integer
+---@param rel_pitch? integer
+---@param wide? integer
+---@param rel_angle? integer
+---@param unk? integer
+function cinematics.special_camera(to, target, force, angle1, angle2, time, range, duration, rel_yaw, rel_pitch, wide, rel_angle, unk) end
+
+---Shakes the screens (Mobius Earthquake).
+---@param to Player|Npc|integer
+---@param pos Position|Player|Npc
+---@param intensity integer
+---@param duration integer seconds
+function cinematics.earthquake(to, pos, intensity, duration) end
+
+---Plays a sound, coming from source when given (Mobius PlaySound).
+---@param to Player|Npc|integer
+---@param sound string e.g. "BS02_A"
+---@param source? Player|Npc
+function cinematics.sound(to, sound, source) end
+
+---Shows text on screen (Mobius ExShowScreenMessage).
+---@param to Player|Npc|integer
+---@param text string
+---@param ms integer
+---@param position? integer 2 (top center) when left out
+function cinematics.screen_message(to, text, ms, position) end
+
 -------------------------------------------------------------------------------
 -- Constants
 -------------------------------------------------------------------------------
@@ -1422,6 +1992,13 @@ Paperdoll = {}
 ---@class ChatTypes
 ---@field [string] integer
 ChatType = {}
+
+---AI intentions for npc:intention() and npc:set_intention: IDLE, ACTIVE,
+---REST, ATTACK, CAST, MOVE_TO, FOLLOW, PICK_UP, INTERACT (the values are
+---the names).
+---@class Intentions
+---@field [string] string
+Intention = {}
 
 ---Races: HUMAN 0, ELF 1, DARK_ELF 2, ORC 3, DWARF 4, then the NPC races.
 ---@class Race

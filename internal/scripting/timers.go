@@ -185,13 +185,17 @@ func (e *Engine) PlayerLeft(objectID int32) {
 	e.vm.cancelTimersWhere(func(k timerKey) bool { return k.player == objectID })
 }
 
-// NpcGone cancels the quest timers of an NPC that decayed or was deleted.
-// The game calls it on the loop.
+// NpcGone tells the engine that an NPC decayed or was deleted: its quest
+// timers stop, its variables go (Mobius clears them on respawn) and the
+// scripts' handles of it become invalid (npc:valid() is false). The game
+// calls it on the loop.
 func (e *Engine) NpcGone(objectID int32) {
 	if e.closed {
 		return
 	}
 	e.vm.cancelTimersWhere(func(k timerKey) bool { return k.npc == objectID })
+	delete(e.npcVars, objectID)
+	e.vm.npcGone(objectID)
 }
 
 // timerBox is the Go value inside a QuestTimer userdata.

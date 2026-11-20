@@ -46,6 +46,12 @@ func translateAll(dir string, names []string, out string) (*report, error) {
 // translateQuest translates one quest file. On a parse error the result
 // carries it and the Lua is empty.
 func translateQuest(path, src, name string) (string, *questResult) {
+	return translateScript(path, src, name, "quests/"+name)
+}
+
+// translateScript translates one Mobius script file; origin is its place
+// under scripts/, for the header (e.g. "ai/others/Chests").
+func translateScript(path, src, name, origin string) (string, *questResult) {
 	res := &questResult{name: name, api: map[string]int{}}
 	cu, err := parseJava(path, src)
 	if err != nil {
@@ -71,12 +77,14 @@ func translateQuest(path, src, name string) (string, *questResult) {
 		return t.saga(), res
 	}
 	t := newTranslator(path, lines, cls, res, false)
+	t.origin = origin
 	lua := t.quest()
 	if t.needTable {
 		// Too many locals or upvalues: translate again with the constants
 		// in one table.
 		res2 := &questResult{name: name, api: map[string]int{}}
 		t2 := newTranslator(path, lines, cls, res2, true)
+		t2.origin = origin
 		lua = t2.quest()
 		*res = *res2
 	}
@@ -107,6 +115,7 @@ type translator struct {
 	questID   string
 	questDesc string
 	extends   string
+	origin    string // the file's place under Mobius scripts/, for the header
 }
 
 // fieldInfo is a field of the quest class or of an inner class.
@@ -487,6 +496,11 @@ func (t *translator) quest() string {
 				}
 				continue
 			}
+			if isScriptMain(v) {
+				// main(String[]) of the AI scripts only makes the script; the
+				// loader does that.
+				continue
+			}
 			t.addMethod(t.methods, v, true)
 		case *fieldDecl, *initBlock:
 			inits = append(inits, m)
@@ -522,7 +536,11 @@ func (t *translator) quest() string {
 	}
 
 	w := t.w
-	w.linef("-- Translated by questport from quests/%s (Mobius CT_0 Interlude); owned by L2Go from here on.", cls.name)
+	origin := t.origin
+	if origin == "" {
+		origin = "quests/" + cls.name
+	}
+	w.linef("-- Translated by questport from %s (Mobius CT_0 Interlude); owned by L2Go from here on.", origin)
 	w.comments(cls.comments)
 	w.line(`local J = require("lib.java")`)
 	w.line("")

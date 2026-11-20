@@ -3,11 +3,15 @@
 //
 // Usage:
 //
-//	questport -mobius <dir> -out <dir> [-quest Q00303_CollectArrowheads ...] [-report]
+//	questport -mobius <dir> -out <dir> [-quest Q00303_CollectArrowheads ...] [-report] [-types scripts/types/l2go.lua]
+//	questport -ai -mobius <dir> -out <dir> [-quest Chests ...] [-report] [-types scripts/types/l2go.lua]
 //
 // -mobius is the Mobius Interlude checkout (or its quests folder). Every
 // quest becomes <out>/<QuestName>/<QuestName>.lua; what could not be
-// translated becomes a J.todo marker, listed in <out>/REPORT.txt.
+// translated becomes a J.todo marker, listed in <out>/REPORT.txt. With
+// -ai the scripts under scripts/ai become <out>/<folder>/<Name>.lua
+// instead. With -types the report also flags, per script, the Lua calls
+// the server's API (the definitions file) lacks.
 package main
 
 import (
@@ -46,6 +50,8 @@ func run(args []string) error {
 	out := fs.String("out", "", "output folder")
 	report := fs.Bool("report", false, "print the coverage report")
 	parseOnly := fs.Bool("parse-only", false, "only parse the Java files and report syntax errors")
+	ai := fs.Bool("ai", false, "translate the AI scripts (scripts/ai) instead of the quests; -quest then names AI scripts (Chests, others/Chests)")
+	types := fs.String("types", "", "the Lua API definitions (scripts/types/l2go.lua): the report flags calls the API lacks")
 	var quests questList
 	fs.Var(&quests, "quest", "translate only this quest (repeatable, or comma separated)")
 	if err := fs.Parse(args); err != nil {
@@ -53,6 +59,16 @@ func run(args []string) error {
 	}
 	if *mobius == "" {
 		return fmt.Errorf("-mobius is required")
+	}
+	var api *apiCheck
+	if *types != "" {
+		var err error
+		if api, err = loadAPICheck(*types); err != nil {
+			return err
+		}
+	}
+	if *ai {
+		return runAI(*mobius, *out, quests, *report, api)
 	}
 	dir, err := questsDir(*mobius)
 	if err != nil {
@@ -72,11 +88,39 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	for _, res := range rep.results {
+		api.flag(res)
+	}
+	return writeReport(rep, *out, *report)
+}
+
+// runAI translates the AI scripts.
+func runAI(mobius, out string, only []string, show bool, api *apiCheck) error {
+	dir, err := aiDir(mobius)
+	if err != nil {
+		return err
+	}
+	scripts, err := aiScripts(dir, only)
+	if err != nil {
+		return err
+	}
+	if out == "" {
+		return fmt.Errorf("-out is required")
+	}
+	rep, err := translateAIAll(dir, scripts, out, api)
+	if err != nil {
+		return err
+	}
+	return writeReport(rep, out, show)
+}
+
+// writeReport writes REPORT.txt into out and prints it or its summary.
+func writeReport(rep *report, out string, show bool) error {
 	text := rep.String()
-	if err := os.WriteFile(filepath.Join(*out, "REPORT.txt"), []byte(text), 0o644); err != nil { //nolint:gosec // the report is meant to be read
+	if err := os.WriteFile(filepath.Join(out, "REPORT.txt"), []byte(text), 0o644); err != nil { //nolint:gosec // the report is meant to be read
 		return fmt.Errorf("write report: %w", err)
 	}
-	if *report {
+	if show {
 		fmt.Print(text)
 	} else {
 		fmt.Print(rep.Summary())

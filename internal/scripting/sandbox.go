@@ -72,6 +72,10 @@ func (v *vm) modules() []module {
 		{name: "skills", funcs: v.skillsFuncs()},
 		{name: "items", funcs: v.itemsFuncs()},
 		{name: "ClassId", funcs: v.classFuncs()},
+		{name: "zones", funcs: v.zonesFuncs()},
+		{name: "doors", funcs: v.doorsFuncs()},
+		{name: "grandboss", funcs: v.grandbossFuncs()},
+		{name: "cinematics", funcs: v.cinematicsFuncs()},
 	}
 }
 

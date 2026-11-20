@@ -104,6 +104,16 @@ const (
 	hookCheckPartyMemberState
 	hookActionForEachPlayer
 	hookStart
+	// The AI hooks (Plan 13, A7).
+	hookFactionCall
+	hookCreatureSee
+	hookEventReceived
+	hookMoveFinished
+	hookNodeArrived
+	hookRouteFinished
+	hookTeleport
+	hookNpcHate
+	hookDayNightChange
 	numHooks
 )
 
@@ -136,6 +146,15 @@ var hookSpecs = [numHooks]hookSpec{
 	hookCheckPartyMemberState: {name: "check_party_member_state", desc: "party member state check"},
 	hookActionForEachPlayer:   {name: "action_for_each_player", desc: "for-each-player"},
 	hookStart:                 {name: "start", desc: "start"},
+	hookFactionCall:           {name: "faction_call", ids: true, what: "NPC", add: "add_faction_call_id", desc: "faction-call"},
+	hookCreatureSee:           {name: "creature_see", ids: true, what: "NPC", add: "add_creature_see_id", desc: "creature-see"},
+	hookEventReceived:         {name: "event_received", ids: true, what: "NPC", add: "add_event_received_id", desc: "event-received"},
+	hookMoveFinished:          {name: "move_finished", ids: true, what: "NPC", add: "add_move_finished_id", desc: "move-finished"},
+	hookNodeArrived:           {name: "node_arrived", ids: true, what: "NPC", add: "add_node_arrived_id", desc: "node-arrived"},
+	hookRouteFinished:         {name: "route_finished", ids: true, what: "NPC", add: "add_route_finished_id", desc: "route-finished"},
+	hookTeleport:              {name: "teleport", ids: true, what: "NPC", add: "add_teleport_id", desc: "teleport"},
+	hookNpcHate:               {name: "npc_hate", ids: true, what: "NPC", add: "add_npc_hate_id", desc: "NPC-hate"},
+	hookDayNightChange:        {name: "day_night_change", desc: "day-night"},
 }
 
 // registration is a handler with the place it was registered.

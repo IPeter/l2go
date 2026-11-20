@@ -87,17 +87,26 @@ func (v *vm) mathRandom(L *lua.LState) int {
 
 // timeFuncs is the time module: time.now_ms() on the loop clock.
 func (v *vm) timeFuncs() map[string]lua.LGFunction {
-	return map[string]lua.LGFunction{
+	m := map[string]lua.LGFunction{
 		"now_ms": func(L *lua.LState) int {
 			L.Push(lua.LNumber(v.needWorld(L, "time.now_ms").Now().UnixMilli()))
 			return 1
 		},
 	}
+	maps.Copy(m, v.timeAIFuncs())
+	return m
 }
 
 // worldFuncs is the world module: world.find_object(id) and
 // world.get_player(id).
 func (v *vm) worldFuncs() map[string]lua.LGFunction {
+	m := v.worldAIFuncs()
+	maps.Copy(m, v.worldQuestFuncs())
+	return m
+}
+
+// worldQuestFuncs are the world functions of the quest API.
+func (v *vm) worldQuestFuncs() map[string]lua.LGFunction {
 	return map[string]lua.LGFunction{
 		"find_object": func(L *lua.LState) int {
 			id := checkObjectID(L, 1, "world.find_object")
@@ -197,6 +206,7 @@ func (v *vm) utilFuncs() map[string]lua.LGFunction {
 			L.Push(lua.LBool(inRange(r, objectArg(L, 2), objectArg(L, 3), L.ToBool(4))))
 			return 1
 		},
+		"calculate_angle_from": calculateAngleFrom,
 	}
 }
 
@@ -300,6 +310,11 @@ var builtinConstants = map[string]map[string]any{
 	"Config": {
 		"ALT_PARTY_RANGE": defaultPartyRange, "ALT_VILLAGES_REPEATABLE_QUEST_REWARD": false, "DISABLE_TUTORIAL": false,
 		"RAID_MIN_RESPAWN_MULTIPLIER": 1.0, "RAID_MAX_RESPAWN_MULTIPLIER": 1.0,
+	},
+	// Mobius Intention, as npc:intention() returns it.
+	"Intention": {
+		"IDLE": "IDLE", "ACTIVE": "ACTIVE", "REST": "REST", "ATTACK": "ATTACK", "CAST": "CAST",
+		"MOVE_TO": "MOVE_TO", "FOLLOW": "FOLLOW", "PICK_UP": "PICK_UP", "INTERACT": "INTERACT",
 	},
 	// Filled by the game from its data (datagen).
 	"Category":        {},

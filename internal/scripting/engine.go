@@ -108,6 +108,13 @@ type Engine struct {
 	vm      *vm       // the running scripts
 	pending *Prepared // a Swap called during a run, applied when it ends
 	closed  bool
+	// queue holds the asynchronous events (Plan 13, A7) raised while a run
+	// was in progress; they run in order when the outermost run ends.
+	queue    []func()
+	draining bool
+	// npcVars are the NPC variables (Mobius NpcVariables) by object ID. They
+	// live on the engine, so a reload keeps them, and go with NpcGone.
+	npcVars map[int32]map[string]string
 
 	// compatMu serializes the deprecated Call, Reload, SwapLocked and Run
 	// (compat.go) with each other and with Close.
@@ -124,7 +131,7 @@ func New(ctx context.Context, opts Options) (*Engine, error) {
 		return nil, err
 	}
 	opts.Logger.Info("scripts loaded", "dir", opts.Dir, "files", v.files)
-	e := &Engine{opts: opts, vm: v}
+	e := &Engine{opts: opts, vm: v, npcVars: make(map[int32]map[string]string)}
 	v.engine = e
 	return e, nil
 }
@@ -153,20 +160,60 @@ func (e *Engine) stopped(ctx context.Context) error {
 }
 
 // settle applies a Swap or Close requested while a run was in progress,
-// once the outermost run has ended.
+// once the outermost run has ended, then runs the queued events.
 func (e *Engine) settle() {
 	if e.vm.depth > 0 {
 		return
 	}
 	if e.closed {
 		e.vm.close()
+		e.queue = nil
 		return
 	}
 	if p := e.pending; p != nil {
 		e.pending = nil
 		e.Swap(p)
 	}
+	e.drain()
 }
+
+// maxDrain bounds the queued events one drain runs, so scripts that keep
+// sending each other events cannot hold the loop forever.
+const maxDrain = 10000
+
+// drain runs the queued events in order, each in its own run with its own
+// time limit; events they queue run in the same drain.
+func (e *Engine) drain() {
+	if e.draining || len(e.queue) == 0 {
+		return
+	}
+	e.draining = true
+	defer func() { e.draining = false }()
+	for n := 0; len(e.queue) > 0 && !e.closed; n++ {
+		if n == maxDrain {
+			e.opts.Logger.Warn("script events dropped: too many queued in one loop command", "dropped", len(e.queue))
+			e.queue = nil
+			return
+		}
+		fn := e.queue[0]
+		e.queue[0] = nil
+		e.queue = e.queue[1:]
+		fn()
+	}
+}
+
+// async runs fn now, or, while a run is in progress, queues it to run
+// after the outermost run (Plan 13, A7: Mobius notifyEventAsync).
+func (e *Engine) async(fn func()) {
+	if e.vm.depth > 0 || e.draining {
+		e.queue = append(e.queue, fn)
+		return
+	}
+	fn()
+}
+
+// QueuedEvents returns the number of queued events (for tests).
+func (e *Engine) QueuedEvents() int { return len(e.queue) }
 
 // Prepared holds scripts loaded by Prepare, waiting for Swap.
 type Prepared struct {
@@ -234,7 +281,7 @@ func (e *Engine) Swap(p *Prepared) {
 	// Start itself.
 	ctx, cancel := context.WithTimeout(context.Background(), e.opts.LoadTimeout)
 	defer cancel()
-	_ = e.Start(ctx) // failures are logged
+	_ = e.start(ctx, true) // failures are logged
 }
 
 // Close closes the Lua state. Call it once the loop no longer calls the

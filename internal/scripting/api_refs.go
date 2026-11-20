@@ -77,13 +77,64 @@ type (
 	npcArg    struct{ ref NpcRef }
 )
 
-// playerBox and npcBox are the Go values inside Player and Npc userdata.
-// The ref is cleared when the run that handed it out ends, so a script
-// that keeps a player in a global cannot use it later.
-type (
-	playerBox struct{ ref PlayerRef }
-	npcBox    struct{ ref NpcRef }
-)
+// playerBox is the Go value inside Player userdata. The ref is cleared
+// when the run that handed it out ends, so a script that keeps a player in
+// a global cannot use it later.
+type playerBox struct{ ref PlayerRef }
+
+// npcBox is the Go value inside Npc userdata: a handle (Plan 02, L4). It
+// outlives the run that handed it out, so AI scripts can keep their boss
+// or minions in fields, but it never trusts the Go ref across runs: the
+// first use in a later run looks the NPC up again by object ID
+// (QuestWorld.FindObject). An NPC that left the world, or whose object ID
+// now belongs to another template, makes the handle invalid for good.
+type npcBox struct {
+	v    *vm
+	ref  NpcRef // checked in run seen
+	id   int32  // object ID
+	tmpl int    // template ID
+	seen uint64 // the run in which ref was handed out or looked up
+	gone bool
+}
+
+// resolve returns the NPC behind the handle, or nil when it is gone. An
+// NPC that leaves the world during a run stays usable until the run ends,
+// as a deleted Mobius Npc object does; npc:valid() is false at once.
+func (b *npcBox) resolve() NpcRef {
+	if b == nil {
+		return nil
+	}
+	v := b.v
+	if b.seen == v.runSeq && v.depth > 0 && b.ref != nil {
+		return b.ref
+	}
+	if b.gone {
+		return nil
+	}
+	w := v.quest.world
+	if w == nil || v.depth == 0 {
+		return nil
+	}
+	n, ok := w.FindObject(b.id).(NpcRef)
+	if !ok || n == nil || n.ID() != b.tmpl {
+		v.npcGone(b.id)
+		return nil
+	}
+	b.ref, b.seen = n, v.runSeq
+	return n
+}
+
+// npcGone makes the handle of an NPC that left the world invalid.
+func (v *vm) npcGone(objectID int32) {
+	ud, ok := v.npcs[objectID]
+	if !ok {
+		return
+	}
+	delete(v.npcs, objectID)
+	if b, ok := ud.Value.(*npcBox); ok {
+		b.gone = true
+	}
+}
 
 // refKey identifies the object behind a ref, so that one object is one Lua
 // value within a run (Java's identity checks, st == st2, keep working).
@@ -108,20 +159,44 @@ func (v *vm) newPlayer(L *lua.LState, p PlayerRef) lua.LValue {
 	return ud
 }
 
-// newNpc returns an Npc value for n, or nil. Within a run, the same NPC is
-// always the same value.
+// newNpc returns the Npc handle of n, or nil. The same NPC is always the
+// same value while it stays in the world, across runs too.
 func (v *vm) newNpc(L *lua.LState, n NpcRef) lua.LValue {
 	if n == nil {
 		return lua.LNil
 	}
-	key := refKey{kind: 'n', id: n.ObjectID()}
-	if ud, ok := v.refCache[key]; ok {
-		return ud
+	id, tmpl := n.ObjectID(), n.ID()
+	if ud, ok := v.npcs[id]; ok {
+		if b, ok := ud.Value.(*npcBox); ok && b.tmpl == tmpl {
+			b.ref, b.seen = n, v.runSeq
+			return ud
+		}
+		v.npcGone(id)
 	}
-	ud := v.newRef(L, &npcBox{ref: n}, npcType)
-	v.refCache[key] = ud
+	ud := L.NewUserData()
+	ud.Value = &npcBox{v: v, ref: n, id: id, tmpl: tmpl, seen: v.runSeq}
+	L.SetMetatable(ud, L.GetTypeMetatable(npcType))
+	v.npcs[id] = ud
 	return ud
 }
+
+// npcHandle returns argument n's handle, nil when it is not an Npc.
+func npcHandle(L *lua.LState, n int) *npcBox {
+	ud, ok := L.Get(n).(*lua.LUserData)
+	if !ok {
+		return nil
+	}
+	b, _ := ud.Value.(*npcBox)
+	return b
+}
+
+// valid reports whether the handle's NPC is in the world.
+func (b *npcBox) valid() bool {
+	return b.resolve() != nil && !b.gone
+}
+
+// goneNpcMsg explains an invalid Npc handle.
+const goneNpcMsg = "this NPC is gone (it left the world, or it came from an earlier handler and cannot be looked up); check npc:valid() first"
 
 func (v *vm) newRef(L *lua.LState, box any, typ string) *lua.LUserData {
 	ud := L.NewUserData()
@@ -137,8 +212,6 @@ func (v *vm) expireRefs() {
 	for i, ud := range v.refs {
 		switch b := ud.Value.(type) {
 		case *playerBox:
-			b.ref = nil
-		case *npcBox:
 			b.ref = nil
 		case *stateBox:
 			b.st, b.player = nil, nil
@@ -168,7 +241,7 @@ func (v *vm) types() []luaType {
 		{name: "QuestTimer", meta: timerType, methods: v.timerMethods(), tostring: timerString},
 		{name: "Item", meta: itemType, methods: itemMethods(), tostring: itemString},
 		{name: "Zone", meta: zoneType, methods: zoneMethods(), tostring: zoneString},
-		{name: "Skill", meta: skillType, methods: skillMethods(), tostring: skillString},
+		{name: "Skill", meta: skillType, methods: v.skillMethods(), tostring: skillString},
 	}
 }
 
@@ -340,11 +413,12 @@ func checkNpc(L *lua.LState, method string) NpcRef {
 		L.RaiseError("%s must be called on an NPC: npc:%s()", method, method)
 		return nil
 	}
-	if b.ref == nil {
-		L.RaiseError("npc:%s(): this NPC was passed to an earlier handler; keep npc:object_id() instead of the NPC", method)
+	n := b.resolve()
+	if n == nil {
+		L.RaiseError("npc:%s(): %s", method, goneNpcMsg)
 		return nil
 	}
-	return b.ref
+	return n
 }
 
 func playerString(ud *lua.LUserData) string {
@@ -355,8 +429,12 @@ func playerString(ud *lua.LUserData) string {
 }
 
 func npcString(ud *lua.LUserData) string {
-	if b, ok := ud.Value.(*npcBox); ok && b.ref != nil {
-		return fmt.Sprintf("npc %s (%d, object %d)", b.ref.Name(), b.ref.ID(), b.ref.ObjectID())
+	b, ok := ud.Value.(*npcBox)
+	if !ok {
+		return "npc"
 	}
-	return "npc (expired)"
+	if n := b.resolve(); n != nil {
+		return fmt.Sprintf("npc %s (%d, object %d)", n.Name(), n.ID(), n.ObjectID())
+	}
+	return fmt.Sprintf("npc %d (object %d, gone)", b.tmpl, b.id)
 }

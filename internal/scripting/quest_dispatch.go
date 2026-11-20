@@ -178,12 +178,52 @@ func (e *Engine) notify(ctx context.Context, k hookKind, id int, scripts []*npcS
 // Start runs the on_start handlers, in load order: spawns, timers and
 // global variables that Mobius scripts set up in their constructors. The
 // game calls it on the loop once the world is ready; Swap calls it after a
-// reload.
+// reload. The handlers get an event table whose reload field is false here
+// and true after a reload (Plan 13, A11): a restart-safe script then finds
+// its live NPCs instead of spawning them again.
 func (e *Engine) Start(ctx context.Context) error {
+	return e.start(ctx, false)
+}
+
+func (e *Engine) start(ctx context.Context, reload bool) error {
 	if e.closed {
 		return ErrStopped
 	}
-	return e.notify(ctx, hookStart, 0, e.vm.order, func(*vm) []lua.LValue { return nil })
+	return e.notify(ctx, hookStart, 0, e.vm.order, func(v *vm) []lua.LValue {
+		ev := v.L.CreateTable(0, 1)
+		ev.RawSetString("reload", lua.LBool(reload))
+		return []lua.LValue{ev}
+	})
+}
+
+// notifyAsync is notify for the events Mobius dispatches asynchronously
+// (Plan 13, A7): raised while a run is in progress, they wait in the
+// queue until the outermost run ends; otherwise they run at once. The
+// scripts are looked up when the handlers run, so a reload in between
+// reaches the new ones.
+func (e *Engine) notifyAsync(ctx context.Context, k hookKind, id int, args func(v *vm) []lua.LValue) error {
+	if err := e.stopped(ctx); err != nil {
+		return err
+	}
+	if len(e.vm.byID[k][id]) == 0 && hookSpecs[k].ids {
+		return nil
+	}
+	var err error
+	e.async(func() {
+		var scripts []*npcScript
+		if hookSpecs[k].ids {
+			scripts = e.vm.byID[k][id]
+		} else {
+			scripts = e.vm.order
+		}
+		runCtx := ctx
+		if e.draining {
+			// Queued: the caller's context may be long gone.
+			runCtx = context.Background()
+		}
+		err = e.notify(runCtx, k, id, scripts, args)
+	})
+	return err
 }
 
 // Kill runs on_kill(npc, killer, is_summon) of the scripts registered for
@@ -193,7 +233,7 @@ func (e *Engine) Kill(ctx context.Context, npc NpcRef, killer PlayerRef, isSummo
 	if npc == nil || e.closed {
 		return e.stopped(ctx)
 	}
-	return e.notify(ctx, hookKill, npc.ID(), e.vm.byID[hookKill][npc.ID()], func(v *vm) []lua.LValue {
+	return e.notifyAsync(ctx, hookKill, npc.ID(), func(v *vm) []lua.LValue {
 		return []lua.LValue{v.newNpc(v.L, npc), v.newPlayer(v.L, killer), lua.LBool(isSummon)}
 	})
 }
@@ -204,7 +244,7 @@ func (e *Engine) Attack(ctx context.Context, npc NpcRef, attacker PlayerRef, dam
 	if npc == nil || e.closed {
 		return e.stopped(ctx)
 	}
-	return e.notify(ctx, hookAttack, npc.ID(), e.vm.byID[hookAttack][npc.ID()], func(v *vm) []lua.LValue {
+	return e.notifyAsync(ctx, hookAttack, npc.ID(), func(v *vm) []lua.LValue {
 		sk := lua.LValue(lua.LNil)
 		if skill != nil {
 			sk = newValue(v.L, *skill, skillType)
@@ -218,7 +258,7 @@ func (e *Engine) Spawn(ctx context.Context, npc NpcRef) error {
 	if npc == nil || e.closed {
 		return e.stopped(ctx)
 	}
-	return e.notify(ctx, hookSpawn, npc.ID(), e.vm.byID[hookSpawn][npc.ID()], func(v *vm) []lua.LValue {
+	return e.notifyAsync(ctx, hookSpawn, npc.ID(), func(v *vm) []lua.LValue {
 		return []lua.LValue{v.newNpc(v.L, npc)}
 	})
 }
@@ -229,7 +269,7 @@ func (e *Engine) SkillSee(ctx context.Context, npc NpcRef, caster PlayerRef, ski
 	if npc == nil || e.closed {
 		return e.stopped(ctx)
 	}
-	return e.notify(ctx, hookSkillSee, npc.ID(), e.vm.byID[hookSkillSee][npc.ID()], func(v *vm) []lua.LValue {
+	return e.notifyAsync(ctx, hookSkillSee, npc.ID(), func(v *vm) []lua.LValue {
 		t := v.L.CreateTable(len(targets), 0)
 		for _, obj := range targets {
 			if val := v.objectValue(v.L, obj); val != lua.LNil {
@@ -245,7 +285,7 @@ func (e *Engine) SpellFinished(ctx context.Context, npc NpcRef, player PlayerRef
 	if npc == nil || e.closed {
 		return e.stopped(ctx)
 	}
-	return e.notify(ctx, hookSpellFinished, npc.ID(), e.vm.byID[hookSpellFinished][npc.ID()], func(v *vm) []lua.LValue {
+	return e.notifyAsync(ctx, hookSpellFinished, npc.ID(), func(v *vm) []lua.LValue {
 		return []lua.LValue{v.newNpc(v.L, npc), v.newPlayer(v.L, player), newValue(v.L, skill, skillType)}
 	})
 }
@@ -255,7 +295,7 @@ func (e *Engine) AggroRangeEnter(ctx context.Context, npc NpcRef, player PlayerR
 	if npc == nil || e.closed {
 		return e.stopped(ctx)
 	}
-	return e.notify(ctx, hookAggroRangeEnter, npc.ID(), e.vm.byID[hookAggroRangeEnter][npc.ID()], func(v *vm) []lua.LValue {
+	return e.notifyAsync(ctx, hookAggroRangeEnter, npc.ID(), func(v *vm) []lua.LValue {
 		return []lua.LValue{v.newNpc(v.L, npc), v.newPlayer(v.L, player), lua.LBool(isSummon)}
 	})
 }
@@ -275,7 +315,7 @@ func (e *Engine) zone(ctx context.Context, k hookKind, creature any, zone Zone) 
 	if e.closed {
 		return ErrStopped
 	}
-	return e.notify(ctx, k, zone.ID, e.vm.byID[k][zone.ID], func(v *vm) []lua.LValue {
+	return e.notifyAsync(ctx, k, zone.ID, func(v *vm) []lua.LValue {
 		return []lua.LValue{v.objectValue(v.L, creature), newValue(v.L, zone, zoneType)}
 	})
 }

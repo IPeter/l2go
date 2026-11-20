@@ -23,7 +23,10 @@ type questResult struct {
 	reviews  []note
 	requires []string
 	api      map[string]int // Lua API functions used, with counts
-	saga     bool
+	// missing are the calls of api the server's API lacks (-types), with
+	// counts: with the J.todo markers, the script's flagged calls.
+	missing map[string]int
+	saga    bool
 }
 
 // report collects the results of a run.
@@ -164,8 +167,28 @@ func (r *report) String() string {
 		fmt.Fprintf(&b, "%6d %4d  %s\n", api[name].calls, api[name].quests, name)
 	}
 
-	b.WriteString("\nPer quest (J.todo markers, review notes)\n")
-	b.WriteString("----------------------------------------\n")
+	missing := map[string]*use{}
+	for _, q := range r.results {
+		for name, n := range q.missing {
+			u := missing[name]
+			if u == nil {
+				u = &use{}
+				missing[name] = u
+			}
+			u.calls += n
+			u.quests++
+		}
+	}
+	if len(missing) > 0 {
+		b.WriteString("\nLua API the server lacks (calls, scripts)\n")
+		b.WriteString("-----------------------------------------\n")
+		for _, name := range sortedKeys(missing) {
+			fmt.Fprintf(&b, "%6d %4d  %s\n", missing[name].calls, missing[name].quests, name)
+		}
+	}
+
+	b.WriteString("\nPer script: flagged calls (J.todo markers, review notes, missing API)\n")
+	b.WriteString("---------------------------------------------------------------------\n")
 	for _, q := range r.results {
 		switch {
 		case q.err != nil:
@@ -176,13 +199,16 @@ func (r *report) String() string {
 			if q.saga {
 				kind = " (saga data)"
 			}
-			fmt.Fprintf(&b, "%-50s %3d %3d%s\n", q.name, len(q.todos), len(q.reviews), kind)
+			fmt.Fprintf(&b, "%-50s %3d %3d %3d%s\n", q.name, len(q.todos), len(q.reviews), len(q.missing), kind)
 		}
 		for _, n := range q.todos {
 			fmt.Fprintf(&b, "    todo   java:%d: %s\n", n.line, n.reason)
 		}
 		for _, n := range q.reviews {
 			fmt.Fprintf(&b, "    review java:%d: %s\n", n.line, n.reason)
+		}
+		for _, name := range sortedKeys(q.missing) {
+			fmt.Fprintf(&b, "    api    %s (%d calls): not in the server's Lua API\n", name, q.missing[name])
 		}
 	}
 	return b.String()

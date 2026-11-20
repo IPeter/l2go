@@ -35,6 +35,9 @@ func (h handler) where() string { return fmt.Sprintf("%s:%d", h.file, h.line) }
 // its handlers stop working.
 func (v *vm) begin(ctx context.Context, timeout time.Duration) (context.Context, func()) {
 	v.depth++
+	if v.depth == 1 {
+		v.runSeq++
+	}
 	if v.depth > 1 {
 		if outer := v.L.Context(); outer != nil {
 			return outer, v.end
