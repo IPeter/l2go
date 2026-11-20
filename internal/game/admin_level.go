@@ -16,9 +16,12 @@ func init() { registerFeature("admin_level", setupAdminLevel) }
 // adminLevelPresets are the levels of the page's "set level" buttons.
 var adminLevelPresets = []int{1, 10, 20, 40, 52, 61, 76, 78, 80}
 
-// adminLevelButtonRow is the row added to //admin's main page.
+// adminLevelButtonRow is the row added to //admin's main page: the Level
+// and Class (admin_class.go) buttons.
 const adminLevelButtonRow = `<center><table width=270><tr><td>` +
 	`<button value="Level" action="bypass -h admin_level_menu" width=65 height=21 back="sek.cbui94" fore="sek.cbui92">` +
+	`</td><td>` +
+	`<button value="Class" action="bypass -h admin_class_menu" width=65 height=21 back="sek.cbui94" fore="sek.cbui92">` +
 	`</td></tr></table></center>`
 
 func setupAdminLevel(s *Server) error {
