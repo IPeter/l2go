@@ -114,6 +114,9 @@ type characterDoc struct {
 	DeleteTime  *time.Time `bson:"delete_time,omitempty"` // absent if not deleting
 	CreatedAt   time.Time  `bson:"created_at"`
 	LastAccess  *time.Time `bson:"last_access,omitempty"` // absent if never entered the world
+
+	DeathPenaltyLevel int32 `bson:"death_penalty_level"`
+	ExpBeforeDeath    int64 `bson:"exp_before_death"`
 }
 
 // itemDoc is the stored form of storage.Item, with the column names of the
@@ -165,6 +168,9 @@ func toCharacterDoc(c *storage.Character) characterDoc {
 		DeleteTime:  optionalTime(c.DeleteTime),
 		CreatedAt:   c.CreatedAt,
 		LastAccess:  optionalTime(c.LastAccess),
+
+		DeathPenaltyLevel: c.DeathPenaltyLevel,
+		ExpBeforeDeath:    c.ExpBeforeDeath,
 	}
 }
 
@@ -204,6 +210,9 @@ func (d *characterDoc) character(items []storage.Item) storage.Character {
 		CreatedAt:   d.CreatedAt,
 		LastAccess:  timeOrZero(d.LastAccess),
 		Items:       items,
+
+		DeathPenaltyLevel: d.DeathPenaltyLevel,
+		ExpBeforeDeath:    d.ExpBeforeDeath,
 	}
 }
 
@@ -434,6 +443,8 @@ func characterUpdate(c *storage.Character) bson.D {
 		{Key: "pvp_kills", Value: doc.PvPKills},
 		{Key: "pk_kills", Value: doc.PKKills},
 		{Key: "clan_id", Value: doc.ClanID},
+		{Key: "death_penalty_level", Value: doc.DeathPenaltyLevel},
+		{Key: "exp_before_death", Value: doc.ExpBeforeDeath},
 		{Key: "cur_hp", Value: doc.CurHP},
 		{Key: "max_hp", Value: doc.MaxHP},
 		{Key: "cur_mp", Value: doc.CurMP},

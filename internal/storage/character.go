@@ -139,6 +139,13 @@ type Character struct {
 	PKKills     int32
 	ClanID      int32 // 0 if not in a clan
 
+	// DeathPenaltyLevel is the level of the Death Penalty (skill 5076), 0
+	// without one (Mobius character_skills_save of 5076).
+	DeathPenaltyLevel int32
+	// ExpBeforeDeath is the exp the character had before its last death, 0
+	// when it has not died since its last revive (Mobius expBeforeDeath).
+	ExpBeforeDeath int64
+
 	CurHP, MaxHP float64
 	CurMP, MaxMP float64
 	CurCP, MaxCP float64
@@ -191,7 +198,8 @@ type CharacterStore interface {
 
 	// Update saves the state of the character with c.ObjectID: position and
 	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
-	// and kill counts, clan, delete time, last access and access level. The
+	// and kill counts, death penalty level and exp before death, clan, delete
+	// time, last access and access level. The
 	// identity fields (account, name, race and creation time) are kept as
 	// stored. c.Items replaces the character's items: those it owned that
 	// c.Items does not list are deleted, and the listed ones are stored with

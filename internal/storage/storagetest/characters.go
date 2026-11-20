@@ -52,6 +52,10 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 		PvPKills:    12,
 		PKKills:     13,
 		ClanID:      14,
+
+		DeathPenaltyLevel: 3,
+		ExpBeforeDeath:    1_234_567_999_999,
+
 		CurHP:       80.5,
 		MaxHP:       81.25,
 		CurMP:       30.5,
@@ -94,6 +98,8 @@ func changedCharacter(c storage.Character) storage.Character {
 	c.PvPKills = 22
 	c.PKKills = 1
 	c.ClanID = 0
+	c.DeathPenaltyLevel = 0
+	c.ExpBeforeDeath = 9_876_600_000
 	c.CurHP = 1200.5
 	c.MaxHP = 1500.25
 	c.CurMP = 400.75
