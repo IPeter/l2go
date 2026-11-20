@@ -161,8 +161,7 @@ q:on_event(function(event, npc, player)
       q:start_quest_timer("zeruel_cleanup", 300000, nil, player, false)
     end
   elseif event == "zeruel_despawn" then
-    -- L2Go: Mobius first calls npc.abortAttack(); the script API has no NPC
-    -- AI calls yet, and the NPC is deleted right after anyway.
+    npc:abort_attack()
     npc:delete()
     return nil
   elseif event == "zeruel_cleanup" then

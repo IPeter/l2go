@@ -8,8 +8,8 @@
 -- </ul>
 --
 -- Needs pets: player:summon(), the flute items (player:get_item,
--- item:enchant_level), skills, minions and NPC attack orders are not in
--- the API yet; the quest is not offered until then.
+-- item:enchant_level) and minions are not in the API yet; the quest is not
+-- offered until then.
 local J = require("lib.java")
 
 local q = quest.new(421, "Q00421_LittleWingsBigAdventure", "Little Wing's Big Adventure")
@@ -133,7 +133,7 @@ q:on_talk(function(npc, player)
         -- Curse if the registered objectId is the wrong one (switch flutes).
         htmltext = "30747-18.htm"
         local skill = skills.get(4167, 1)
-        if skill ~= nil and player:is_affected_by_skill(skill.id) then
+        if skill ~= nil and player:is_affected_by_skill(skill:id()) then
           skills.apply_effects(skill, npc, player)
         end
       end
@@ -188,7 +188,7 @@ q:on_kill(function(npc, killer, isPet)
   -- Tree curses the killer.
   if rnd(100) < 30 and originalKiller ~= nil then
     local skill = skills.get(4243, 1)
-    if skill ~= nil and originalKiller:is_affected_by_skill(skill.id) then
+    if skill ~= nil and originalKiller:is_affected_by_skill(skill:id()) then
       skills.apply_effects(skill, npc, originalKiller)
     end
   end

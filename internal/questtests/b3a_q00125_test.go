@@ -64,16 +64,24 @@ func TestB3aQ125TheNameOfEvil1(t *testing.T) {
 	q.talk(hero, karakawei, "32117-15.htm")
 	q.talk(hero, mushika, "32114-11.htm")
 
+	// Each statue casts skill 5089 when the player reaches it.
+	w.ClearRecords()
 	q.talk(hero, ulu, "32119-01.htm")
+	fixWantAction(t, "Ulu casts", w, "cast", ulu.ObjectID, 0, 5089)
 	q.event(hero, ulu, "32119-14.htm", "32119-14.htm")
 	q.want("Ulu", hero, scripting.StateStarted, 6)
 	q.talk(hero, ulu, "32119-14.htm")
 	q.talk(hero, balu, "32120-01.htm")
+	fixWantAction(t, "Balu casts", w, "cast", balu.ObjectID, 0, 5089)
 	q.event(hero, balu, "32120-15.htm", "32120-15.htm")
 	q.want("Balu", hero, scripting.StateStarted, 7)
 	q.talk(hero, balu, "32120-16.htm")
 	q.talk(hero, karakawei, "32117-16.htm")
 	q.talk(hero, chuta, "32121-01.htm")
+	fixWantAction(t, "Chuta casts", w, "cast", chuta.ObjectID, 0, 5089)
+	if n := len(fixActions(w, "cast")); n != 3 {
+		t.Errorf("%d casts, want 3", n)
+	}
 	q.event(hero, chuta, "32121-16.htm", "32121-16.htm")
 	q.want("Chuta", hero, scripting.StateStarted, 8)
 	b3aWantItems(t, "epitaph", hero, map[int]int64{8782: 0, 8781: 1})

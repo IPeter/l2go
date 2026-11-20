@@ -153,6 +153,7 @@ func TestB2Q229Walkthrough(t *testing.T) {
 	if !zeruel.Deleted {
 		t.Error("Zeruel did not leave")
 	}
+	fixWantAction(t, "Zeruel leaves", h.World(), "abort_attack", zeruel.ObjectID, 0, 0)
 	reply, ok = h.Talk(b2Q229, hero, orim)
 	b2Page(t, "Orim cond 5", reply, ok, "30630-15.htm")
 	h.Event(b2Q229, "30630-16.htm", hero, orim)

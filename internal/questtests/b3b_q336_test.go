@@ -19,7 +19,7 @@ func TestB3bQ336Walkthrough(t *testing.T) {
 	page := &scripttest.Npc{ObjectID: 0x60000003, ID: 30696}
 	ferris := &scripttest.Npc{ObjectID: 0x60000004, ID: 30847}
 	shaman := &scripttest.Npc{ObjectID: 0x60000005, ID: 20644}
-	archer := &scripttest.Npc{ObjectID: 0x60000006, ID: 20584}
+	archer := &scripttest.Npc{ObjectID: 0x60000006, ID: 20584, Level: 41} // npc:level()
 	lich := &scripttest.Npc{ObjectID: 0x60000007, ID: 21003}
 
 	// Too young. exit_quest leaves a CREATED state alone, as in Mobius.

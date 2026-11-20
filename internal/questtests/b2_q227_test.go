@@ -105,6 +105,13 @@ func TestB2Q227Walkthrough(t *testing.T) {
 	b2Items(t, "inspector", hero, map[int]int64{2824: 0})
 	mahums := b2Q226Spawned(t, h, "Ol Mahums", 30732, 27129)
 	pilgrim, inspector := mahums[0], mahums[1]
+	// The inspector hates and attacks the pilgrim.
+	if want := []scripttest.Action{
+		{Kind: "hate", Object: inspector.ObjectID, Target: pilgrim.ObjectID, Value: 99999},
+		{Kind: "attack", Object: inspector.ObjectID, Target: pilgrim.ObjectID},
+	}; !slices.Equal(h.World().Actions, want) {
+		t.Errorf("Ol Mahums: actions %+v, want %+v", h.World().Actions, want)
+	}
 	h.Advance(5 * time.Second) // the despawn check: not yet
 	if pilgrim.Deleted || inspector.Deleted {
 		t.Fatal("the Ol Mahums left too early")
@@ -123,6 +130,13 @@ func TestB2Q227Walkthrough(t *testing.T) {
 	reply, ok = h.Talk(b2Q227, hero, katari)
 	b2Page(t, "Katari betrayer", reply, ok, "30668-02.htm")
 	betrayer := b2Q227Spawn(t, h, "betrayer", 27130)
+	// The betrayer runs away.
+	if want := []scripttest.Action{
+		{Kind: "run", Object: betrayer.ObjectID},
+		{Kind: "move", Object: betrayer.ObjectID, Loc: scripting.Location{X: -7732, Y: 36787, Z: -3709}},
+	}; !slices.Equal(h.World().Actions, want) || !betrayer.Running {
+		t.Errorf("betrayer: actions %+v, want %+v", h.World().Actions, want)
+	}
 	h.Kill(hero, betrayer)
 	b2Quest(t, "betrayer", hero, b2Q227, scripting.StateStarted, 9)
 	b2Items(t, "betrayer", hero, map[int]int64{2833: 1})
@@ -150,7 +164,7 @@ func TestB2Q227Walkthrough(t *testing.T) {
 	if !werewolf.Deleted {
 		t.Fatal("the werewolf stayed after a plain hit")
 	}
-	if want := []scripttest.Action{{Kind: "say", Object: werewolf.ObjectID, Text: "Cowardly guy!"}, {Kind: "delete", Object: werewolf.ObjectID}}; !slices.Equal(h.World().Actions, want) {
+	if want := []scripttest.Action{{Kind: "abort_attack", Object: werewolf.ObjectID}, {Kind: "say", Object: werewolf.ObjectID, Text: "Cowardly guy!"}, {Kind: "delete", Object: werewolf.ObjectID}}; !slices.Equal(h.World().Actions, want) {
 		t.Errorf("werewolf: actions %+v, want %+v", h.World().Actions, want)
 	}
 	h.World().ClearRecords()

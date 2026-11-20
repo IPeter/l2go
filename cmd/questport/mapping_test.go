@@ -145,6 +145,125 @@ func TestTypedHelpers(t *testing.T) {
 	}
 }
 
+// aiCallsSource uses the NPC AI, skill, item and player calls the Lua API
+// has (npc:attack, skills.get, items.get, player:active_weapon, ...).
+const aiCallsSource = `package quests.Q09997_AiCalls;
+
+public class Q09997_AiCalls extends Quest
+{
+	private static final SkillHolder GOW = new SkillHolder(4284, 2);
+
+	public Q09997_AiCalls()
+	{
+		super(9997);
+		addStartNpc(30001);
+		addAttackId(27001);
+	}
+
+	@Override
+	public String onEvent(String event, Npc npc, Player player)
+	{
+		final Attackable mob = addSpawn(27001, npc, true, 0).asAttackable();
+		mob.setRunning();
+		mob.addDamageHate(player, 0, 999);
+		mob.getAI().setIntentionAttack(player);
+		npc.getAI().setIntentionMoveTo(new Location(1, 2, 3));
+		npc.teleToLocation(4, 5, 6);
+		npc.setTarget(player);
+		npc.doCast(GOW.getSkill());
+		npc.doCast(SkillData.getInstance().getSkill(5089, 1));
+		npc.broadcastPacket(new MagicSkillUse(npc, player, 5073, 5, 1500, 0));
+		npc.asMonster().dropItem(player, 6353, 1);
+		npc.abortAttack();
+		if ((player.getActiveWeaponItem() != null) && (player.getActiveWeaponItem().getId() == 3471) && player.isAffectedBySkill(4082))
+		{
+			player.setPkKills(player.getPkKills() - 1);
+			player.updateUserInfo();
+		}
+		if (!player.isNoble())
+		{
+			player.setNoble(true);
+		}
+		if ((npc.getLevel() > 40) && (npc.getCurrentHp() < (npc.getMaxHp() / 3)))
+		{
+			npc.doDie(player);
+		}
+		if (World.getVisibleObjects().stream().anyMatch(object -> object.getId() == 25290))
+		{
+			return null;
+		}
+		player.getTarget().decayMe();
+		final ItemTemplate item = ItemData.getInstance().getTemplate(57);
+		if (item.isStackable())
+		{
+			return item.getName();
+		}
+		return String.valueOf(player.getAllActiveQuests().size());
+	}
+
+	@Override
+	public void onAttack(Npc npc, Player attacker, int damage, boolean isSummon, Skill skill)
+	{
+		if ((skill != null) && (skill.getId() == 1177) && (skill.getLevel() == 1))
+		{
+			npc.setScriptValue(1);
+		}
+	}
+}
+`
+
+func TestAICalls(t *testing.T) {
+	lua, res := translateQuest("Q09997_AiCalls.java", aiCallsSource, "Q09997_AiCalls")
+	if res.err != nil {
+		t.Fatal(res.err)
+	}
+	for _, n := range res.todos {
+		t.Errorf("unexpected todo at java:%d: %s", n.line, n.reason)
+	}
+	for _, want := range []string{
+		"mob:set_running()",
+		"mob:add_damage_hate(player, 0, 999)",
+		"mob:attack(player)",
+		"npc:move_to({x = 1, y = 2, z = 3})",
+		"npc:teleport(4, 5, 6)",
+		"npc:set_target(player)",
+		// A holder's skill is the runtime Skill.
+		"npc:cast(skills.get(GOW.id, GOW.level))",
+		"npc:cast(skills.get(5089, 1))",
+		"npc:magic_skill_use(player, 5073, 5, 1500, 0)",
+		"npc:drop_item(player, 6353, 1)",
+		"npc:abort_attack()",
+		// player:active_weapon() is the item ID itself.
+		"player:active_weapon() ~= nil and player:active_weapon() == 3471 and player:is_affected_by_skill(4082)",
+		"player:set_pk_kills(player:pk_kills() - 1)",
+		"player:update_user_info()",
+		"if not player:is_noble() then",
+		"player:set_noble(true)",
+		// getMaxHp is an int: Java's integer division.
+		"npc:level() > 40 and npc:hp() < J.idiv(npc:max_hp(), 3)",
+		"npc:die(player)",
+		"world.npc_exists(25290)",
+		"player:target():delete()",
+		"items.get(57)",
+		"item.stackable",
+		"item.name",
+		"#player:active_quests()",
+		// Skill id and level are methods.
+		"skill:id() == 1177 and skill:level() == 1",
+	} {
+		if !strings.Contains(lua, want) {
+			t.Errorf("output lacks %q", want)
+		}
+	}
+	// Noblesse exists now: no requirement.
+	if strings.Contains(lua, "q:requires(") {
+		t.Errorf("output has a requirement")
+	}
+	if t.Failed() {
+		t.Log(lua)
+	}
+}
+
 func TestRegexReplaceUnknownPatternStaysTodo(t *testing.T) {
 	src := strings.Replace(mappingTestSource, `replaceAll("\\D", "")`, `replaceAll("\\w+", "")`, 1)
 	_, res := translateQuest("Q09999_MappingTest.java", src, "Q09999_MappingTest")

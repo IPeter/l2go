@@ -89,11 +89,31 @@ func TestB3bQ334Walkthrough(t *testing.T) {
 		t.Fatalf("spawned %+v, want Rupina", w.Spawned)
 	}
 	rupina := w.Spawned[0]
+	// Mobius decays the player's target: the NPC clicked, here Rupina.
+	hero.Target = rupina
 	h.SetRand(rnd.NewScripted(t, rnd.Get(100, 4)))
 	reply, ok = h.Talk(b3bQ334, hero, rupina)
 	b3bPage(t, "Rupina", reply, ok, "30742-01.htm")
 	b3bItems(t, "Rupina", hero, map[int]int64{931: 1})
 	if !rupina.Deleted {
 		t.Error("Rupina stays after the talk")
+	}
+
+	// The Wisdom Chest gives its spellbooks (rnd(100) < 20) and goes. Without
+	// a target nothing is decayed (Mobius would fail on the null target).
+	chest := &scripttest.Npc{ObjectID: 0x60000020, ID: 30743, Name: "Wisdom Chest"}
+	h.SetRand(rnd.NewScripted(t, rnd.Get(100, 19)))
+	reply, ok = h.Talk(b3bQ334, hero, chest)
+	b3bPage(t, "chest without target", reply, ok, "30743-06.htm")
+	if chest.Deleted {
+		t.Error("the chest went without being the target")
+	}
+	hero.Target = chest
+	h.SetRand(rnd.NewScripted(t, rnd.Get(100, 19)))
+	reply, ok = h.Talk(b3bQ334, hero, chest)
+	b3bPage(t, "chest", reply, ok, "30743-06.htm")
+	b3bItems(t, "chest", hero, map[int]int64{1049: 2, 1050: 2})
+	if !chest.Deleted {
+		t.Error("the chest stays after the talk")
 	}
 }

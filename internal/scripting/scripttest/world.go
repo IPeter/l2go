@@ -34,6 +34,9 @@ type World struct {
 	Actions  []Action
 	Messages []Message
 	Spawned  []*Npc
+	// Given lists the items given (give_items, reward_items), one entry
+	// per call.
+	Given []Give
 	// QuestLists counts the QuestList packets per player object ID;
 	// QuestMarks lists the quests ExShowQuestMark was sent for.
 	QuestLists map[int32]int
@@ -115,6 +118,13 @@ type Action struct {
 	HitTime time.Duration
 }
 
+// Give is one item give: count items of a template to a player.
+type Give struct {
+	Player int32
+	Item   int
+	Count  int64
+}
+
 // Message is a text or system message sent to a player.
 type Message struct {
 	Player int32
@@ -157,7 +167,7 @@ func (w *World) SoundsOf(p *Player) []string {
 
 // ClearRecords forgets what scripts did so far.
 func (w *World) ClearRecords() {
-	w.Sounds, w.Replies, w.Actions, w.Messages, w.Spawned, w.QuestMarks = nil, nil, nil, nil, nil, nil
+	w.Sounds, w.Replies, w.Actions, w.Messages, w.Spawned, w.QuestMarks, w.Given = nil, nil, nil, nil, nil, nil, nil
 	clear(w.QuestLists)
 }
 
@@ -296,8 +306,9 @@ func (w *World) EquippedItemID(p scripting.PlayerRef, slot int) int {
 	return 0
 }
 
-// GiveItems adds items.
+// GiveItems adds items and records the call in Given.
 func (w *World) GiveItems(p scripting.PlayerRef, itemID int, count int64, _ int) {
+	w.Given = append(w.Given, Give{Player: p.ObjectID(), Item: itemID, Count: count})
 	if pl := playerOf(p); pl != nil {
 		pl.addItem(itemID, count)
 	}

@@ -82,7 +82,11 @@ func TestB2Q231Walkthrough(t *testing.T) {
 		t.Errorf("teleported to %d, %d, %d", hero.X, hero.Y, hero.Z)
 	}
 	h.Advance(5 * time.Second)
-	b2Q226Spawned(t, h, "bugbears", 20150, 20150, 20150)
+	// Each King Bugbear hates and attacks the player.
+	for _, bugbear := range b2Q226Spawned(t, h, "bugbears", 20150, 20150, 20150) {
+		fixWantAction(t, "bugbear hate", h.World(), "hate", bugbear.ObjectID, hero.ObjectID, 999)
+		fixWantAction(t, "bugbear attack", h.World(), "attack", bugbear.ObjectID, hero.ObjectID, 0)
+	}
 	reply, ok = h.Talk(b2Q231, hero, toma)
 	b2Page(t, "Toma", reply, ok, "30556-06.htm")
 	b2Items(t, "devices", hero, map[int]int64{2916: 0, 2872: 5})

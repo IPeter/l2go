@@ -19,9 +19,7 @@ func b1Q999Load(t *testing.T) *scripttest.Harness {
 
 // The newbie helper part of the tutorial for a human fighter: the Newbie
 // Helper's first mission, the gremlin, the blue gem for the recommendation
-// and the soulshots, then Roien's gift. The gremlin's blue gem drop needs
-// npc:drop_item, which the Lua API does not have yet: the test hands the
-// gem over instead of killing the second gremlin.
+// and the soulshots, then Roien's gift.
 func TestB1Q999Walkthrough(t *testing.T) {
 	h := b1Q999Load(t)
 	w := h.World()
@@ -59,8 +57,24 @@ func TestB1Q999Walkthrough(t *testing.T) {
 	h.Kill(hero, gremlin)
 	b1Q255Var(t, "first gremlin", hero, "Ex", "2")
 
-	// The blue gem (dropped by the second gremlin in Mobius).
+	// The second gremlin drops the blue gem for the player; the fake world
+	// records the drop, and the player picks the gem up.
+	w.ClearRecords()
+	h.Kill(hero, gremlin)
+	if drops := fixActions(w, "drop_item"); len(drops) != 1 || drops[0].Object != gremlin.ObjectID ||
+		drops[0].Target != hero.ObjectID || drops[0].Value != 6353 || drops[0].Count != 1 {
+		t.Fatalf("second gremlin: drops %+v, want the blue gem for the hero", drops)
+	}
+	if got, _ := hero.Quest(b1Q999).Get("step"); got != "1" {
+		t.Errorf("second gremlin: step = %q, want 1", got)
+	}
 	hero.Give(6353, 1)
+	// With the gem in the bag a third gremlin drops nothing.
+	w.ClearRecords()
+	h.Kill(hero, gremlin)
+	if drops := fixActions(w, "drop_item"); len(drops) != 0 {
+		t.Errorf("third gremlin: drops %+v", drops)
+	}
 	reply, ok = h.FirstTalk(hero, helper)
 	b1Page(t, "blue gem", reply, ok, "30009-03.htm")
 	b1Items(t, "blue gem", hero, map[int]int64{6353: 0, 1067: 1, 5789: 200})

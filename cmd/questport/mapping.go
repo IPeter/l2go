@@ -346,8 +346,8 @@ var mappings = []*mapEntry{
 	m("Player", "getClanId", "", "$r:clan_id()", "int").feat("clans"),
 	m("Player", "isClanLeader", "", "$r:is_clan_leader()", "boolean").feat("clans"),
 	m("Player", "isSubClassActive", "", "$r:is_sub_class_active()", "boolean").feat("subclass"),
-	m("Player", "isNoble", "", "$r:is_noble()", "boolean").feat("noblesse"),
-	m("Player", "setNoble", "bool", "$r:set_noble($1)", "").feat("noblesse"),
+	m("Player", "isNoble", "", "$r:is_noble()", "boolean"),
+	m("Player", "setNoble", "bool", "$r:set_noble($1)", ""),
 	m("Player", "sendMessage", "str", "$r:send_message($1)", ""),
 	m("Player", "getAdena", "", "$r:adena()", "long"),
 	m("Player", "getSkillLevel", "int", "$r:skill_level($1)", "int"),
@@ -559,9 +559,11 @@ var mappings = []*mapEntry{
 	m("ItemChanceHolder", "getChance", "", "$r.chance", "double"),
 	m("SkillHolder", "getSkillId", "", "$r.id", "int"),
 	m("SkillHolder", "getSkillLevel", "", "$r.level", "int"),
-	m("SkillHolder", "getSkill", "", "$r", "Skill"),
-	m("Skill", "getId", "", "$r.id", "int"),
-	m("Skill", "getLevel", "", "$r.level", "int"),
+	// A holder is the table {id =, level =}; its skill is the runtime Skill,
+	// whose id and level are methods.
+	m("SkillHolder", "getSkill", "", "skills.get($r.id, $r.level)", "Skill").w(),
+	m("Skill", "getId", "", "$r:id()", "int"),
+	m("Skill", "getLevel", "", "$r:level()", "int"),
 	m("Skill", "getMpConsume", "", "$r.mp_consume", "int"),
 	m("Skill", "getHpConsume", "", "$r.hp_consume", "int"),
 	m("Location", "getX", "", "$r.x", "int"),
@@ -570,7 +572,8 @@ var mappings = []*mapEntry{
 	m("Location", "getHeading", "", "$r.heading", "int"),
 	m("ZoneType", "getId", "", "$r:id()", "int"),
 	m("Weapon", "getItemType", "", "$r:item_type()", "WeaponType"),
-	m("Weapon", "getId", "", "$r:id()", "int"),
+	// player:active_weapon() is the weapon's item ID already.
+	fnm("Weapon", "getId", "", "int", same("int")),
 
 	// --- Enums ---
 	fnm("PlayerClass", "getId", "", "int", same("int")),

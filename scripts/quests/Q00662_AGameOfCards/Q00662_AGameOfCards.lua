@@ -1,6 +1,4 @@
 -- Translated by questport from quests/Q00662_AGameOfCards (Mobius CT_0 Interlude); owned by L2Go from here on.
--- Finished by hand: giveReward's item template lookup (ItemData) is replaced
--- by the stackable flags of the few reward items.
 local J = require("lib.java")
 
 local q = quest.new(662, "Q00662_AGameOfCards", "A Game of Cards")
@@ -22,14 +20,9 @@ local CARDS = {}
 -- Drop chances
 local CHANCES = {}
 
--- The rewards that stack (Mobius item data, is_stackable); the enchant
--- scrolls of Interlude do not.
-local STACKABLE = {[ZIGGO_GEMSTONE] = true}
-
--- giveReward is Mobius's giveReward: a stackable item in one go, any other
--- one by one.
 local function giveReward(player, item, count)
-  if STACKABLE[item] then
+  local template = items.get(item)
+  if template.stackable then
     q:give_items(player, item, count)
   else
     for i = 0, count - 1 do

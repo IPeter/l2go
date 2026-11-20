@@ -136,6 +136,16 @@ func TestB3aQ120PavelsLastResearch(t *testing.T) {
 			b3aWantItems(t, "flower given", hero, map[int]int64{8290: 0})
 		case "32045-02.htm":
 			b3aWantItems(t, "report", hero, map[int]int64{8059: 1})
+			// The bookshelf shows skill 5073 level 5 on the player.
+			found := false
+			for _, a := range w.Actions {
+				if a.Kind == "magic_skill_use" && a.Object == shelf.ObjectID && a.Target == hero.ObjectID && a.Value == 5073 && a.Level == 5 && a.HitTime.Milliseconds() == 1500 {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("actions %+v, want the 5073 animation", w.Actions)
+			}
 		case "32041-16.htm":
 			b3aWantItems(t, "enigma", hero, map[int]int64{8060: 1})
 		case "32041-22.htm":

@@ -32,10 +32,6 @@ q:add_talk_id(MUSHIKA, KARAKAWEI, ULU_KAIMU, BALU_KAIMU, CHUTA_KAIMU)
 q:add_kill_id(J.keys(ORNITHOMIMUS))
 q:add_kill_id(J.keys(DEINONYCHUS))
 
--- Mobius has the stone statues cast skill 5089 (a visual) when the player
--- reaches them: npc.doCast(SkillData.getInstance().getSkill(5089, 1)). Left
--- out until the API has NPC casting (npc:cast).
-
 q:on_event(function(event, npc, player)
   local htmltext = event
   local st = q:get_quest_state(player, false)
@@ -113,18 +109,21 @@ q:on_talk(function(npc, player)
       end
     elseif sw2 == ULU_KAIMU then
       if cond == 5 then
+        npc:cast(skills.get(5089, 1))
         htmltext = "32119-01.htm"
       elseif cond == 6 then
         htmltext = "32119-14.htm"
       end
     elseif sw2 == BALU_KAIMU then
       if cond == 6 then
+        npc:cast(skills.get(5089, 1))
         htmltext = "32120-01.htm"
       elseif cond == 7 then
         htmltext = "32120-16.htm"
       end
     elseif sw2 == CHUTA_KAIMU then
       if cond == 7 then
+        npc:cast(skills.get(5089, 1))
         htmltext = "32121-01.htm"
       elseif cond == 8 then
         htmltext = "32121-17.htm"

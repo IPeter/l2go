@@ -126,6 +126,14 @@ func TestB2Q223Walkthrough(t *testing.T) {
 	if n := len(h.World().Spawned); n != 2 || h.World().Spawned[0].ID != 27088 || h.World().Spawned[1].ID != 27088 {
 		t.Fatalf("harpy spawned %d monsters (%+v), want 2 matriarchs", n, h.World().Spawned)
 	}
+	// Each runs at, hates and attacks the attacker.
+	for _, m := range h.World().Spawned {
+		if !m.Running {
+			t.Errorf("matriarch %#x walks", m.ObjectID)
+		}
+		fixWantAction(t, "matriarch hate", h.World(), "hate", m.ObjectID, hero.ObjectID, 999)
+		fixWantAction(t, "matriarch attack", h.World(), "attack", m.ObjectID, hero.ObjectID, 0)
+	}
 	matriarch := h.World().Spawned[0]
 	b2Rand(t, h, rnd.Bool(false))
 	h.Kill(hero, matriarch)
@@ -167,6 +175,7 @@ func TestB2Q223Walkthrough(t *testing.T) {
 	if n := len(h.World().Spawned); n != 1 || h.World().Spawned[0].ID != 27089 {
 		t.Fatalf("scavenger spawned %d monsters (%+v), want 1 collector", n, h.World().Spawned)
 	}
+	fixWantAction(t, "collector attack", h.World(), "attack", h.World().Spawned[0].ObjectID, hero.ObjectID, 0)
 	b2Q223Kills(t, h, hero, h.World().Spawned[0], 1)
 	b2Q223Kills(t, h, hero, scavenger, 98)
 	b2Quest(t, "99 ratman heads", hero, b2Q223, scripting.StateStarted, 10)

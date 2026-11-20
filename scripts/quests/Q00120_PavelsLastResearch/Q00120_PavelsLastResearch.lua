@@ -135,8 +135,7 @@ q:on_event(function(event, npc, player)
   elseif event == "32045-02.htm" then
     qs:set_cond(15, true)
     q:give_items(player, REPORT2, 1)
-    -- Mobius: npc.broadcastPacket(new MagicSkillUse(npc, player, 5073, 5, 1500, 0)).
-    -- A visual only; left out until the API has npc:magic_skill_use.
+    npc:magic_skill_use(qs:get_player(), 5073, 5, 1500, 0)
   elseif event == "32046-04.htm" or event == "32046-05.htm" then
     qs:exit_quest(true)
   elseif event == "32046-06.htm" then

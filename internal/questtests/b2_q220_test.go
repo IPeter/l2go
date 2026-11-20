@@ -218,10 +218,20 @@ func TestB2Q220Walkthrough(t *testing.T) {
 	w.kill(ragna, 1)
 	b2Says220(t, h, "Ragna killed", "Too late!")
 	chief := b2Spawned217(t, h, 27086)
+	chief.HP, chief.MaxHP = 1000, 1000
 	h.World().ClearRecords()
 	h.Attack(w.p, chief, 100)
 	h.Attack(w.p, chief, 100)
 	b2Says220(t, h, "chief attacked", "How regretful! Unjust dishonor!")
+	// Below a third of its HP the chief cries out once.
+	h.World().ClearRecords()
+	chief.HP = 340
+	h.Attack(w.p, chief, 100)
+	b2Says220(t, h, "chief at 34 %")
+	chief.HP = 320
+	h.Attack(w.p, chief, 100)
+	h.Attack(w.p, chief, 100)
+	b2Says220(t, h, "chief at 32 %", "Indignant and unfair death!")
 	h.World().ClearRecords()
 	w.kill(chief, 1)
 	b2Says220(t, h, "chief killed", "I'll get revenge someday!!")

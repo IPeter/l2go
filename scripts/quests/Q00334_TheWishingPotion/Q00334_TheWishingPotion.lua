@@ -83,6 +83,15 @@ local function checkIngr(st, player)
   return false
 end
 
+-- Mobius decays st.getPlayer().getTarget(), the NPC the player talks to.
+-- Its NullPointerException without a target becomes nothing here.
+local function decayTarget(player)
+  local target = player:target()
+  if target ~= nil and target.delete ~= nil then
+    target:delete()
+  end
+end
+
 q:add_start_npc(ALCHEMIST_MATILD)
 q:add_talk_id(ALCHEMIST_MATILD, TORAI, WISDOM_CHEST, RUPINA)
 q:register_quest_items(ALCHEMY_TEXT_ID, SECRET_BOOK_ID, POTION_RECIPE_1_ID, POTION_RECIPE_2_ID, AMBER_SCALE_ID, WIND_SOULSTONE_ID, GLASS_EYE_ID, HORROR_ECTOPLASM_ID, SILENOS_HORN_ID, ANT_SOLDIER_APHID_ID, TYRANTS_CHITIN_ID, BUGBEAR_BLOOD_ID)
@@ -264,20 +273,18 @@ q:on_talk(function(npc, player)
       htmltext = q:get_no_quest_msg(player)
     end
   elseif npcId == WISDOM_CHEST then
-    -- L2Go: Mobius decays st.getPlayer().getTarget(), the NPC the player talks
-    -- to; without player:target() (API gap) the talked NPC is removed directly.
     local dropChance = rnd(100)
     if dropChance < 20 then
       q:give_items(player, SPELLBOOK_ICEBOLT_ID, 1)
       q:give_items(player, SPELLBOOK_BATTLEHEAL_ID, 1)
-      npc:delete()
+      decayTarget(st:get_player())
       htmltext = "30743-06.htm"
     elseif dropChance < 30 then
       q:give_items(player, HEART_OF_PAAGRIO_ID, 1)
-      npc:delete()
+      decayTarget(st:get_player())
       htmltext = "30743-06.htm"
     else
-      npc:delete()
+      decayTarget(st:get_player())
       htmltext = "30743-0" .. (rnd(5) + 1) .. ".htm"
     end
   elseif npcId == RUPINA then
@@ -295,7 +302,7 @@ q:on_talk(function(npc, player)
         q:give_items(player, DEMONS_GLOVES_FABRIC_ID, 1)
       end
     end
-    npc:delete() -- L2Go: Mobius decays the player's target (see the Wisdom Chest).
+    decayTarget(st:get_player())
     htmltext = "30742-01.htm"
   end
   return htmltext

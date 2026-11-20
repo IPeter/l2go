@@ -78,13 +78,15 @@ q:on_event(function(event, npc, player)
     q:take_items(player, STINGER_WASP_NEEDLE, -1)
     q:give_items(player, REPORT_OF_KRUMA, 1)
   elseif event == "spawn_bugbears" then
-    -- L2Go: Mobius makes each King Bugbear hate (addDamageHate 999) and
-    -- attack the player. The script API has no NPC AI calls yet, so they
-    -- are only spawned around the player (aggressive monsters still notice
-    -- the player on their own).
-    q:add_spawn(KING_BUGBEAR, {x = 140333, y = -194153, z = -3138, heading = 0}, false, 200000)
-    q:add_spawn(KING_BUGBEAR, {x = 140395, y = -194147, z = -3146, heading = 0}, false, 200000)
-    q:add_spawn(KING_BUGBEAR, {x = 140304, y = -194082, z = -3157, heading = 0}, false, 200000)
+    local bugbear1 = q:add_spawn(KING_BUGBEAR, {x = 140333, y = -194153, z = -3138, heading = 0}, false, 200000)
+    bugbear1:add_damage_hate(player, 0, 999)
+    bugbear1:attack(player)
+    local bugbear2 = q:add_spawn(KING_BUGBEAR, {x = 140395, y = -194147, z = -3146, heading = 0}, false, 200000)
+    bugbear2:add_damage_hate(player, 0, 999)
+    bugbear2:attack(player)
+    local bugbear3 = q:add_spawn(KING_BUGBEAR, {x = 140304, y = -194082, z = -3157, heading = 0}, false, 200000)
+    bugbear3:add_damage_hate(player, 0, 999)
+    bugbear3:attack(player)
     return nil
   end
   return htmltext

@@ -206,9 +206,7 @@ q:on_attack(function(npc, attacker, damage, isPet)
   if isPet then
     return
   end
-  -- L2Go: Mobius makes each spawned monster run (setRunning), hate
-  -- (addDamageHate 999) and attack the attacker. The script API has no NPC
-  -- AI calls yet, so the monsters are only spawned next to the attacker.
+  local originalKiller = attacker
   local sw = npc:id()
   if sw == HARPY then
     if st:is_cond(6) and rnd.bool() and not npc:is_script_value(1) then
@@ -216,7 +214,10 @@ q:on_attack(function(npc, attacker, damage, isPet)
       do
         local i = 1
         while i < (rnd(10) < 7 and 2 or 3) do
-          q:add_spawn(HARPY_MATRIARCH, npc, true, 0)
+          local collector = q:add_spawn(HARPY_MATRIARCH, npc, true, 0)
+          collector:set_running()
+          collector:add_damage_hate(originalKiller, 0, 999)
+          collector:attack(originalKiller)
           i = i + 1
         end
       end
@@ -228,7 +229,10 @@ q:on_attack(function(npc, attacker, damage, isPet)
       do
         local i = 1
         while i < (rnd(10) < 7 and 2 or 3) do
-          q:add_spawn(ROAD_COLLECTOR, npc, true, 0)
+          local collector = q:add_spawn(ROAD_COLLECTOR, npc, true, 0)
+          collector:set_running()
+          collector:add_damage_hate(originalKiller, 0, 999)
+          collector:attack(originalKiller)
           i = i + 1
         end
       end

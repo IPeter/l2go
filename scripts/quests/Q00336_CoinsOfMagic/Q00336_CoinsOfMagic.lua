@@ -1,10 +1,6 @@
 -- Translated by questport from quests/Q00336_CoinsOfMagic (Mobius CT_0 Interlude); owned by L2Go from here on.
 -- Adapted from FirstTeam Interlude
 --
--- Finished by hand: Mobius's drop chance uses npc.getLevel(), and NPC
--- values have no level() yet (API gap). The levels of the monsters whose
--- drop uses it are their template levels (Mobius stats/npcs), which never
--- change, in K.NPC_LEVEL; switch to npc:level() once it exists.
 -- The coin exchanges of the exchange NPCs are not in Mobius either: their
 -- pages just show.
 local J = require("lib.java")
@@ -147,27 +143,6 @@ K.MONSTERS = {
   K.BLOODY_GHOST,
   K.NIHIL_INVADER,
   K.DARK_GUARD,
-}
--- L2Go: the template levels of the DROPLIST monsters, for npc.getLevel()
--- (no npc:level() yet, API gap).
-K.NPC_LEVEL = {
-  [K.TIMAK_ORC_ARCHER] = 41,
-  [K.TIMAK_ORC_SOLDIER] = 42,
-  [K.TIMAK_ORC_SHAMAN] = 44,
-  [K.LAKIN] = 44,
-  [K.TORTURED_UNDEAD] = 53,
-  [K.HATAR_HANISHEE] = 49,
-  [K.TIMAK_ORC] = 40,
-  [K.SHACKLE] = 45,
-  [K.HEADLESS_KNIGHT] = 50,
-  [K.ROYAL_CAVE_SERVANT] = 51,
-  [K.MALRUK_SUCCUBUS_TUREN] = 56,
-  [K.FORMOR] = 45,
-  [K.FORMOR_ELDER] = 46,
-  [K.VANOR_SILENOS_SHAMAN] = 49,
-  [K.TARLK_BUGBEAR_HIGH_WARRIOR] = 49,
-  [K.OEL_MAHUM] = 53,
-  [K.OEL_MAHUM_WARRIOR] = 54,
 }
 
 local function promote(st)
@@ -317,8 +292,7 @@ q:on_kill(function(npc, player, isPet)
     return
   end
   local grade = st:get_int("grade")
-  -- L2Go: Mobius's npc.getLevel(), from the template levels (API gap).
-  local chance = (K.NPC_LEVEL[npcId] or 0) + grade * 3 - 20
+  local chance = npc:level() + grade * 3 - 20
   for _, e in ipairs(K.DROPLIST) do
     if e[1] == npcId then
       if rnd(100) < chance then

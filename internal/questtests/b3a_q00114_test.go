@@ -60,9 +60,24 @@ func TestB3aQ114ResurrectionOfAnOldManager(t *testing.T) {
 	q.event(hero, wendy, "32047-13a.htm", "32047-13a.htm")
 	q.want("golem", hero, scripting.StateStarted, 10)
 	q.talk(hero, wendy, "32047-14a.htm")
+	w.ClearRecords()
 	q.event(hero, wendy, "32047-15a.htm", "32047-15a.htm")
 	if len(w.Spawned) != 1 || w.Spawned[0].ID != 27318 {
 		t.Fatalf("spawned %+v", w.Spawned)
+	}
+	// The golem hates and attacks the player.
+	golem := w.Spawned[0].ObjectID
+	var hate, attack bool
+	for _, a := range w.Actions {
+		switch {
+		case a.Kind == "hate" && a.Object == golem && a.Target == hero.ObjectID && a.Value == 999:
+			hate = true
+		case a.Kind == "attack" && a.Object == golem && a.Target == hero.ObjectID:
+			attack = true
+		}
+	}
+	if !hate || !attack {
+		t.Errorf("golem actions %+v, want hate 999 and an attack on the player", w.Actions)
 	}
 	// One golem at a time, until it leaves after 15 minutes.
 	q.event(hero, wendy, "32047-15a.htm", "32047-19a.htm")

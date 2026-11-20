@@ -1,6 +1,7 @@
 package questtests
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/IPeter/l2go/internal/rnd"
@@ -66,6 +67,9 @@ func TestB3cQ662Walkthrough(t *testing.T) {
 
 	// Five T cards (draws 2, 16, 30, 44, 58 all fold to 3).
 	b3cQ662Deal(t, h, hero, klump, 2, 16, 30, 44, 58)
+	// The item data says the gemstones stack and the scrolls do not.
+	w.StackableItems = []int{8868}
+	w.ClearRecords()
 	reply, ok = h.Talk(b3cQ662, hero, klump)
 	b3cHTML(t, "face down", reply, ok, "<html>30845-11a.htm|ffff00:?|ffff00:?|ffff00:?|ffff00:?|ffff00:?</html>")
 	reply, ok = h.Event(b3cQ662, "Third", hero, klump)
@@ -77,6 +81,14 @@ func TestB3cQ662Walkthrough(t *testing.T) {
 	reply, ok = h.Event(b3cQ662, "Fifth", hero, klump)
 	b3cHTML(t, "five of a kind", reply, ok, "<html>30845-13.htm|ff6f6f:T|ff6f6f:T|ff6f6f:T|ff6f6f:T|ff6f6f:T</html>")
 	b3cItems(t, "five of a kind", hero, map[int]int64{8868: 43, 959: 3, 729: 1})
+	// A stackable reward comes in one give, the others one by one.
+	gives := map[int][]int64{}
+	for _, g := range w.Given {
+		gives[g.Item] = append(gives[g.Item], g.Count)
+	}
+	if !slices.Equal(gives[8868], []int64{43}) || !slices.Equal(gives[959], []int64{1, 1, 1}) || !slices.Equal(gives[729], []int64{1}) {
+		t.Errorf("gives %+v", w.Given)
+	}
 	reply, ok = h.Talk(b3cQ662, hero, klump)
 	b3cPage(t, "after the game", reply, ok, "30845-04.htm")
 

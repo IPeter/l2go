@@ -109,8 +109,7 @@ q:on_event(function(event, npc, player)
       q:start_quest_timer("lizardman_cleanup", 300000, nil, player, false)
     end
   elseif event == "werewolf_despawn" then
-    -- L2Go: Mobius first calls npc.abortAttack(); the script API has no NPC
-    -- AI calls yet, and the NPC is deleted right after anyway.
+    npc:abort_attack()
     npc:broadcast_say(ChatType.GENERAL, "Cowardly guy!")
     npc:delete()
     _crimsonWerewolf = false
@@ -214,9 +213,8 @@ q:on_talk(function(npc, player)
           _olMahumInspector = J.oid(q:add_spawn(OL_MAHUM_INSPECTOR, {x = -4034, y = 40201, z = -3665, heading = 0}, false, 0))
           -- Resets Ol Mahums' instances
           q:start_quest_timer("ol_mahums_despawn", 5000, nil, player, true)
-          -- L2Go: Mobius makes the inspector hate (addDamageHate 99999) and
-          -- attack the pilgrim. The script API has no NPC AI calls yet, so
-          -- the two only stand there.
+          J.obj(_olMahumInspector):add_damage_hate(J.obj(_olMahumPilgrim), 0, 99999)
+          J.obj(_olMahumInspector):attack(J.obj(_olMahumPilgrim))
         end
       elseif cond == 7 then
         htmltext = "30668-01.htm"
@@ -229,9 +227,8 @@ q:on_talk(function(npc, player)
         htmltext = "30668-02.htm"
         if _olMahumBetrayer == nil then
           _olMahumBetrayer = J.oid(q:add_spawn(OL_MAHUM_BETRAYER, {x = -4106, y = 40174, z = -3660, heading = 0}, false, 0))
-          -- L2Go: Mobius makes the betrayer run (setRunning) to -7732, 36787,
-          -- -3709. The script API has no NPC movement yet, so it waits where
-          -- it spawned.
+          J.obj(_olMahumBetrayer):set_running()
+          J.obj(_olMahumBetrayer):move_to({x = -7732, y = 36787, z = -3709})
           -- Resets Ol Mahum Betrayer's instance
           q:start_quest_timer("betrayer_despawn", 40000, nil, player, false)
         end

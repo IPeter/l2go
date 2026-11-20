@@ -115,8 +115,8 @@ q:on_event(function(event, npc, player)
     if st:get_int("golemSpawned") == 0 then
       local golem = q:add_spawn(GOLEM, {x = 96977, y = -110625, z = -3322, heading = 0}, true, 0)
       golem:broadcast_say(ChatType.GENERAL, "You, " .. player:name() .. ", you attacked Wendy. Prepare to die!")
-      -- Mobius also makes the golem attack the player (addDamageHate(player,
-      -- 0, 999) and an attack intention); the Lua API has no NPC attack yet.
+      golem:add_damage_hate(player, 0, 999)
+      golem:attack(player)
       st:set("golemSpawned", "1")
       q:start_quest_timer("golemDespawn", 900000, golem, player, false)
     else

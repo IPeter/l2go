@@ -491,11 +491,10 @@ q:on_attack(function(npc, attacker, damage, isPet)
       if npc:is_script_value(0) then
         npc:broadcast_say(ChatType.GENERAL, "How regretful! Unjust dishonor!")
         npc:set_script_value(1)
+      elseif npc:is_script_value(1) and npc:hp() / npc:max_hp() < 0.33 then
+        npc:broadcast_say(ChatType.GENERAL, "Indignant and unfair death!")
+        npc:set_script_value(2)
       end
-      -- L2Go: Mobius also shouts "Indignant and unfair death!" (script
-      -- value 2) once the chief is below a third of its HP. The script API
-      -- cannot read an NPC's HP yet (npc.getCurrentHp/getMaxHp), so that
-      -- line is left out; nothing else depends on it.
     end
   end
 end)

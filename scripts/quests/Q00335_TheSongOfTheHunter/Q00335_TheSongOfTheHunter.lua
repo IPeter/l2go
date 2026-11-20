@@ -701,8 +701,7 @@ q:on_kill(function(npc, player, isPet)
     end
   end
   if q:get_quest_items_count(player, CIRCLE_HUNTER_LICENSE1) > 0 or q:get_quest_items_count(player, CIRCLE_HUNTER_LICENSE2) > 0 then
-    -- L2Go: getActiveWeaponItem() is the right-hand item.
-    if q:get_quest_items_count(player, CYBELLINS_REQUEST) > 0 and q:get_item_equipped(st:get_player(), Paperdoll.RHAND) == CYBELLINS_DAGGER then
+    if q:get_quest_items_count(player, CYBELLINS_REQUEST) > 0 and st:get_player():active_weapon() == CYBELLINS_DAGGER then
       local bloodCrystalLevel = getBloodCrystalLevel(player)
       if bloodCrystalLevel > 0 and bloodCrystalLevel < 10 then
         for _, lizardmen_id in ipairs(Q_BLOOD_CRYSTAL_LIZARDMEN) do

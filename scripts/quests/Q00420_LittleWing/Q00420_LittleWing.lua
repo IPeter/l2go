@@ -2,8 +2,7 @@
 local J = require("lib.java")
 
 local q = quest.new(420, "Q00420_LittleWing", "Little Wing")
--- The Dragonflutes summon hatchlings (Plan 11: pets 352/419-421). Mimyu's
--- npc:teleport does not exist yet either (Npc teleport, an API gap).
+-- The Dragonflutes summon hatchlings (Plan 11: pets 352/419-421).
 q:requires("pets")
 
 -- NPCs
