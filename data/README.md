@@ -64,6 +64,20 @@ Script constants (`data.LoadConstants`):
 |---|---|
 | `constants/constants.json` | The global tables of the Lua quest scripts, by Mobius name: `Category`, `ChatType` (client IDs), `ClassId`, `Paperdoll` (inventory slots), `QuestSound` (sound names), `QuestType`, `Race`, `Sex`, `State` (quest states) and `SystemMessageId` (the 2,083 message IDs, without their text) |
 
+World objects (`data.LoadObjects`), bosses (`data.LoadBosses`, whose
+`CheckWorld` checks the NPCs and zones they name) and walker routes
+(`data.LoadRoutes`):
+
+| File | Content |
+|---|---|
+| `objects/doors.json` | All 547 doors, one per line: position, the 4 outline nodes, bottom Z and height, HP and defences, level, open methods (click, time, item, skill, cycle), default status, group, child door and master actions, close time, open and random times of the timed doors, clan hall, and the HP, targetable, collision, wall and attackable flags |
+| `objects/staticobjects.json` | The 29 static objects, one per line: town maps (with the map texture and the object's place on it), thrones and signboards |
+| `objects/fences.json` | The fences (one demo fence): position, size and state |
+| `spawns/raidbosses.json` | The 196 raid boss spawns, one per line: position, heading, respawn delay and random range in seconds, and the HP and MP a boss starts with |
+| `bosses/grandbosses.json` | The 9 grand boss seeds of the server's boss state: position, heading, respawn time, HP, MP and status |
+| `bosses/zones.json` | The 10 boss zones' parameters (their shapes are in `zones/zones.json`): invade time, oust point, enabled at start |
+| `routes/routes.json` | The 14 walker routes, one per line: repeat flag and style, the NPCs that walk them from their spawn points, and the nodes with delay, run flag and speech |
+
 The JSON schema is defined by the types in `internal/data`. The starting
 class templates character creation uses are built from `classes.json`.
 
@@ -101,6 +115,11 @@ datapack (`L2J_Mobius_CT_0_Interlude`):
   with `CustomSkillsLoad`), `dist/game/data/stats/players/skillTrees/**/*.xml`
   and `dist/game/data/stats/armorsets/*.xml`
 - `dist/game/data/CategoryData.xml`
+- `dist/game/data/Doors.xml`, `StaticObjects.xml`, `FenceData.xml` and
+  `Routes.xml`; the boss zone parameters of `dist/game/data/zones/custom_boss.xml`
+- `dist/db_installer/sql/game/raidboss_spawnlist.sql` and
+  `grandboss_data.sql` (the rows that are not commented out, with the
+  column defaults of their `CREATE TABLE`)
 - The skill enums (abnormal, target and operate types, effect scopes,
   traits, abnormal visual effects, social classes, instance and category
   types), from their Java sources in `java/org/l2jmobius/gameserver/`; the
@@ -138,8 +157,9 @@ the Mobius sources; `go generate ./internal/data` does the same) and then
 `go run ./cmd/datagen` (every file of `data/`, `html/` included). To read
 another checkout: `make data MOBIUS=/path/to/L2J_Mobius_CT_0_Interlude`.
 
-`go run ./cmd/datagen -list` prints the domains (`categories`, `constants`,
-`economy`, `html`, `items`, `passives`, `players`, `skills`, `world`); naming some (for example `go run ./cmd/datagen html` or
+`go run ./cmd/datagen -list` prints the domains (`bosses`, `categories`,
+`constants`, `economy`, `html`, `items`, `objects`, `passives`, `players`,
+`routes`, `skills`, `world`); naming some (for example `go run ./cmd/datagen html` or
 `go run ./cmd/datagen players items`) regenerates only those. The output is
 sorted and does not depend on the time or file order, so running it again on
 the same datapack gives identical files. Commit the JSON files; `html/` stays

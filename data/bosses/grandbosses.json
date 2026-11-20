@@ -1,0 +1,11 @@
+[
+{"bossId":25512,"x":96320,"y":-110912,"z":-3328,"heading":8191,"respawnTime":0,"hp":0,"mp":0,"status":0},
+{"bossId":29001,"x":-21610,"y":181594,"z":-5734,"heading":0,"respawnTime":0,"hp":229898.48,"mp":667.776,"status":0},
+{"bossId":29006,"x":17726,"y":108915,"z":-6480,"heading":0,"respawnTime":0,"hp":622493.58388,"mp":3793.536,"status":0},
+{"bossId":29014,"x":55024,"y":17368,"z":-5412,"heading":10126,"respawnTime":0,"hp":622493.58388,"mp":3793.536,"status":0},
+{"bossId":29019,"x":185708,"y":114298,"z":-8221,"heading":32768,"respawnTime":0,"hp":17850000,"mp":39960,"status":0},
+{"bossId":29020,"x":116033,"y":17447,"z":10107,"heading":-25348,"respawnTime":0,"hp":4068372,"mp":39960,"status":0},
+{"bossId":29022,"x":55312,"y":219168,"z":-3223,"heading":0,"respawnTime":0,"hp":858518.36,"mp":399600,"status":0},
+{"bossId":29028,"x":-105200,"y":-253104,"z":-15264,"heading":0,"respawnTime":0,"hp":62041918,"mp":2248572,"status":0},
+{"bossId":29045,"x":0,"y":0,"z":0,"heading":0,"respawnTime":0,"hp":1216600,"mp":11100,"status":0}
+]

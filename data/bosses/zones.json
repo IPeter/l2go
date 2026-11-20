@@ -1,0 +1,12 @@
+[
+{"zoneId":12003,"name":"Anakim and Lilith Boss","invadeTime":1800000,"enabled":false},
+{"zoneId":12004,"name":"Fire 1","invadeTime":1800000,"enabled":false},
+{"zoneId":12005,"name":"Fire 2","invadeTime":1800000,"enabled":false},
+{"zoneId":12010,"name":"Valakas Boss","invadeTime":1800000,"enabled":true},
+{"zoneId":12011,"name":"Frintezza Boss","invadeTime":1800000,"enabled":true},
+{"zoneId":12012,"name":"Queen Ant Boss","enabled":false},
+{"zoneId":12013,"name":"Orfen Boss","enabled":false},
+{"zoneId":12014,"name":"Altar of Sacrifice","invadeTime":1800000,"enabled":false},
+{"zoneId":12015,"name":"Ice Fairy Sirra Boss","oust":{"x":115844,"y":-125602,"z":-3352},"enabled":true},
+{"zoneId":12016,"name":"Lair of Zaken","invadeTime":1800000,"enabled":false}
+]
