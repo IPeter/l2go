@@ -1,0 +1,64 @@
+-- Translated by questport from quests/Q00052_WilliesSpecialBait (Mobius CT_0 Interlude); owned by L2Go from here on.
+local J = require("lib.java")
+
+local q = quest.new(52, "Q00052_WilliesSpecialBait", "Willie's Special Bait")
+-- The reward is a fishing lure: offered once fishing exists (Plan 11).
+q:requires("fishing")
+
+-- Item
+local TARLK_EYE = 7623
+-- Reward
+local EARTH_FISHING_LURE = 7612
+
+q:register_quest_items(TARLK_EYE)
+q:add_start_npc(31574) -- Willie
+q:add_talk_id(31574)
+q:add_kill_id(20573) -- Tarlk Basilik
+
+q:on_event(function(event, npc, player)
+  local htmltext = event
+  local st = q:get_quest_state(player, false)
+  if st == nil then
+    return htmltext
+  end
+  if event == "31574-03.htm" then
+    st:start_quest()
+  elseif event == "31574-07.htm" then
+    htmltext = "31574-06.htm"
+    q:take_items(player, TARLK_EYE, -1)
+    q:reward_items(player, EARTH_FISHING_LURE, 4)
+    st:exit_quest(false, true)
+  end
+  return htmltext
+end)
+
+q:on_talk(function(npc, player)
+  local htmltext = q:get_no_quest_msg(player)
+  local st = q:get_quest_state(player, true)
+  local sw = st:get_state()
+  if sw == State.CREATED then
+    htmltext = player:level() < 48 and "31574-02.htm" or "31574-01.htm"
+  elseif sw == State.STARTED then
+    htmltext = q:get_quest_items_count(player, TARLK_EYE) == 100 and "31574-04.htm" or "31574-05.htm"
+  elseif sw == State.COMPLETED then
+    htmltext = q:get_already_completed_msg(player)
+  end
+  return htmltext
+end)
+
+q:on_kill(function(npc, player, isSummon)
+  local partyMember = q:get_random_party_member(player, 1)
+  if partyMember == nil then
+    return
+  end
+  local qs = q:get_quest_state(partyMember, false)
+  if q:get_quest_items_count(partyMember, TARLK_EYE) < 100 then
+    if rnd(100) < 33 then
+      q:give_items(partyMember, TARLK_EYE, 1)
+      q:play_sound(partyMember, QuestSound.ITEMSOUND_QUEST_ITEMGET)
+    end
+  end
+  if q:get_quest_items_count(partyMember, TARLK_EYE) >= 100 then
+    qs:set_cond(2, true)
+  end
+end)
