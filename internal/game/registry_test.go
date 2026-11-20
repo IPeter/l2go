@@ -27,11 +27,12 @@ func messages(ps []testclient.Packet) []string {
 func TestPacketHandlers(t *testing.T) {
 	var got []string
 	e := newEnv(t, nil, func(s *Server) {
-		if err := s.Register(0x77, func(p *Player, body []byte) { got = append(got, p.Name()+":"+string(body)) }); err != nil {
+		// 0x75 is an opcode Mobius does not use.
+		if err := s.Register(0x75, func(p *Player, body []byte) { got = append(got, p.Name()+":"+string(body)) }); err != nil {
 			t.Fatalf("Register: %v", err)
 		}
-		if err := s.Register(0x77, func(*Player, []byte) {}); !errors.Is(err, ErrDuplicate) {
-			t.Errorf("second Register of 0x77 = %v, want ErrDuplicate", err)
+		if err := s.Register(0x75, func(*Player, []byte) {}); !errors.Is(err, ErrDuplicate) {
+			t.Errorf("second Register of 0x75 = %v, want ErrDuplicate", err)
 		}
 		if err := s.Register(clientpackets.OpAppearing, func(*Player, []byte) {}); !errors.Is(err, ErrDuplicate) {
 			t.Errorf("Register of the core's Appearing = %v, want ErrDuplicate", err)
@@ -47,17 +48,17 @@ func TestPacketHandlers(t *testing.T) {
 	}
 
 	// Before EnterWorld in-world packets are dropped.
-	e.srv.Handle(sess, 0x77, []byte("early"))
+	e.srv.Handle(sess, 0x75, []byte("early"))
 	e.sync()
 	e.srv.EnterWorld(sess)
 
 	body := []byte("abc")
-	e.srv.Handle(sess, 0x77, body)
+	e.srv.Handle(sess, 0x75, body)
 	body[0] = 'X' // the session may reuse its buffer
 	e.srv.HandleEx(sess, 0x99, []byte("def"))
 	e.srv.Handle(sess, 0x78, []byte("no handler"))
 	e.srv.HandleEx(sess, 0x9a, []byte("no handler"))
-	e.srv.Handle(newSession("nobody"), 0x77, []byte("no player"))
+	e.srv.Handle(newSession("nobody"), 0x75, []byte("no player"))
 	var calls []string
 	e.onLoop(func() { calls = slices.Clone(got) })
 	if want := []string{"Hero:abc", "ex:def"}; !slices.Equal(calls, want) {

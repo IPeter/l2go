@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
-	"github.com/IPeter/l2go/internal/geo"
 	"github.com/IPeter/l2go/internal/world"
 )
 
@@ -23,9 +22,6 @@ const (
 	// walkMaxSwim is the longest swim one request starts (Mobius
 	// moveToLocation in water).
 	walkMaxSwim = 700
-	// walkGeoCheckDistance: a mouse walk shorter than this ends where
-	// geodata blocks it (Mobius moveToLocation, getValidLocation).
-	walkGeoCheckDistance = 3000
 	// walkHeadingScale turns degrees into the client's heading units
 	// (Mobius LocationUtil, 65536 / 360).
 	walkHeadingScale = 182.044444444
@@ -50,6 +46,8 @@ type walkTrack struct {
 	// broadcast is the game tick of the last MoveToLocation sent
 	// (lastBroadcastTime).
 	broadcast int64
+	// geo is the walk's route and door look-ahead (pathing.go).
+	geo walkGeo
 }
 
 // step is one update of a walk towards dest (Mobius
@@ -181,19 +179,15 @@ func (s *Server) startWalk(p *Player, m *motion, dest world.Position, offset int
 		sin, cos = dy/distance, dx/distance
 	}
 
-	// A mouse walk on land ends where geodata blocks it; without geodata
-	// the destination stays (Mobius getValidLocation). Mobius would walk
-	// around the obstacle on a path (geo.FindPath); walks do not follow
-	// paths yet.
-	if !inWater && !m.keyboard && distance < walkGeoCheckDistance &&
-		!(float64(cur.Z)-float64(z) > 300 && distance < 300) {
-		to := s.geo.ValidLocation(geo.Point{X: cur.X, Y: cur.Y, Z: cur.Z}, geo.Point{X: x, Y: y, Z: z})
-		x, y, z = to.X, to.Y, to.Z
-		vx, vy, _ := walkDelta(cur, x, y, z)
-		if math.Sqrt(vx*vx+vy*vy) < 1 {
-			p.SendActionFailed()
+	// A mouse walk on land is clipped where geodata, a door or a fence
+	// stops it, or walks around on a path (pathing.go, Mobius
+	// moveToLocation).
+	g := geoMove{cur: cur, x: x, y: y, z: z, distance: distance, sin: sin, cos: cos}
+	if !inWater && !m.keyboard {
+		if !s.playerGeoMove(p, m, &g) {
 			return false
 		}
+		x, y, z, sin, cos = g.x, g.y, g.z, g.sin, g.cos
 	}
 
 	heading := walkHeading(cos, sin)
@@ -208,6 +202,8 @@ func (s *Server) startWalk(p *Player, m *motion, dest world.Position, offset int
 	}
 	p.Move = walk
 	m.walk = walkTrack{state: walk, started: gameTick(now)}
+	m.walk.geo.route = g.route
+	s.planDoorStop(p, m)
 	m.pawnStop = false
 	if !m.listed {
 		m.listed = true
@@ -264,6 +260,9 @@ func (s *Server) advanceWalk(p *Player, tick int64) {
 	speed := p.stats.MoveSpeed()
 	walk.Speed = speed
 	cur := p.Position()
+	if s.walkLookAhead(p, m, cur, tick) {
+		return // pathing_door.go: an obstacle ahead stopped the walk
+	}
 	next, arrived, ok := m.walk.step(cur, walk.Destination, speed, walkCollision(p), tick, walkFloating(p))
 	if !ok {
 		return
@@ -281,7 +280,7 @@ func (s *Server) advanceWalk(p *Player, tick int64) {
 			return // a hook stopped, replaced or ended the walk
 		}
 	}
-	if arrived {
+	if arrived && !s.nextPlayerLeg(p, m) { // pathing.go: a route walks on
 		s.arriveWalk(p, m)
 	}
 }

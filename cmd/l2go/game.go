@@ -68,11 +68,29 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	if err != nil {
 		return err
 	}
+	// Doors, static objects (town maps, signboards) and fences.
+	objects, err := data.LoadObjects(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	// Raid boss spawns, grand boss seeds and boss zone parameters.
+	bosses, err := data.LoadBosses(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	if err := bosses.CheckWorld(worldData); err != nil {
+		return err
+	}
 
 	// Geodata (ground heights, walls) from the L2J tiles in geodata.dir. An
-	// empty setting, or a folder without tiles, runs without geodata, as
-	// Mobius does without its files; Open logs what it loaded.
-	geoEngine, err := geo.Open(gs.Geodata.Dir, logger)
+	// empty setting, or a folder where no tile loads, runs without geodata
+	// and pathfinding, as Mobius does without its files; Open logs what it
+	// loaded and every tile it skipped.
+	geoOpts, err := geoOptions(gs.Geodata)
+	if err != nil {
+		return err
+	}
+	geoEngine, err := geo.Open(gs.Geodata.Dir, geoOpts, logger)
 	if err != nil {
 		return err
 	}
@@ -141,6 +159,8 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		Data:            gameData,
 		World:           worldData,
 		Characters:      store.Characters(),
+		Relations:       store.Relations(), // friend and block lists
+		Clans:           store.Clans(),     // the clan registry, loaded before the loop starts
 		IDs:             store.IDs(),
 		IDPool:          idPool,
 		Passives:        passives,
@@ -152,7 +172,10 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		GlobalVariables: store.GlobalVariables(),
 		Quests:          quests,
 		Geo:             geoEngine,
-		Accounts:        loginLink, // account bans of the admin panel
+		Objects:         objects, // doors, static objects, fences
+		Bosses:          bosses,
+		BossStore:       store.Bosses(), // raid and grand boss state, raid points
+		Accounts:        loginLink,      // account bans of the admin panel
 		Logger:          gsLogger,
 	})
 	if err != nil {

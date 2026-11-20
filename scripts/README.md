@@ -172,7 +172,7 @@ Every link a page offers is remembered for the player; a link that the last page
 | `npcs/asamah/` | `Asamah` | Asamah (32115) | Mobius's `ai/others/Asamah`: the Elroki pages and the capture skill explanations. |
 | `npcs/kier/` | `Kier` | Kierre's statue (32022) | Mobius's `ai/others/Kier`. |
 
-`village_master/` holds Mobius's 16 village master scripts, ported by hand with the same names: the first and second class changes (`ElfHumanFighterChange1`, `ElfHumanWizardChange1`, `DarkElfChange1`, `OrcChange1`, `DwarfBlacksmithChange1`, `DwarfWarehouseChange1` and their `...Change2`, plus `ElfHumanClericChange2`), the newbie village headmasters (`FirstClassTransferTalk`) and the clan and alliance pages (`ClanMaster`, `AllianceMaster`; nobody has a clan until clans exist, and the game answers the clan actions as not available yet). `lib/class_master.lua` holds their shared class change step. Their pages are Mobius's, in `data/html/scripts/village_master/`.
+`village_master/` holds Mobius's 16 village master scripts, ported by hand with the same names: the first and second class changes (`ElfHumanFighterChange1`, `ElfHumanWizardChange1`, `DarkElfChange1`, `OrcChange1`, `DwarfBlacksmithChange1`, `DwarfWarehouseChange1` and their `...Change2`, plus `ElfHumanClericChange2`), the newbie village headmasters (`FirstClassTransferTalk`) and the clan and alliance pages (`ClanMaster`, `AllianceMaster`; the clan actions of their pages, `npc_%objectId%_create_clan` and the others, are commands of the game's village masters, and the alliance, unit and clan skill ones answer as not available yet until those features exist). `lib/class_master.lua` holds their shared class change step. Their pages are Mobius's, in `data/html/scripts/village_master/`.
 
 The Mobius ports keep their page names and links. Where Mobius asks for quest states or items, which the Lua API does not have yet, the scripts take the branch of a player who never took the quest (marked in the code).
 
@@ -273,7 +273,8 @@ Handlers get players and NPCs as values with methods. They are valid only while 
 | `player:sex()`, `player:base_class()`, `player:is_mage_class()`, `player:is_newbie()`, `player:is_dead()`, `player:is_in_category(Category.X)` | |
 | `player:var(name, default)`, `var_int`, `var_bool`, `set_var(name, value)` | player variables, saved with the character |
 | `player:set_class_id(ClassId.X)`, `player:set_base_class(id)`, `player:broadcast_user_info()` | the class change (effect, message, skill list) |
-| `player:is_in_party()`, `party_members()`, `clan()`, `is_clan_leader()`, `is_sub_class_active()` | alone, no clan, until those features exist |
+| `player:is_in_party()`, `party_members()`, `is_sub_class_active()` | alone until those features exist |
+| `player:clan()`, `player:is_clan_leader()` | the clan (nil without one): `clan:id()`, `name()`, `level()`, `reputation()`, `leader_id()`, `leader()` (`:object_id()`, `:name()`, `:player()`, nil offline), `add_reputation(n)`, `broadcast_pledge_info_update()` |
 | `player:is_noble()`, `set_noble(bool)` | noblesse (the flag and the noble skills) |
 | `player:active_weapon()`, `player:target()` | the right-hand weapon's item ID (nil without one), the target (Player, Npc or nil) |
 | `player:is_affected_by_skill(id)`, `player:magic_skill_use(target, id, level, hit_ms, reuse_ms)` | a skill's effects on the player; the skill animation (shown only) |

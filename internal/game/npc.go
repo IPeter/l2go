@@ -84,11 +84,15 @@ type Npc struct {
 	ai              npcAI      // the monster AI, hate and movement (ai.go)
 	randomAnimation bool       // Mobius isRandomAnimationEnabled
 	lastSocial      time.Time  // when the NPC last played a random animation
+	walker          *npcWalker // the route it walks, or nil (walker.go)
 	// priceConfig is a merchant's tax region, set when it spawns (Mobius
 	// Merchant.onSpawn, merchant_price.go); nil for other NPCs.
 	priceConfig *data.PriceConfig
 
 	skill *skillNpc // skills and effects (skill_creature.go)
+	boss  npcBoss   // leader, minions and boss state (minion.go, raid.go)
+	// script is what the AI scripts set on the NPC (quest_world_ai.go).
+	script npcScriptState
 }
 
 var (
@@ -487,6 +491,8 @@ func (s *Server) placeNpc(n *Npc, pos world.Position, aiData map[string]int) err
 	s.npcSpawned(n, aiData, &pos) // ai.go: Mobius Attackable.onSpawn
 	s.merchantSpawned(n)          // merchant_price.go: Mobius Merchant.onSpawn
 	s.questNpcSpawned(n)          // quest_events.go: the scripts' on_spawn
+	s.walkerSpawned(n)            // walker.go: Mobius WalkingManager.onSpawn
+	s.spawnMinions(n)             // minion.go: Mobius Spawn.initializeNpc's Privates
 	return nil
 }
 
@@ -502,6 +508,9 @@ func (s *Server) SpawnNpc(npcID int, pos world.Position) (*Npc, error) {
 	if err != nil {
 		return nil, err
 	}
+	if n.class != nil && n.class.monster && !t.Status.Flying && s.zoneAt(pos, "WaterZone") == nil {
+		pos.Z = s.spawnGroundZ(pos, nil) // geo_spawn.go: Mobius Spawn.initializeNpc
+	}
 	if err := s.placeNpc(n, pos, nil); err != nil {
 		s.releaseNpcID(n)
 		return nil, fmt.Errorf("game: spawn NPC %d at %v: %w", npcID, pos, err)
@@ -515,15 +524,19 @@ func (s *Server) SpawnNpc(npcID int, pos world.Position) (*Npc, error) {
 // respawn. An NPC without a spawn is gone for good. Loop-only.
 func (s *Server) DespawnNpc(n *Npc) {
 	wasIn := n.InWorld()
+	if !n.Dead {
+		s.minionsDeleted(n) // minion.go: Mobius Monster.deleteMe
+	}
 	if wasIn {
 		s.removeNpc(n)
 	}
-	s.npcSkillsGone(n, n.spawn == nil) // skill_persist.go
-	s.questNpcGone(n)                  // quest_events.go: its quest timers stop
+	comeBack := n.boss.comeBack                     // a dead minion its master brings back (minion.go)
+	s.npcSkillsGone(n, n.spawn == nil && !comeBack) // skill_persist.go
+	s.questNpcGone(n)                               // quest_events.go: its quest timers stop
 	switch sp := n.spawn; {
 	case sp != nil:
 		s.scheduleRespawn(sp)
-	case wasIn:
+	case wasIn && !comeBack:
 		s.releaseNpcID(n)
 	}
 }

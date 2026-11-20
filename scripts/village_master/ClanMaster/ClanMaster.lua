@@ -2,10 +2,11 @@
 -- village_master/ClanMaster. The pages that need a clan leader show their
 -- "-no" page to everyone else.
 --
--- Clans come with M9: until then nobody leads a clan, so those pages always
--- answer "-no". The clan actions on the pages (npc_%objectId%_create_clan,
--- ..._learn_clan_skills and the others) are NPC commands of the game, which
--- answers them as not available yet.
+-- The clan actions on the pages (npc_%objectId%_create_clan,
+-- increase_clan_level, dissolve_clan, recover_clan, change_clan_leader,
+-- cancel_clan_leader_change and the others) are commands of the game's
+-- village masters, as in Mobius VillageMaster.onBypassFeedback; the unit
+-- and clan skill ones answer as not available yet until they exist.
 --
 -- The pages are Mobius's, served from
 -- data/html/scripts/village_master/ClanMaster/.

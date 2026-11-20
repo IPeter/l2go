@@ -26,7 +26,7 @@ const (
 func (s *Server) Restart(sess Session) {
 	s.runFor(sess, func() {
 		p := s.playerOf(sess)
-		if p == nil || p.state != stateInGame || s.refuseRestart(p) {
+		if p == nil || p.state != stateInGame || s.refuseStoreRestart(p) || s.refuseRestart(p) {
 			return
 		}
 		s.log.Info("player restarts", p.logArgs()...)
@@ -105,6 +105,7 @@ func (s *Server) shutdown() {
 		}
 	}
 	s.saveGlobals(true) // quest.go: the scripts' global variables
+	s.saveBossesAtShutdown()
 	s.log.Info("game world: players saved for shutdown", "players", len(players))
 }
 

@@ -149,6 +149,9 @@ func (s *Server) actionObject(p *Player, id int32) world.Object {
 	if n, ok := obj.(*Npc); ok && !n.Template.Status.Targetable && !p.IsGM() {
 		return nil
 	}
+	if d, ok := obj.(*Door); ok && !d.Targetable() && !p.IsGM() {
+		return nil
+	}
 	if targetInstance(obj) != p.InstanceID() || !s.world.CanSee(p, obj) {
 		return nil
 	}
@@ -173,6 +176,8 @@ func (s *Server) onAction(p *Player, obj world.Object, interact bool) {
 		s.playerClick(p, o, interact)
 	case *GroundItem:
 		s.itemClick(p, o)
+	case objectClicker: // doors and static objects (door.go)
+		o.click(p, interact)
 	}
 	p.SendActionFailed()
 }
@@ -221,15 +226,20 @@ func (s *Server) npcClick(p *Player, n *Npc, interact bool) {
 }
 
 // playerClick is Mobius PlayerClick: the first click targets the player. A
-// click on the target attacks it when p may attack it without Ctrl;
-// otherwise p gets ActionFailed (following comes later; private stores and
-// cursed weapons do not exist yet).
+// click on the target walks up to its private store and opens it
+// (interactStore) when it runs one, attacks it when p may attack it without
+// Ctrl; otherwise p gets ActionFailed (following comes later; cursed weapons
+// do not exist yet).
 func (s *Server) playerClick(p, target *Player, interact bool) {
 	if p.Target != world.Object(target) {
 		s.SetTarget(p, target)
 		return
 	}
 	if !interact {
+		return
+	}
+	if target.InStoreMode() {
+		s.interactStore(p, target) // store_view.go
 		return
 	}
 	if target.autoAttackableBy(p) {
@@ -304,10 +314,10 @@ func (s *Server) approachNpc(p *Player, n *Npc) {
 	}
 	a := &npcApproach{npc: n, started: s.Now()}
 	if m := p.Move; m != nil {
-		a.dest, a.moving = m.Destination, true
+		a.dest, a.moving = s.walkGoal(p, m), true
 	}
 	s.npc.approaches[p] = a
-	s.world.Broadcast(p, npcMoveToPawnPacket(p, n, targetApproachOffset), true)
+	s.broadcastPawnWalk(p, n, targetApproachOffset) // pathing.go
 }
 
 // checkApproaches is the tick hook of the walks up to NPCs: a player that
@@ -323,7 +333,7 @@ func (s *Server) checkApproaches(now time.Time) {
 		case s.npcReached(p, n), p.Move == nil:
 			delete(s.npc.approaches, p)
 			s.arriveAtNpc(p, n)
-		case !a.moving || p.Move.Destination != a.dest, now.Sub(a.started) > targetApproachTimeout:
+		case !a.moving || s.walkGoal(p, p.Move) != a.dest, now.Sub(a.started) > targetApproachTimeout:
 			delete(s.npc.approaches, p)
 		}
 	}
@@ -435,10 +445,11 @@ func targetAbsDiff(a, b int32) int64 {
 	return d
 }
 
-// targetIsCreature reports whether o is a creature: an NPC or a player.
+// targetIsCreature reports whether o is a creature: an NPC, a player, or a
+// door or static object (Mobius creatures too).
 func targetIsCreature(o world.Object) bool {
 	switch o.(type) {
-	case *Npc, *Player:
+	case *Npc, *Player, *Door, *StaticObject:
 		return true
 	}
 	return false
@@ -456,6 +467,10 @@ func targetColor(p *Player, o world.Object) int16 {
 		if t.autoAttackableBy(p) {
 			return int16(p.Level() - t.Level()) //nolint:gosec // levels are small
 		}
+	case *Door:
+		if t.autoAttackableBy(p) {
+			return int16(p.Level() - t.Level()) //nolint:gosec // levels are small
+		}
 	}
 	return 0
 }
@@ -470,6 +485,9 @@ func targetHPBar(o world.Object) []byte {
 		maxHP, cur = t.MaxHP(), t.CurHP
 	case *Player:
 		maxHP, cur = t.Stats().View().MaxHP, t.CurHP
+	case *Door:
+		maxHP, cur = t.hpBar()
+	case *StaticObject: // no HP: Mobius's template has none
 	default:
 		return nil
 	}

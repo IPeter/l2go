@@ -540,8 +540,11 @@ func (v *vm) inRangeOf(p PlayerRef, target NpcRef) bool {
 }
 
 // qGetRandomPartyMember is q:get_random_party_member(player[, cond |
-// var, value | npc]). There are no parties yet, so these are Mobius's
-// paths for a player without one.
+// var, value | npc]), Mobius's getRandomPartyMember variants (party.go
+// has the party side): a random member in the player's instance; a random
+// member near the player's target whose quest variable matches; or the
+// member with the highest of 1000 rolls that on_check_party_member
+// accepts, near npc. Without a party only the player is checked.
 func (v *vm) qGetRandomPartyMember(L *lua.LState) int {
 	const fn = "q:get_random_party_member"
 	s := checkScript(L, "get_random_party_member")
@@ -550,26 +553,89 @@ func (v *vm) qGetRandomPartyMember(L *lua.LState) int {
 		L.Push(lua.LNil)
 		return 1
 	}
-	var match bool
+	members := partyOf(p)
+	var pick PlayerRef
 	switch x := L.Get(3).(type) {
 	case *lua.LNilType: // getRandomPartyMember(player)
-		match = true
+		pick = v.randomPartyMember(p, members)
 	case lua.LNumber: // (player, cond)
-		match = v.stateVarIs(L, s, p, "cond", lua.LVAsString(x), fn)
+		pick = v.randomPartyMemberWith(L, s, p, members, "cond", lua.LVAsString(x), fn)
 	case lua.LString: // (player, var, value)
-		match = v.stateVarIs(L, s, p, string(x), L.CheckString(4), fn)
+		pick = v.randomPartyMemberWith(L, s, p, members, string(x), L.CheckString(4), fn)
 	case *lua.LUserData: // (player, npc)
-		npc := optNpcArg(L, 3, fn)
-		match = v.inRangeOf(p, npc) && v.checkPartyMember(L, s, p, npc)
+		pick = v.luckyPartyMember(L, s, p, members, optNpcArg(L, 3, fn))
 	default:
 		L.ArgError(3, fn+": a cond, a variable name or an NPC expected")
 	}
-	if match {
-		L.Push(v.newPlayer(L, p))
+	if pick != nil {
+		L.Push(v.newPlayer(L, pick))
 	} else {
 		L.Push(lua.LNil)
 	}
 	return 1
+}
+
+// randomPartyMember is the static getRandomPartyMember(player): the player
+// without a party, else a random member in the player's instance.
+func (v *vm) randomPartyMember(p PlayerRef, members []PlayerRef) PlayerRef {
+	if len(members) == 0 {
+		return p
+	}
+	pp, _ := p.(PlayerParty)
+	for {
+		m := members[v.quest.rand.Get(len(members))]
+		if pp == nil || pp.SameInstance(m) || m == p {
+			return m
+		}
+	}
+}
+
+// randomPartyMemberWith is getRandomPartyMember(player, var, value): a
+// random member near the player's target with the quest variable set to
+// value, ignoring case.
+func (v *vm) randomPartyMemberWith(L *lua.LState, s *npcScript, p PlayerRef, members []PlayerRef, name, value, fn string) PlayerRef {
+	if len(members) == 0 {
+		if v.stateVarIs(L, s, p, name, value, fn) {
+			return p
+		}
+		return nil
+	}
+	var cands []PlayerRef
+	for _, m := range members {
+		if v.stateVarIs(L, s, m, name, value, fn) && v.partyCandidate(p, m) {
+			cands = append(cands, m)
+		}
+	}
+	if len(cands) == 0 {
+		return nil
+	}
+	return cands[v.quest.rand.Get(len(cands))]
+}
+
+// luckyPartyMember is getRandomPartyMember(player, npc): each member rolls
+// 0-999 and the highest roll that on_check_party_member accepts wins; the
+// player and the winner must be near npc.
+func (v *vm) luckyPartyMember(L *lua.LState, s *npcScript, p PlayerRef, members []PlayerRef, npc NpcRef) PlayerRef {
+	if !v.inRangeOf(p, npc) {
+		return nil
+	}
+	var lucky PlayerRef
+	if len(members) == 0 {
+		if v.checkPartyMember(L, s, p, npc) {
+			lucky = p
+		}
+	} else {
+		highest := 0
+		for _, m := range members {
+			if roll := v.quest.rand.Get(1000); roll > highest && v.checkPartyMember(L, s, m, npc) {
+				highest, lucky = roll, m
+			}
+		}
+	}
+	if lucky == nil || !v.inRangeOf(lucky, npc) {
+		return nil
+	}
+	return lucky
 }
 
 // stateVarIs reports whether the player's state of s has the variable set
@@ -616,8 +682,11 @@ func (v *vm) checkPartyMemberState(L *lua.LState, s *npcScript, st lua.LValue, n
 }
 
 // qGetRandomPartyMemberState is q:get_random_party_member_state(player,
-// state) → Player, or (player, cond, chance, npc) → QuestState; cond -1
-// only checks that the quest is started. Solo paths, as above.
+// state) → Player, a random member near the player's target in that quest
+// state, or (player, cond, chance, npc) → QuestState: the player counts
+// chance times, each other member once, among those at cond (-1: the quest
+// started) that on_check_party_member_state accepts, and the one drawn
+// must be near npc. Without a party only the player is checked.
 func (v *vm) qGetRandomPartyMemberState(L *lua.LState) int {
 	const fn = "q:get_random_party_member_state"
 	s := checkScript(L, "get_random_party_member_state")
@@ -628,10 +697,29 @@ func (v *vm) qGetRandomPartyMemberState(L *lua.LState) int {
 			L.Push(lua.LNil)
 			return 1
 		}
-		if st := v.questState(L, s, p, false, fn); st != nil && st.State() == state {
-			L.Push(v.newPlayer(L, p))
-		} else {
+		inState := func(m PlayerRef) bool {
+			st := v.questState(L, s, m, false, fn)
+			return st != nil && st.State() == state
+		}
+		members := partyOf(p)
+		if len(members) == 0 {
+			if inState(p) {
+				L.Push(v.newPlayer(L, p))
+			} else {
+				L.Push(lua.LNil)
+			}
+			return 1
+		}
+		var cands []PlayerRef
+		for _, m := range members {
+			if inState(m) && v.partyCandidate(p, m) {
+				cands = append(cands, m)
+			}
+		}
+		if len(cands) == 0 {
 			L.Push(lua.LNil)
+		} else {
+			L.Push(v.newPlayer(L, cands[v.quest.rand.Get(len(cands))]))
 		}
 		return 1
 	}
@@ -642,33 +730,79 @@ func (v *vm) qGetRandomPartyMemberState(L *lua.LState) int {
 		L.Push(lua.LNil)
 		return 1
 	}
-	st := v.questState(L, s, p, false, fn)
-	if st == nil {
+	// stateOf is the QuestState of m when it passes
+	// checkPartyMemberConditions, else nil.
+	stateOf := func(m PlayerRef) lua.LValue {
+		st := v.questState(L, s, m, false, fn)
+		if st == nil {
+			return nil
+		}
+		matches := st.State() == StateStarted
+		if cond != -1 {
+			matches = int64(st.Cond()) == cond
+		}
+		if !matches {
+			return nil
+		}
+		stv := v.newQuestState(L, m, st)
+		if !v.checkPartyMemberState(L, s, stv, npc) {
+			return nil
+		}
+		return stv
+	}
+	type candidate struct {
+		p  PlayerRef
+		st lua.LValue
+	}
+	members := partyOf(p)
+	if len(members) == 0 {
+		stv := stateOf(p)
+		if stv == nil || !v.inRangeOf(p, npc) {
+			L.Push(lua.LNil)
+			return 1
+		}
+		L.Push(stv)
+		return 1
+	}
+	var cands []candidate
+	if stv := stateOf(p); stv != nil {
+		for range chance {
+			cands = append(cands, candidate{p, stv})
+		}
+	}
+	for _, m := range members {
+		if m == p {
+			continue
+		}
+		if stv := stateOf(m); stv != nil {
+			cands = append(cands, candidate{m, stv})
+		}
+	}
+	if len(cands) == 0 {
 		L.Push(lua.LNil)
 		return 1
 	}
-	matches := st.State() == StateStarted
-	if cond != -1 {
-		matches = int64(st.Cond()) == cond
-	}
-	stv := v.newQuestState(L, p, st)
-	if !matches || !v.checkPartyMemberState(L, s, stv, npc) || !v.inRangeOf(p, npc) {
+	c := cands[v.quest.rand.Get(len(cands))]
+	if !v.inRangeOf(c.p, npc) {
 		L.Push(lua.LNil)
 		return 1
 	}
-	L.Push(stv)
+	L.Push(c.st)
 	return 1
 }
 
 // qExecuteForEachPlayer is q:execute_for_each_player(player, npc,
 // is_summon, include_party, include_command_channel): it runs
-// on_action_for_each_player for the player (parties come later).
+// on_action_for_each_player for the player, or with include_party for
+// each member of its party. Command channels come with M11, so a party
+// asked only for its command channel gets nothing, as in Mobius.
 func (v *vm) qExecuteForEachPlayer(L *lua.LState) int {
 	const fn = "q:execute_for_each_player"
 	s := checkScript(L, "execute_for_each_player")
 	p := optPlayerArg(L, 2, fn)
 	npc := optNpcArg(L, 3, fn)
 	summon := L.ToBool(4)
+	includeParty, includeCC := L.ToBool(5), L.ToBool(6)
 	if p == nil {
 		return 0
 	}
@@ -676,11 +810,20 @@ func (v *vm) qExecuteForEachPlayer(L *lua.LState) int {
 	if !ok {
 		return 0
 	}
-	L.Push(reg.fn)
-	L.Push(v.newPlayer(L, p))
-	L.Push(v.newNpc(L, npc))
-	L.Push(lua.LBool(summon))
-	L.Call(3, 0)
+	targets := []PlayerRef{p}
+	if members := partyOf(p); (includeParty || includeCC) && len(members) > 0 {
+		targets = nil
+		if includeParty {
+			targets = members
+		}
+	}
+	for _, m := range targets {
+		L.Push(reg.fn)
+		L.Push(v.newPlayer(L, m))
+		L.Push(v.newNpc(L, npc))
+		L.Push(lua.LBool(summon))
+		L.Call(3, 0)
+	}
 	return 0
 }
 

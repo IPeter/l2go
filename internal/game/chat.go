@@ -107,9 +107,9 @@ func (s *Server) handleSay2(p *Player, body []byte) {
 	case serverpackets.ChatHeroVoice:
 		s.chatHeroVoice(p, text)
 	case serverpackets.ChatParty:
-		p.SendMessage("You are not in a party.")
+		s.chatParty(p, text) // party.go
 	case serverpackets.ChatClan:
-		p.SendMessage("You are not in a clan.")
+		s.chatClan(p, text) // clan_members.go
 	case serverpackets.ChatAlliance:
 		p.SendMessage("You are not in an alliance.")
 	case serverpackets.ChatPetitionPlayer, serverpackets.ChatPetitionGM:
@@ -303,11 +303,16 @@ func (s *Server) chatFloodOK(p *Player) bool {
 // (Mobius ChatWhisper): the target gets it with p's name, and p gets it back
 // with "->" and the target's name. When no such player is in the game, or
 // it refuses messages (//silence, Mobius isSilenceMode), p gets "That player
-// is not online."
+// is not online." When it blocks p or refuses all messages (friends.go), p
+// gets "That person is in message refusal mode."
 func (s *Server) chatWhisper(p *Player, target, text string) {
 	to, ok := s.PlayerByName(target)
 	if !ok || to.admin.silence {
 		p.SendSystemMessage(serverpackets.SysMsgPlayerNotOnline)
+		return
+	}
+	if to.Blocks(p) {
+		p.SendSystemMessage(serverpackets.SysMsgMessageRefusal)
 		return
 	}
 	to.Send(chatSay(p, serverpackets.ChatWhisper, p.Name(), text))

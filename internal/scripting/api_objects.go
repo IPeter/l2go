@@ -207,20 +207,11 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 			pv.SetVar(L.CheckString(2), valueString(L, 3, "player:set_var"))
 			return 0
 		},
-		// Parties, clans and subclasses come in later milestones; until then
-		// every player is alone, without a clan.
-		"is_in_party":         solo("is_in_party", lua.LFalse),
-		"party":               solo("party", lua.LNil),
-		"clan":                solo("clan", lua.LNil),
-		"is_clan_leader":      solo("is_clan_leader", lua.LFalse),
+		// The clan methods are in api_clan.go, the party methods in
+		// party.go; subclasses come in a later milestone.
+		"clan":                v.playerClanMethod,
+		"is_clan_leader":      playerIsClanLeader,
 		"is_sub_class_active": solo("is_sub_class_active", lua.LFalse),
-		"party_members": func(L *lua.LState) int {
-			p := checkPlayer(L, "party_members")
-			t := L.CreateTable(1, 0)
-			t.RawSetInt(1, v.newPlayer(L, p))
-			L.Push(t)
-			return 1
-		},
 		"social_action": func(L *lua.LState) int {
 			p := checkPlayer(L, "social_action")
 			id := int(checkInt(L, 2, "player:social_action"))
@@ -261,6 +252,9 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 		m[name] = fn
 	}
 	for name, fn := range v.playerControlMethods() {
+		m[name] = fn
+	}
+	for name, fn := range v.playerPartyMethods() { // party.go
 		m[name] = fn
 	}
 	return m

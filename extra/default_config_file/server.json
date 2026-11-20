@@ -54,7 +54,13 @@
         "autoLearnSkills": false,
         "gridsAlwaysOn": false,
         "gridTurnOnTime": "1s",
-        "gridTurnOffTime": "90s"
+        "gridTurnOffTime": "90s",
+        "minNpcAnimation": "5s",
+        "maxNpcAnimation": "60s",
+        "minMonsterAnimation": "5s",
+        "maxMonsterAnimation": "60s",
+        "allowBoat": true,
+        "boatBroadcastRadius": 20000
       },
 
       "chat": {
@@ -75,11 +81,35 @@
         "mobAggroInPeaceZone": true,
         "aggroDistanceCheck": false,
         "aggroDistanceCheckRange": 2000,
-        "attackablesCampPlayerCorpses": false
+        "attackablesCampPlayerCorpses": false,
+        "raidMinionRespawnTime": "300s",
+        "customMinionsRespawnTime": "22450,30;22371,120;22543,0;25545,0;22424,30;22425,30;22426,30;22427,30;22428,30;22429,30;22430,30;22432,30;22433,30;22434,30;22435,30;22436,30;22437,30;22438,30;25596,30;25605,0;25606,0;25607,0;25608,0",
+        "forceDeleteMinions": false,
+        "disableRaidCurse": false,
+        "raidChaosTime": 30,
+        "grandChaosTime": 30,
+        "minionChaosTime": 30,
+        "raidMinRespawnMultiplier": 1.0,
+        "raidMaxRespawnMultiplier": 1.0,
+        "raidHpRegenMultiplier": 100,
+        "raidMpRegenMultiplier": 100,
+        "raidPDefenceMultiplier": 100,
+        "raidMDefenceMultiplier": 100,
+        "raidPAttackMultiplier": 100,
+        "raidMAttackMultiplier": 100
       },
 
       "geodata": {
-        "dir": ""
+        "dir": "",
+        "pathfinding": true,
+        "pathFindBuffers": "100x6;128x6;192x6;256x4;320x4;384x4;500x2",
+        "lowWeight": 0.5,
+        "mediumWeight": 2,
+        "highWeight": 3,
+        "advancedDiagonalStrategy": false,
+        "diagonalWeight": 0.707,
+        "avoidObstructedPathNodes": true,
+        "maxPostfilterPasses": 3
       },
 
       "items": {
@@ -93,12 +123,14 @@
         "maxAdena": 2000000000,
         "warehouseSlotsNoDwarf": 100,
         "warehouseSlotsDwarf": 120,
-        "autoLootSlotLimit": false
+        "warehouseSlotsClan": 200,
+        "autoLootSlotLimit": true
       },
 
       "economy": {
         "altKarmaPlayerCanShop": true,
         "altKarmaPlayerCanUseWarehouse": true,
+        "altKarmaPlayerCanTrade": true,
         "onlyGMItemsFree": true,
         "multisellAmountLimit": 10000,
         "customMultisell": false,
@@ -110,6 +142,8 @@
       "rates": {
         "xp": 1,
         "sp": 1,
+        "partyXp": 1,
+        "partySp": 1,
         "deathDropChance": 1,
         "deathDropAmount": 1,
         "herbDropChance": 1,
@@ -162,6 +196,76 @@
         "canGMDropEquipment": false,
         "awardPKKillPVPPoint": false,
         "karmaPlayerCanBeKilledInPeaceZone": false
+      },
+
+      "party": {
+        "newLeaderOnLeave": false,
+        "xpCutoffMethod": "level",
+        "xpCutoffPercent": 3.0,
+        "xpCutoffLevel": 20,
+        "xpCutoffGaps": [[0, 9], [10, 14], [15, 99]],
+        "xpCutoffGapPercents": [100, 30, 0]
+      },
+
+      "stores": {
+        "sellSlotsDwarf": 4,
+        "sellSlotsOther": 3,
+        "buySlotsDwarf": 5,
+        "buySlotsOther": 4,
+        "minRangeFromPlayer": 50,
+        "minRangeFromNpc": 100
+      },
+
+      "clan": {
+        "daysBeforeJoin": 1,
+        "daysBeforeCreate": 10,
+        "daysToDissolve": 7,
+        "leaderInstantActivation": false,
+        "membersForWar": 15,
+        "membersCanWithdrawFromWarehouse": false,
+        "lifeCrystalNeeded": true,
+        "nameTemplate": ".*",
+        "level6Cost": 5000,
+        "level7Cost": 10000,
+        "level8Cost": 20000,
+        "level6Members": 30,
+        "level7Members": 50,
+        "level8Members": 80,
+        "royalGuardCost": 5000,
+        "knightUnitCost": 10000,
+        "reputationPerKill": 1,
+        "academyMinPoints": 190,
+        "academyMaxPoints": 650
+      },
+
+      "ally": {
+        "maxClans": 3,
+        "daysBeforeJoinWhenLeft": 1,
+        "daysBeforeJoinWhenDismissed": 1,
+        "daysBeforeAcceptWhenDismissed": 1,
+        "daysBeforeCreateWhenDissolved": 10
+      },
+
+      "grandBosses": {
+        "antharasWaitTime": "20m",
+        "intervalOfAntharasSpawn": "264h",
+        "randomOfAntharasSpawn": "8h",
+        "antharasRecognizeHero": true,
+        "valakasWaitTime": "20m",
+        "intervalOfValakasSpawn": "264h",
+        "randomOfValakasSpawn": "8h",
+        "valakasRecognizeHero": true,
+        "intervalOfBaiumSpawn": "168h",
+        "randomOfBaiumSpawn": "8h",
+        "baiumRecognizeHero": true,
+        "intervalOfCoreSpawn": "60h",
+        "randomOfCoreSpawn": "8h",
+        "intervalOfOrfenSpawn": "48h",
+        "randomOfOrfenSpawn": "8h",
+        "intervalOfQueenAntSpawn": "36h",
+        "randomOfQueenAntSpawn": "8h",
+        "intervalOfZakenSpawn": "60h",
+        "randomOfZakenSpawn": "8h"
       }
     }
   ]

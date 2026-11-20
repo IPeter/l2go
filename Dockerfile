@@ -34,6 +34,9 @@ COPY --from=build /out/l2go /usr/local/bin/l2go
 #               `make data` copies them from the Mobius checkout, and the
 #               COPY below takes them along when the folder exists. Without
 #               it the image still builds, but NPCs have no dialog pages.
+#   geodata/    L2J geodata tiles (X_Y.l2j), never part of the image. docker
+#               compose mounts GEODATA_DIR here read-only; the compose
+#               config's geodata.dir points to it.
 COPY scripts /opt/l2go/scripts
 COPY data /opt/l2go/data
 WORKDIR /opt/l2go

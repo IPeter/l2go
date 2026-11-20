@@ -180,6 +180,7 @@ func (s *Server) flushStatus(time.Time) {
 		p.statusQueued = false
 		if p.state == stateInGame {
 			p.Send(vitalsStatusUpdate(p))
+			s.partyStatusUpdate(p) // party_window.go
 		}
 	}
 	clear(queue)

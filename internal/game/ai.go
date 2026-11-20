@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/IPeter/l2go/internal/data"
+	"github.com/IPeter/l2go/internal/npcai"
 	"github.com/IPeter/l2go/internal/rnd"
 	"github.com/IPeter/l2go/internal/world"
 )
@@ -57,6 +58,9 @@ const (
 	NpcAttack
 	// NpcMoveTo: the NPC walks somewhere, home for example (MOVE_TO).
 	NpcMoveTo
+	// NpcCast: the NPC walks up to a target and casts a skill at it
+	// (CAST, ai_cast.go).
+	NpcCast
 )
 
 // String returns Mobius's name of the intention.
@@ -70,6 +74,8 @@ func (i NpcIntention) String() string {
 		return "ATTACK"
 	case NpcMoveTo:
 		return "MOVE_TO"
+	case NpcCast:
+		return "CAST"
 	}
 	return "?"
 }
@@ -156,6 +162,9 @@ type npcAI struct {
 	moving bool
 	// seen is set while the NPC waits to wake up (npcSeen).
 	seen bool
+
+	// x is the state of the full AI: skills, fear, CAST, sight (ai_npcai.go).
+	x npcAIx
 }
 
 // aiClass is what the AI needs from a template, worked out once.
@@ -181,6 +190,9 @@ type aiClass struct {
 	hateRace            data.Race
 	hateRaceOK          bool
 	hateRaceRatio       int
+
+	// sk is the full AI's part: the skill profile and the rank (ai_npcai.go).
+	sk aiSkillClass
 }
 
 // aiFeature is the AI's state on the Server (Server.ai). Loop-only.
@@ -205,6 +217,9 @@ type aiFeature struct {
 
 	// scan is a reusable list of the creatures a think looks at.
 	scan []Creature
+
+	// x is the state of the full AI (ai_npcai.go).
+	x aiFeatureX
 }
 
 // setupAI registers the AI's ticks and hooks.
@@ -244,7 +259,7 @@ func (s *Server) aiClassOf(n *Npc) *aiClass {
 			clans:          t.AI.Clans,
 			ignoreIDs:      t.AI.IgnoreNpcIDs,
 			archer:         t.AI.Type == "ARCHER",
-			randomWalk:     t.Status.RandomWalk,
+			randomWalk:     t.Status.RandomWalk && !s.walkerTargeted(t.ID), // Mobius Npc.onSpawn
 			aggroRange:     t.AI.AggroRange,
 			aggressiveTime: npcParamInt(t.Parameters.Params, "SetAggressiveTime", -1),
 		}
@@ -258,10 +273,11 @@ func (s *Server) aiClassOf(n *Npc) *aiClass {
 		if t.Type == "Monster" && c.aggroRange > s.settings.NPCs.MaxAggroRange {
 			c.aggroRange = s.settings.NPCs.MaxAggroRange
 		}
-		if c.guard {
-			c.randomWalk = false // Mobius Guard.onSpawn
+		if c.guard || (n.class != nil && n.class.raid) {
+			c.randomWalk = false // Mobius Guard, RaidBoss and GrandBoss onSpawn
 		}
 		c.hateParams(t)
+		c.sk = s.aiSkillClassOf(t)
 		if s.ai.classes == nil {
 			s.ai.classes = make(map[int]*aiClass)
 		}
@@ -309,6 +325,8 @@ func (s *Server) aiOf(n *Npc) *npcAI {
 		ai.attackTimeout = aiNoTimeout
 		ai.target, ai.attackTarget = nil, nil
 		ai.pawnOffset, ai.pawnTimeout = 0, 0
+		ai.x.brain = npcai.State{} // a new AttackableAI
+		ai.x.castSkill, ai.x.castTarget = nil, nil
 		s.rollGlobalAggro(n)
 	}
 	return ai
@@ -404,19 +422,26 @@ func (s *Server) ThinkingNpcs() int {
 }
 
 // npcThink is Mobius AttackableAI.notifyActionThink: one think, unless one
-// runs, the NPC's neighbourhood is inactive or the NPC is dead.
+// runs, the NPC's neighbourhood is inactive, the NPC is dead or all its
+// skills are disabled (stunned, asleep, paralyzed).
 func (s *Server) npcThink(n *Npc) {
 	ai := &n.ai
 	if !ai.attached || ai.thinking || n.Dead || !s.world.NeighborsActive(n) {
 		return
 	}
+	if n.skill != nil && allSkillsDisabled(&n.skill.skillBase) {
+		return
+	}
 	ai.thinking = true
 	defer func() { ai.thinking = false }()
+	s.minionLeash(n) // minion.go: Mobius checkMinionLeash
 	switch ai.intention {
 	case NpcActive:
 		s.npcThinkActive(n)
 	case NpcAttack:
 		s.npcThinkAttack(n)
+	case NpcCast:
+		s.npcThinkCast(n) // ai_cast.go
 	}
 }
 
@@ -514,6 +539,8 @@ func canHandleAction(n *Npc) bool { return n.InWorld() && n.ai.attached }
 func (s *Server) npcArrived(n *Npc) {
 	if n.class == nil || !n.class.attackable {
 		n.Move = nil
+		s.walkerArrived(n)   // walker.go: Mobius WalkingManager.onArrived
+		s.npcMoveFinished(n) // quest_world_ai_events.go: on_move_finished
 		return
 	}
 	s.aiOf(n)
@@ -522,6 +549,8 @@ func (s *Server) npcArrived(n *Npc) {
 	}
 	n.Move = nil
 	s.npcClientStoppedMoving(n)
+	s.walkerArrived(n)   // walker.go: Mobius WalkingManager.onArrived
+	s.npcMoveFinished(n) // quest_world_ai_events.go: on_move_finished
 	if n.ai.intention == NpcMoveTo {
 		s.npcSetActive(n)
 	}
@@ -565,9 +594,10 @@ func (s *Server) notifyAttacked(n *Npc, attacker Creature) {
 	if !n.Running() {
 		s.SetNpcRunning(n, true)
 	}
-	if ai.intention != NpcAttack || n.MostHated() != ai.attackTarget {
+	if !ai.x.coreAIDisabled && (ai.intention != NpcAttack || n.MostHated() != ai.attackTarget) {
 		s.npcSetAttack(n, attacker)
 	}
+	s.minionsAssist(n, attacker) // minion.go: MinionList.onAssist
 	if len(s.aiClassOf(n).clans) > 0 && n.inAttackBy(attacker) {
 		s.callClanHelp(n, attacker)
 	}
@@ -598,6 +628,7 @@ func (s *Server) notifyAggression(n *Npc, target Creature, aggro int) {
 		}
 		s.npcSetAttack(n, target)
 	}
+	s.minionsAssist(n, target) // minion.go: MinionList.onAssist
 }
 
 // NotifyReadyToAct tells the AI of c that it may act again (Mobius
@@ -629,6 +660,12 @@ func (s *Server) aiForget(viewer, object world.Object) {
 	}
 	if ai.attackTarget != nil && world.Object(ai.attackTarget) == object {
 		ai.attackTarget = nil
+		if c, ok := object.(Creature); !ok || !c.IsDead() {
+			s.npcSetActive(n)
+		}
+	}
+	if ai.x.castTarget != nil && world.Object(ai.x.castTarget) == object {
+		ai.x.castTarget = nil
 		if c, ok := object.(Creature); !ok || !c.IsDead() {
 			s.npcSetActive(n)
 		}
@@ -673,7 +710,8 @@ func (s *Server) npcSpawned(n *Npc, aiData map[string]int, home *world.Position)
 	ai := &n.ai
 	if home != nil {
 		ai.aggroRange, ai.aggroSet = aiData["aggroRange"]
-		ai.home, ai.hasHome = *home, n.spawn == nil
+		// A minion has no spawn and no home (Mobius getSpawn() == null).
+		ai.home, ai.hasHome = *home, n.spawn == nil && n.boss.leader == nil
 	}
 	ai.spawnTime = s.Now()
 	n.ClearAggroList()
@@ -699,6 +737,7 @@ func (s *Server) removeNpc(n *Npc) {
 		s.npcSetIdle(n)
 		s.stopAITask(n)
 	}
+	s.walkerGone(n) // walker.go: Mobius onDecay's WalkingManager.onDeath
 	s.RemoveObject(n)
 }
 

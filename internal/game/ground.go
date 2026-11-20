@@ -216,6 +216,10 @@ func (s *Server) handleDropItem(p *Player, body []byte) {
 		s.illegalAction(p, "RequestDropItem of more than one item that does not stack")
 		return
 	}
+	if s.ProcessingTransaction(p) || p.InStoreMode() { // trade.go
+		p.SendSystemMessage(tradeMsgStoreNoDiscard)
+		return
+	}
 	if t.Type2 == typeQuest && !p.IsGM() {
 		p.SendSystemMessage(sysMsgCannotDiscardOrExchange)
 		return
@@ -279,16 +283,9 @@ func (s *Server) itemClick(p *Player, g *GroundItem) {
 		return
 	}
 	if m := p.Move; m != nil {
-		pu.dest, pu.moving = m.Destination, true
+		pu.dest, pu.moving = s.walkGoal(p, m), true
 	}
-	pos, to := p.Position(), g.Position()
-	s.world.Broadcast(p, serverpackets.NewMoveToPawnPacket(serverpackets.MoveToPawn{
-		ObjectID: p.ObjectID(),
-		TargetID: g.item.ObjectID(),
-		Distance: pickUpOffset,
-		X:        pos.X, Y: pos.Y, Z: pos.Z,
-		TargetX: to.X, TargetY: to.Y, TargetZ: to.Z,
-	}), true)
+	s.broadcastPawnWalk(p, g, pickUpOffset) // pathing.go
 }
 
 // pickUpArrived is the OnPlayerArrived hook: a player that reached the item
@@ -317,7 +314,7 @@ func (s *Server) checkPickUps(now time.Time) {
 			if s.pickUpReached(p, pu.g) {
 				s.doPickUp(p, pu.g)
 			}
-		case !pu.moving || p.Move.Destination != pu.dest, now.Sub(pu.started) > pickUpTimeout:
+		case !pu.moving || s.walkGoal(p, p.Move) != pu.dest, now.Sub(pu.started) > pickUpTimeout:
 			delete(s.items.pickups, p)
 		}
 	}
@@ -339,18 +336,23 @@ func (s *Server) doPickUp(p *Player, g *GroundItem) {
 	if p.IsDead() {
 		return
 	}
+	if s.Trading(p) { // trade.go
+		p.SendSystemMessage(tradeMsgCannotUseItems)
+		p.SendActionFailed()
+		return
+	}
 	p.Send(stopMovePacket(p))
 	if !g.InWorld() {
 		p.SendActionFailed()
 		return
 	}
 	it := g.item
-	if g.protectedFor != 0 && g.protectedFor != p.ID() && s.Now().Before(g.protectedUntil) {
+	if g.protectedFor != 0 && g.protectedFor != p.ID() && s.Now().Before(g.protectedUntil) && !s.inLooterParty(p, g.protectedFor) {
 		p.SendActionFailed()
 		p.SendSystemMessage(sysMsgFailedPickUpS1, s.itemNameParam(it.ItemID()))
 		return
 	}
-	if !p.inv.ValidateCapacityFor(it) {
+	if pickUpCapacityChecked(p) && !p.inv.ValidateCapacityFor(it) { // party_reward.go
 		p.SendActionFailed()
 		p.SendSystemMessage(sysMsgInventoryFull)
 		return
@@ -379,6 +381,9 @@ func (s *Server) doPickUp(p *Player, g *GroundItem) {
 			s.world.Broadcast(p, serverpackets.NewSystemMessagePacket(serverpackets.SystemMessage{ID: sysMsgAttentionPickedUp,
 				Params: []serverpackets.SystemMessageParam{name, s.itemNameParam(it.ItemID())}}), true)
 		}
+	}
+	if s.partyPickUp(p, it) { // party_reward.go: the party shares it
+		return
 	}
 	if it.ItemID() == inventory.AdenaID && p.inv.AdenaItem() != nil {
 		s.AddAdena(p, it.Count(), true)

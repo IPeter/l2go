@@ -224,7 +224,8 @@ func (s *Server) AddLevel(p *Player, delta int) bool {
 		}
 		p.SendSystemMessage(sysMsgLevelIncreased)
 	}
-	s.RewardSkills(p) // auto-get skills, and the delevel check (skill_learn.go)
+	s.RewardSkills(p)     // auto-get skills, and the delevel check (skill_learn.go)
+	s.clanLevelChanged(p) // clan_members.go: PledgeShowMemberListUpdate to the clan
 	s.refreshOverloaded(p)
 	s.refreshExpertisePenalty(p) // penalty.go
 	if p.state == stateInGame {

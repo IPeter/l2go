@@ -6,7 +6,9 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 )
 
@@ -45,26 +47,32 @@ const (
 )
 
 // Geo is the Engine for L2J geodata: Mobius's GeoEngine with its cell
-// pathfinder (PathFinding with GeoEngine.ini defaults). A tile without a
-// file has no geodata and answers like None. Doors and fences are not
-// geodata; the game layer checks them.
+// pathfinder (PathFinding with the given Options). A tile without a file,
+// or with a broken one, has no geodata and answers like None. Doors and
+// fences are not geodata; the game composes them (see Door and Fence).
 //
-// Where it differs from Mobius:
-//   - The anti corner cut check reads each neighbouring cell from its own
-//     tile; Mobius reads it from the moving cell's tile, wrapping around at
-//     tile edges.
-//   - FindPath gives the straight path when an end has no geodata; Mobius
-//     finds no path there and its mover then walks straight.
-//   - A tile file that is not valid geodata fails the load; Mobius skips it
-//     with a warning.
+// Kept Mobius quirks:
+//   - The anti corner cut check reads the cells beside a step from the
+//     moving cell's tile, wrapping around at the tile's edge (Region.getBlock
+//     takes the block index modulo the tile).
+//   - FindPath has no path when either end has no geodata; the mover then
+//     walks straight.
 //
 // A Geo is read-only once loaded and safe for concurrent use.
 type Geo struct {
 	// tiles is indexed by tileX*tilesY + tileY; nil has no geodata.
-	tiles [tilesX * tilesY]*tile
-	// diagonal is Mobius's AdvancedDiagonalStrategy: the pathfinder also
-	// steps diagonally. Its GeoEngine.ini turns it off.
-	diagonal bool
+	tiles   [tilesX * tilesY]*tile
+	skipped []error
+
+	pathfinding     bool
+	avoidObstructed bool
+	diagonal        bool
+	passes          int
+	// sizes are the A* window sides, ascending; pools hold their windows,
+	// one pool per size (Mobius keeps one window per size and thread).
+	sizes                           []int
+	pools                           []sync.Pool
+	wLow, wMedium, wHigh, wDiagonal int32
 }
 
 var _ Engine = (*Geo)(nil)
@@ -75,28 +83,56 @@ type TileInfo struct {
 	X, Y int
 	// Flat, Complex and Multilayer count its blocks by type.
 	Flat, Complex, Multilayer int
-	// Bytes is the memory its geodata takes.
+	// Bytes is the file's size. The file is mapped, not read, so this is
+	// address space; the block index adds 256 KiB of memory per tile.
 	Bytes int
 }
 
-// Open returns the Engine for the geodata.dir setting: None when dir is
-// empty, otherwise the geodata in dir. A folder without tiles also gives
-// None, with a warning; Mobius then turns pathfinding off. The loaded
-// tiles are logged. log may be nil.
-func Open(dir string, log *slog.Logger) (Engine, error) {
+// newGeo returns a Geo without tiles.
+func newGeo(opts Options) *Geo {
+	sizes := slices.Sorted(slices.Values(opts.BufferSizes))
+	return &Geo{
+		pathfinding:     opts.Pathfinding,
+		avoidObstructed: opts.AvoidObstructedPathNodes,
+		diagonal:        opts.AdvancedDiagonalStrategy,
+		passes:          opts.MaxPostfilterPasses,
+		sizes:           sizes,
+		pools:           make([]sync.Pool, len(sizes)),
+		wLow:            pathWeight(opts.LowWeight),
+		wMedium:         pathWeight(opts.MediumWeight),
+		wHigh:           pathWeight(opts.HighWeight),
+		wDiagonal:       pathWeight(opts.DiagonalWeight),
+	}
+}
+
+// pathWeight scales a weight as NodeBuffer does: (int) (float × 1000), in
+// Java float arithmetic.
+func pathWeight(w float64) int32 {
+	return int32(float32(w) * 1000)
+}
+
+// Open returns the Engine for the geodata settings: None when dir is empty;
+// otherwise the geodata in dir. A tile that fails to load is skipped with a
+// warning. When no tile loads it returns None, as Mobius then turns
+// pathfinding off; the loaded tiles are logged. A missing folder is an
+// error. log may be nil.
+func Open(dir string, opts Options, log *slog.Logger) (Engine, error) {
 	if dir == "" {
 		return None{}, nil
 	}
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	g, err := Load(dir)
+	g, err := Load(dir, opts)
 	if err != nil {
 		return nil, err
 	}
+	for _, err := range g.Skipped() {
+		log.Warn("geodata: tile not loaded", "err", err)
+	}
 	tiles := g.Tiles()
 	if len(tiles) == 0 {
-		log.Warn("geodata: no tiles in the folder, running without geodata", "dir", dir)
+		log.Warn("geodata: no tile loaded, running without geodata (pathfinding is off)", "dir", dir)
 		return None{}, nil
 	}
 	var sum TileInfo
@@ -108,31 +144,49 @@ func Open(dir string, log *slog.Logger) (Engine, error) {
 	}
 	log.Info("geodata loaded", "dir", dir, "tiles", len(tiles),
 		"flatBlocks", sum.Flat, "complexBlocks", sum.Complex, "multilayerBlocks", sum.Multilayer,
-		"memoryMiB", sum.Bytes>>20)
+		"mappedMiB", sum.Bytes>>20, "pathfinding", g.Pathfinding())
 	return g, nil
 }
 
-// Load reads the geodata tiles in dir; see LoadFS.
-func Load(dir string) (*Geo, error) {
-	g, err := LoadFS(os.DirFS(dir))
+// Load maps the geodata tiles in dir read-only, as Mobius does: a file
+// "X_Y.l2j" for each world tile (X 16–26, Y 10–25). A missing file leaves
+// its tile without geodata; a file that fails to load does too, and is
+// reported by Skipped. Other files are ignored. A missing folder is an
+// error.
+func Load(dir string, opts Options) (*Geo, error) {
+	fi, err := os.Stat(dir)
+	if err == nil && !fi.IsDir() {
+		err = errors.New("not a folder")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("geodata folder %s: %w", dir, err)
 	}
-	return g, nil
+	return load(opts, func(name string) ([]byte, func(), error) {
+		b, err := mapFile(filepath.Join(dir, name))
+		if err != nil {
+			return nil, nil, err
+		}
+		return b, func() { unmapFile(b) }, nil
+	}), nil
 }
 
-// LoadFS reads the geodata tiles in fsys as Mobius does: a file "X_Y.l2j"
-// for each world tile (X 16–26, Y 10–25). A missing file leaves its tile
-// without geodata, and other files are ignored. A file that is not valid
-// L2J geodata is an error wrapping ErrCorrupt.
-//
-// Tiles load in parallel, so fsys must allow concurrent reads, as os.DirFS
-// and fstest.MapFS do.
-func LoadFS(fsys fs.FS) (*Geo, error) {
+// LoadFS is Load for the tiles in fsys, read into memory. Tiles load in
+// parallel, so fsys must allow concurrent reads, as os.DirFS and
+// fstest.MapFS do.
+func LoadFS(fsys fs.FS, opts Options) (*Geo, error) {
 	if _, err := fs.Stat(fsys, "."); err != nil {
 		return nil, err
 	}
-	g := &Geo{}
+	return load(opts, func(name string) ([]byte, func(), error) {
+		b, err := fs.ReadFile(fsys, name)
+		return b, func() {}, err
+	}), nil
+}
+
+// load reads every world tile with read, in parallel. read returns the
+// file's bytes and how to release them.
+func load(opts Options, read func(name string) ([]byte, func(), error)) *Geo {
+	g := newGeo(opts)
 	errs := make([]error, len(g.tiles))
 	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
 	var wg sync.WaitGroup
@@ -142,30 +196,32 @@ func LoadFS(fsys fs.FS) (*Geo, error) {
 			wg.Go(func() {
 				sem <- struct{}{}
 				defer func() { <-sem }()
-				g.tiles[i], errs[i] = loadTile(fsys, x, y)
+				g.tiles[i], errs[i] = loadTile(read, x, y)
 			})
 		}
 	}
 	wg.Wait()
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
+	for _, err := range errs {
+		if err != nil {
+			g.skipped = append(g.skipped, err)
+		}
 	}
-	return g, nil
+	return g
 }
 
-// loadTile reads tile (x, y) from fsys. A missing file is no tile and no
-// error.
-func loadTile(fsys fs.FS, x, y int) (*tile, error) {
+// loadTile reads tile (x, y). A missing file is no tile and no error.
+func loadTile(read func(name string) ([]byte, func(), error), x, y int) (*tile, error) {
 	name := fmt.Sprintf("%d_%d.l2j", x, y)
-	b, err := fs.ReadFile(fsys, name)
+	b, release, err := read(name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	t, err := parseTile(x, y, b)
 	if err != nil {
+		release()
 		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	return t, nil
@@ -181,6 +237,13 @@ func (g *Geo) Tiles() []TileInfo {
 	}
 	return out
 }
+
+// Skipped returns why each tile file that exists did not load, by X then Y.
+// Mobius logs these and runs without those tiles.
+func (g *Geo) Skipped() []error { return g.skipped }
+
+// Pathfinding reports whether pathfinding is on (Options.Pathfinding).
+func (g *Geo) Pathfinding() bool { return g.pathfinding }
 
 // Height returns the geodata height nearest to z at (x, y) (Mobius
 // getHeight): the cell's height, or on a multilayer cell the closest
@@ -211,7 +274,7 @@ func (g *Geo) HasGeo(x, y int32) bool { return g.hasGeoPos(toGeoX(x), toGeoY(y))
 // CompletelyBlocked reports whether the floor nearest to z of the cell
 // holding (x, y) has every direction closed (Mobius isCompletelyBlocked,
 // which MoveToLocation checks for the clicked target). Without geodata at
-// (x, y) nothing is blocked.
+// (x, y), or with pathfinding off, nothing is blocked.
 func (g *Geo) CompletelyBlocked(x, y, z int32) bool {
 	return g.completelyBlocked(toGeoX(x), toGeoY(y), int(z))
 }
@@ -312,11 +375,14 @@ func (g *Geo) CanMoveToTarget(from, to Point) bool {
 		if !ok {
 			return false
 		}
-		// Mobius also checks the plain NSWE flags first (with its default
-		// AvoidObstructedPathNodes); the anti corner cut check covers them.
-		if g.hasGeoPos(prevX, prevY) &&
-			!g.checkNSWEAntiCornerCut(prevX, prevY, prevZ, computeNSWE(prevX, prevY, curX, curY)) {
-			return false
+		if g.hasGeoPos(prevX, prevY) {
+			dir := computeNSWE(prevX, prevY, curX, curY)
+			if g.avoidObstructed && !g.checkNSWE(prevX, prevY, prevZ, dir) {
+				return false
+			}
+			if !g.checkNSWEAntiCornerCut(prevX, prevY, prevZ, dir) {
+				return false
+			}
 		}
 		prevX, prevY, prevZ = curX, curY, curZ
 	}
@@ -326,9 +392,10 @@ func (g *Geo) CanMoveToTarget(from, to Point) bool {
 // ValidLocation returns where a straight walk from from towards to ends
 // (Mobius getValidLocation without doors and fences): to at its geodata
 // height when the walk gets there, otherwise the centre of the last cell
-// reached before a step it cannot take (too steep, blocked flags, or into a
-// cell closed on all sides). A walk that gets through but ends on another
-// floor than to's returns from at its geodata height, as in Mobius.
+// reached before a step it cannot take (too steep, blocked flags, or with
+// pathfinding on into a cell closed on all sides). A walk that gets through
+// but ends on another floor than to's returns from at its geodata height,
+// as in Mobius.
 func (g *Geo) ValidLocation(from, to Point) Point {
 	geoX, geoY := toGeoX(from.X), toGeoY(from.Y)
 	targetX, targetY := toGeoX(to.X), toGeoY(to.Y)
@@ -387,9 +454,12 @@ func (g *Geo) neighbourLayerNear(x, y, z int) bool {
 }
 
 // completelyBlocked reports whether the floor of cell (x, y) nearest to z
-// has every direction closed (Mobius isCompletelyBlocked, with pathfinding
-// on as whenever geodata is loaded).
+// has every direction closed (Mobius isCompletelyBlocked): never with
+// pathfinding off.
 func (g *Geo) completelyBlocked(x, y, z int) bool {
+	if !g.pathfinding {
+		return false
+	}
 	t := g.tileAt(x, y)
 	return t != nil && t.nswe(x, y, z) == 0
 }
@@ -397,22 +467,28 @@ func (g *Geo) completelyBlocked(x, y, z int) bool {
 // checkNSWEAntiCornerCut reports whether the floor of cell (x, y) nearest
 // to z allows the step dir, and for a diagonal step whether both cells
 // beside it allow the moves around the corner (Mobius
-// checkNearestNsweAntiCornerCut).
+// checkNearestNsweAntiCornerCut). All cells are read from (x, y)'s tile,
+// wrapping around at its edges, as in Mobius.
 func (g *Geo) checkNSWEAntiCornerCut(x, y, z, dir int) bool {
+	t := g.tileAt(x, y)
+	if t == nil {
+		return true
+	}
+	check := func(x, y, dir int) bool { return t.nswe(x, y, z)&dir == dir }
 	canMove := true
 	if dir&nsweNorthEast == nsweNorthEast {
-		canMove = g.checkNSWE(x, y-1, z, nsweEast) && g.checkNSWE(x+1, y, z, nsweNorth)
+		canMove = check(x, y-1, nsweEast) && check(x+1, y, nsweNorth)
 	}
 	if canMove && dir&nsweNorthWest == nsweNorthWest {
-		canMove = g.checkNSWE(x, y-1, z, nsweWest) && g.checkNSWE(x-1, y, z, nsweNorth)
+		canMove = check(x, y-1, nsweWest) && check(x-1, y, nsweNorth)
 	}
 	if canMove && dir&nsweSouthEast == nsweSouthEast {
-		canMove = g.checkNSWE(x, y+1, z, nsweEast) && g.checkNSWE(x+1, y, z, nsweSouth)
+		canMove = check(x, y+1, nsweEast) && check(x+1, y, nsweSouth)
 	}
 	if canMove && dir&nsweSouthWest == nsweSouthWest {
-		canMove = g.checkNSWE(x, y+1, z, nsweWest) && g.checkNSWE(x-1, y, z, nsweSouth)
+		canMove = check(x, y+1, nsweWest) && check(x-1, y, nsweSouth)
 	}
-	return canMove && g.checkNSWE(x, y, z, dir)
+	return canMove && check(x, y, dir)
 }
 
 // checkNSWE reports whether the floor of cell (x, y) nearest to z allows

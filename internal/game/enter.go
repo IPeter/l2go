@@ -64,6 +64,7 @@ func (s *Server) SelectCharacter(ctx context.Context, sess Session, slot int) er
 	if err != nil {
 		return err
 	}
+	s.loadRelations(ctx, p) // friends.go: the friend and block lists
 
 	if err := s.loop.Call(ctx, func() {
 		if s.bySession[sess] != nil {
@@ -80,6 +81,7 @@ func (s *Server) SelectCharacter(ctx context.Context, sess Session, slot int) er
 		s.loadWornItems(p) // item_skill.go: the worn items' skills come with the inventory
 		s.loadSkills(p)    // skill_persist.go: skills before the HP, as Mobius loads them
 		s.loadItemState(p) // item_skill.go: shortcuts, item reuse, grade penalty
+		s.restoreClan(p)   // clan.go: the clan, privileges and pledge class
 		p.Send(s.charSelected(p, sess))
 	}); err != nil {
 		return fmt.Errorf("game: select a character: %w", err)
@@ -177,7 +179,7 @@ func (s *Server) EnterWorld(sess Session) {
 //     around, and the info of every other visible object
 //  8. EtcStatusUpdate
 //  9. ExStorageMaxCount
-//  10. FriendList (empty)
+//  10. FriendList, and "$s1 (Friend) has logged in." to the friends online
 //  11. SystemMessage "Welcome to the World of Lineage II."
 //  12. SkillCoolTime (empty)
 //  13. UserInfo again, and CharInfo to the players around
@@ -187,14 +189,17 @@ func (s *Server) EnterWorld(sess Session) {
 //
 // and 300 ms later AbnormalStatusUpdate and SkillList (both empty). The
 // OnPlayerEnter hooks run between 11 and 12, where Mobius calls
-// onPlayerEnter. Clan, tutorial, Seven Signs, announcement and GM startup
-// packets are left out (decision E1).
+// onPlayerEnter. A clan member gets the clan packets after the first
+// UserInfo (clanEnterWorld) and the join penalty notice after SkillCoolTime;
+// Seven Signs, announcement and GM startup packets are left out (decision
+// E1).
 func (s *Server) enterWorld(p *Player) {
 	sess := p.session
 	sess.SetState(StateInGame)
 	p.state = stateInGame
 
 	p.sendUserInfo()
+	s.clanEnterWorld(p) // clan.go: PledgeSkillList, the members' notices, the clan window
 	p.Send(enterMacroList)
 	p.Send(serverpackets.NewItemListPacket(serverpackets.ItemList{Items: p.inv.ItemInfos()}))
 	p.Send(shortcutInitPacket(p))
@@ -226,7 +231,7 @@ func (s *Server) enterWorld(p *Player) {
 
 	p.Send(etcStatusPacket(p))
 	p.Send(s.storageMaxCount(p))
-	p.Send(emptyFriendList)
+	s.sendFriendsOnEnter(p) // friends.go: FriendList, the friends' log-in notices
 	p.Send(welcomeMessagePacket)
 
 	s.runEnter(p)
@@ -237,6 +242,7 @@ func (s *Server) enterWorld(p *Player) {
 	// Mobius sendSkillList sends the list 300 ms later.
 	p.SendSkillList()
 	p.Send(s.SkillCoolTimePacket(p))
+	s.clanEnterWorldLate(p) // clan_members.go: the join penalty notice
 
 	p.BroadcastUserInfo()
 	s.world.FlushUpdates()

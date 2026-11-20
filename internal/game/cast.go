@@ -276,6 +276,11 @@ func (s *Server) DoCastAt(c Creature, sk *skills.Skill, target Creature, targets
 	if b == nil || sk == nil {
 		return
 	}
+	if s.monsterDropsCast(c, sk) { // Monster.doCast(skill, target, targets), ai_cast.go
+		b.cast.clear(false)
+		b.cast.clear(true)
+		return
+	}
 	sim := sk.SimultaneousCast
 	if !s.checkDoCastConditions(c, b, sk) {
 		b.cast.clear(sim)
@@ -692,7 +697,7 @@ func (s *Server) castLaunched(c Creature, b *skillBase, mu *magicUse) {
 				continue
 			}
 			if (sk.TargetType != data.TargetParty || !sk.HasEffectType(skills.TypeHeal)) &&
-				mu.time > castSightTime && !s.geo.CanSeeTarget(geoPoint(pos), geoPoint(tp)) {
+				mu.time > castSightTime && !s.canSee(c, gt) {
 				skipSight++
 				continue
 			}

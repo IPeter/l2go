@@ -105,6 +105,16 @@ type Player struct {
 	itemSkill playerItemSkill // shortcuts, shots, item skills, penalties (item_skill.go)
 
 	admin playerAdmin // the GM toggles: invul, diet, silence, ... (admin_gm.go)
+
+	store playerStore // the private store (store.go)
+
+	social playerSocial // the friend and block lists (friends.go)
+
+	party playerParty // the party, the request partner and summon requests (party.go)
+
+	clan playerClan // the clan membership and privileges (clan.go)
+
+	vehicle playerVehicle // the boat the player is on (vehicle.go)
 }
 
 var (
@@ -304,9 +314,9 @@ type relation struct {
 }
 
 // relationTo returns the relation bits of p as seen by v (Mobius
-// Player.getRelation, without clans, parties and sieges, which do not exist
-// yet).
-func (p *Player) relationTo(*Player) int32 {
+// Player.getRelation, without sieges, which do not exist yet): the clan
+// leader and war bits come from clanRelationBits (clan.go).
+func (p *Player) relationTo(v *Player) int32 {
 	var r int32
 	if p.PvPFlag != 0 {
 		r |= serverpackets.RelationPvPFlag
@@ -314,7 +324,7 @@ func (p *Player) relationTo(*Player) int32 {
 	if p.char.Karma > 0 {
 		r |= serverpackets.RelationHasKarma
 	}
-	return r
+	return r | p.srv.clanRelationBits(p, v)
 }
 
 // autoAttackableBy reports whether v attacks p with a plain click (Mobius
@@ -325,6 +335,10 @@ func (p *Player) autoAttackableBy(v *Player) bool {
 	case p.Invisible() && p.IsGM():
 		return false
 	case v == p:
+		return false
+	case p.party.party != nil && p.party.party == v.party.party:
+		// Party members never attack each other with a click (Mobius
+		// Player.java 8383).
 		return false
 	case p.Zones.Inside(ZonePeace) || p.Zones.Inside(ZoneNoPvP):
 		return false

@@ -149,7 +149,7 @@ func (s *Server) handleWarehouseDeposit(p *Player, body []byte) {
 		return
 	}
 	wh := p.Warehouse()
-	if wh == nil || !s.warehouse.active[p] || !s.warehouseManagerOK(p) {
+	if wh == nil || !s.warehouse.active[p] || s.Trading(p) || !s.warehouseManagerOK(p) { // trade.go
 		return
 	}
 	if !s.gs.Economy.AltKarmaPlayerCanUseWarehouse && p.Karma() > 0 {

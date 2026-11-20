@@ -32,7 +32,6 @@ var (
 	emptySkillList       = serverpackets.NewSkillListPacket(nil)
 	emptyAbnormalStatus  = serverpackets.NewAbnormalStatusUpdatePacket(nil)
 	emptyHennaInfo       = serverpackets.NewHennaInfoPacket(serverpackets.HennaInfo{})
-	emptyFriendList      = serverpackets.NewFriendListPacket(nil)
 	manorListPacket      = serverpackets.NewExSendManorListPacket(serverpackets.InterludeCastles())
 	welcomeMessagePacket = serverpackets.NewSystemMessagePacket(serverpackets.SystemMessage{ID: serverpackets.SysMsgWelcome})
 	// enterMacroList is the empty macro list EnterWorld sends: Mobius starts
@@ -139,8 +138,14 @@ func forgetRelation(v world.Viewer, o world.Object) {
 // changed, and MoveToLocation while p walks (InfoProvider).
 func (p *Player) InfoFor(viewer *Player) [][]byte {
 	out := [][]byte{p.charInfoFor(viewer)}
+	if on := p.getOnVehiclePacket(); on != nil { // vehicle.go: a passenger
+		out = append(out, on)
+	}
 	if rel, ok := p.relationUpdate(viewer); ok {
 		out = append(out, rel)
+	}
+	if msg := p.storeMsgPacket(); msg != nil { // store.go
+		out = append(out, msg)
 	}
 	if m := p.Move; m != nil {
 		out = append(out, moveToLocationPacket(p, m.Destination))
@@ -243,8 +248,10 @@ func (p *Player) userInfo() []byte {
 			title = "[Invisible]"
 		}
 	}
+	cv := p.clanView()
 	return serverpackets.NewUserInfoPacket(serverpackets.UserInfo{
 		X: pos.X, Y: pos.Y, Z: pos.Z,
+		VehicleID:             p.vehicleID(), // vehicle.go
 		ObjectID:              p.ObjectID(),
 		Name:                  p.char.Name,
 		Race:                  p.char.Race,
@@ -309,6 +316,16 @@ func (p *Player) userInfo() []byte {
 		NameColor:             p.nameColor(),
 		Running:               p.Running(),
 		TitleColor:            p.titleColor(),
+		PrivateStoreType:      uint8(p.store.typ),
+		ClanID:                cv.clanID, // clan.go
+		ClanCrestID:           cv.crestID,
+		AllyID:                cv.allyID,
+		AllyCrestID:           cv.allyCrestID,
+		Relation:              cv.userRelation,
+		ClanPrivileges:        cv.privileges,
+		ClanCrestLargeID:      cv.crestLargeID,
+		PledgeClass:           cv.pledgeClass,
+		PledgeType:            cv.pledgeType,
 	})
 }
 
@@ -317,7 +334,7 @@ func (p *Player) userInfo() []byte {
 // instead of the invisible flag.
 func (p *Player) charInfoFor(viewer *Player) []byte {
 	v := p.stats.View()
-	pos := p.Position()
+	pos, vehicleID := p.charInfoPosition() // vehicle.go: a passenger's deck position
 	gmSeesInvisible := p.Invisible() && viewer.IsGM()
 	title := p.Title()
 	abnormal := abnormalMask(p.skill)
@@ -326,8 +343,10 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 		abnormal |= serverpackets.AbnormalStealth
 	}
 	recLeft, recHave := p.recommendations()
+	cv := p.clanView()
 	return serverpackets.NewCharInfoPacket(serverpackets.CharInfo{
 		X: pos.X, Y: pos.Y, Z: pos.Z,
+		VehicleID:             vehicleID,
 		ObjectID:              p.ObjectID(),
 		Name:                  p.char.Name,
 		Race:                  p.char.Race,
@@ -369,6 +388,14 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 		NameColor:             p.nameColor(),
 		Heading:               pos.Heading,
 		TitleColor:            p.titleColor(),
+		PrivateStoreType:      uint8(p.store.typ),
+		ClanID:                cv.clanID, // clan.go
+		ClanCrestID:           cv.crestID,
+		AllyID:                cv.allyID,
+		AllyCrestID:           cv.allyCrestID,
+		ClanCrestLargeID:      cv.crestLargeID,
+		PledgeClass:           cv.pledgeClass,
+		PledgeType:            cv.pledgeType,
 	})
 }
 

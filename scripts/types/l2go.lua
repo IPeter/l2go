@@ -657,8 +657,8 @@ function Script:cancel_quest_timers(name) end
 
 ---Mobius getRandomPartyMember: (player) any member; (player, cond) or
 ---(player, var, value) a member whose state matches; (player, npc) a
----member near npc that on_check_party_member accepts. Until parties exist,
----the player or nil.
+---member near npc that on_check_party_member accepts (the highest of 1000
+---rolls). Without a party, the player or nil.
 ---@param player Player?
 ---@param cond_var_or_npc? integer|string|Npc
 ---@param value? string
@@ -667,8 +667,8 @@ function Script:get_random_party_member(player, cond_var_or_npc, value) end
 
 ---Mobius getRandomPartyMemberState: (player, state) → a member with the
 ---state; (player, cond, chance, npc) → the state of a member at cond (-1:
----started) near npc that on_check_party_member_state accepts. Until
----parties exist, the player's.
+---started) near npc that on_check_party_member_state accepts, the player
+---counting chance times. Without a party, the player's.
 ---@param player Player?
 ---@param state_or_cond integer
 ---@param chance? integer
@@ -676,8 +676,8 @@ function Script:get_random_party_member(player, cond_var_or_npc, value) end
 ---@return Player|QuestState|nil
 function Script:get_random_party_member_state(player, state_or_cond, chance, npc) end
 
----Runs on_action_for_each_player for the player (and, once parties
----exist, its party or command channel).
+---Runs on_action_for_each_player for the player, or with include_party for
+---each member of its party (command channels come with M11).
 ---@param player Player
 ---@param npc Npc?
 ---@param is_summon boolean
@@ -1046,23 +1046,45 @@ function Player:var_bool(name, default) end
 ---@param value string|number|boolean
 function Player:set_var(name, value) end
 
----Always false until parties exist.
+---Whether the player is in a party.
 ---@return boolean
 function Player:is_in_party() end
 
----Always nil until parties exist.
----@return nil
+---The player's party, nil without one: the leader, the members in party
+---order (leader first) and the loot mode (0 finders keepers, 1 random,
+---2 random including spoil, 3 by turn, 4 by turn including spoil).
+---@return {leader: Player, members: Player[], loot: integer}|nil
 function Player:party() end
 
----The party's members; until parties exist, the player alone.
+---The party's members, leader first; without a party, the player alone.
 ---@return Player[]
 function Player:party_members() end
 
----Always nil until clans exist.
----@return nil
+---A clan member's leader: its object ID, its name, and its player while it
+---is in the game (nil offline).
+---@class ClanLeader
+---@field object_id fun(self: ClanLeader): integer
+---@field name fun(self: ClanLeader): string
+---@field player fun(self: ClanLeader): Player|nil
+
+---A clan, called with ":": id, name, level, reputation, leader_id,
+---leader(), add_reputation(points) (negative takes; with Mobius's messages
+---and the clan window update) and broadcast_pledge_info_update().
+---@class Clan
+---@field id fun(self: Clan): integer
+---@field name fun(self: Clan): string
+---@field level fun(self: Clan): integer
+---@field reputation fun(self: Clan): integer
+---@field leader_id fun(self: Clan): integer
+---@field leader fun(self: Clan): ClanLeader
+---@field add_reputation fun(self: Clan, points: integer)
+---@field broadcast_pledge_info_update fun(self: Clan)
+
+---The player's clan, nil without one.
+---@return Clan|nil
 function Player:clan() end
 
----Always false until clans exist.
+---Whether the player leads its clan.
 ---@return boolean
 function Player:is_clan_leader() end
 
@@ -1927,6 +1949,54 @@ function cinematics.sound(to, sound, source) end
 ---@param ms integer
 ---@param position? integer 2 (top center) when left out
 function cinematics.screen_message(to, text, ms, position) end
+
+---The ferries (Mobius vehicles/Boat*.java). A schedule is data: the game
+---runs the boat, its path, the docks and the tickets. scripts/lib/boat.lua
+---has the docks, messages and a helper; scripts/vehicles/ the five routes.
+vehicles = {}
+
+---A point of a boat path: {x, y, z, speed, rotation}. Without the speeds
+---the boat sails at 350 and turns at 4000 (Mobius VehiclePathPoint); a
+---speed of 0 teleports it there, facing `rotation`.
+---@alias VehiclePoint integer[]
+
+---What the players within the boat broadcast radius of either `near`
+---point hear: the boat announcements (system message IDs), then the horn.
+---@class VehicleAnnounce
+---@field near VehiclePoint[] two points
+---@field messages? integer[] system message IDs
+---@field horn? VehiclePoint where the horn plays
+---@field dock? integer only in `await`: the dock to wait for
+
+---One case of the schedule, done in this order: wait for a free dock
+---(`await`: try again every 5 s, announcing the delay on the first try and
+---every 36th after), free (`undock`) or take (`dock`) a dock, `say`, the
+---`horn` around the boat, take the tickets (`pay`), sail the `path`, and
+---run the next step after `wait` ms, or when the path ends without one.
+---@class VehicleStep
+---@field await? VehicleAnnounce
+---@field undock? integer
+---@field dock? integer
+---@field say? VehicleAnnounce
+---@field horn? VehiclePoint
+---@field pay? {item: integer, count?: integer, oust: VehiclePoint} item 0: no ticket
+---@field path? VehiclePoint[]
+---@field wait? integer milliseconds
+
+---A ferry schedule.
+---@class VehicleRoute
+---@field name string
+---@field boat integer the Mobius boat ID
+---@field start integer[] {x, y, z, heading}
+---@field start_delay? integer ms before the first step
+---@field dock? integer the dock the boat holds at startup
+---@field steps VehicleStep[]
+
+---Declares a ferry schedule; only while the scripts load. The game starts
+---one boat per route at startup (when boats are allowed) and runs its steps
+---in a cycle. A reload does not change running boats.
+---@param route VehicleRoute
+function vehicles.add_route(route) end
 
 -------------------------------------------------------------------------------
 -- Constants

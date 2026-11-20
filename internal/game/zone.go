@@ -418,6 +418,7 @@ func (s *Server) enterZone(p *Player, r *zoneRule) {
 		p.Send(etcStatusPacket(p))
 	}
 	s.questZone(p, r.zone.ID, r.zone.Type, true) // quest_events.go
+	s.bossZoneEntered(p, r.zone.ID)              // bosszone.go
 }
 
 // exitZone records that p left the zone id and does what the zone does on
@@ -445,6 +446,7 @@ func (s *Server) exitZone(p *Player, id int) {
 		p.Send(etcStatusPacket(p))
 	}
 	s.questZone(p, id, r.zone.Type, false) // quest_events.go
+	s.bossZoneExited(p, id, false)         // bosszone.go
 }
 
 // updateMotion sets the stat set's water and swamp state from p's zones:

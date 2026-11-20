@@ -111,6 +111,9 @@ func (s *Server) npcDied(victim, killer Creature) {
 	// Npc.doDie: the weapons shown go back to the template's.
 	n.RHand, n.LHand = int32(n.Template.Equipment.RHand), int32(n.Template.Equipment.LHand) //nolint:gosec // item IDs are small
 	s.startDecay(n)
+	// raid.go: Attackable.doDie's minion hooks, then RaidBoss and GrandBoss
+	// doDie (the success message, raid points, the raid spawner).
+	s.bossNpcDied(n, killer)
 }
 
 // npcDiePacket is Die for an NPC (Mobius Die): an NPC can always be
@@ -159,16 +162,22 @@ func (s *Server) npcDropItems(n *Npc, c Creature) {
 		herb := t.ExImmediateEffect
 		autoLoot := n.Template.Status.Flying || (!herb && !raid && combat.AutoLoot) || (herb && combat.AutoLootHerbs)
 		if autoLoot && p.InGame() {
-			s.autoLoot(p, t, d.Count)
+			s.autoLoot(p, n, t, d.Count)
 			continue
 		}
 		s.npcDropItem(n, p, t, d.Count)
 	}
 }
 
-// autoLoot is Mobius Player.doAutoLoot without a party: adena through
-// AddAdena, other items through AddItem, with their messages.
-func (s *Server) autoLoot(p *Player, t *data.Item, count int) {
+// autoLoot is Mobius Player.doAutoLoot: in a party everything but herbs is
+// shared by the loot mode around the monster (party_reward.go); otherwise
+// adena goes through AddAdena, other items through AddItem, with their
+// messages.
+func (s *Server) autoLoot(p *Player, n *Npc, t *data.Item, count int) {
+	if p.InParty() && !t.ExImmediateEffect {
+		s.partyDistributeItem(p, int32(t.ID), int64(count), false, n) //nolint:gosec // item IDs are small
+		return
+	}
 	if t.ID == adenaID {
 		s.AddAdena(p, int64(count), true)
 		return

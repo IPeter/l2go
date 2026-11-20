@@ -107,6 +107,12 @@ func TestLoadReportsJSONErrors(t *testing.T) {
 		"string item ID": `{"gameservers": [{"id": 1, "pvp": {"listOfPetItems": ["2375"]}}]}`,
 		"unknown combat": `{"gameservers": [{"id": 1, "combat": {"altPartyRange": 1500}}]}`,
 		"unknown econ":   `{"gameservers": [{"id": 1, "economy": {"customMultisellLoad": true}}]}`,
+		"unknown party":  `{"gameservers": [{"id": 1, "party": {"altLeavePartyLeader": true}}]}`,
+		"string gaps":    `{"gameservers": [{"id": 1, "party": {"xpCutoffGaps": "0,9;10,14"}}]}`,
+		"unknown stores": `{"gameservers": [{"id": 1, "stores": {"maxPvtStoreSellSlotsDwarf": 4}}]}`,
+		"unknown clan":   `{"gameservers": [{"id": 1, "clan": {"daysBeforeJoinAClan": 1}}]}`,
+		"unknown ally":   `{"gameservers": [{"id": 1, "ally": {"altMaxNumOfClansInAlly": 3}}]}`,
+		"bool template":  `{"gameservers": [{"id": 1, "clan": {"nameTemplate": true}}]}`,
 	}
 	for name, content := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -196,7 +202,7 @@ func TestParseGameSections(t *testing.T) {
 			g.World.DeleteCharAfterDays, g.World.MaxRunSpeed, g.World.SpawnProtection = 3, 200, 0
 			g.Chat = Chat{GeneralRange: 900, Shout: ChatModeGlobal, Trade: ChatModeOff, MaxLength: 80}
 			g.NPCs.SpawnCustom, g.NPCs.MaxFreeTeleportLevel, g.NPCs.InteractionRange = true, 20, 150
-			g.Geodata = Geodata{Dir: "/srv/geo"}
+			g.Geodata.Dir = "/srv/geo"
 		}},
 		{"every new key", `{"id": 1,
 			"world": {"autoLearnSkills": true, "gridsAlwaysOn": true, "gridTurnOnTime": "2s", "gridTurnOffTime": "1m"},
@@ -204,10 +210,10 @@ func TestParseGameSections(t *testing.T) {
 				"mobAggroInPeaceZone": false, "aggroDistanceCheck": true, "aggroDistanceCheckRange": 3000, "attackablesCampPlayerCorpses": true},
 			"items": {"_comment": "i", "allowDiscardItem": false, "autoDestroyDroppedItemAfter": "0s", "autoDestroyHerbTime": "30s", "listOfProtectedItems": [57, 1060],
 				"destroyPlayerDroppedItem": true, "destroyEquipableItem": true, "multipleItemDrop": false, "maxAdena": 99999999999,
-				"warehouseSlotsNoDwarf": 50, "warehouseSlotsDwarf": 60, "autoLootSlotLimit": true},
-			"economy": {"altKarmaPlayerCanShop": false, "altKarmaPlayerCanUseWarehouse": false, "onlyGMItemsFree": false, "multisellAmountLimit": 1,
+				"warehouseSlotsNoDwarf": 50, "warehouseSlotsDwarf": 60, "warehouseSlotsClan": 70, "autoLootSlotLimit": true},
+			"economy": {"altKarmaPlayerCanShop": false, "altKarmaPlayerCanUseWarehouse": false, "altKarmaPlayerCanTrade": false, "onlyGMItemsFree": false, "multisellAmountLimit": 1,
 				"customMultisell": true, "floodDropItem": "0s", "floodTransaction": "500ms", "floodMultisell": "2s"},
-			"rates": {"xp": 10, "sp": 2.5, "deathDropChance": 3, "deathDropAmount": 4, "herbDropChance": 0, "herbDropAmount": 0.5,
+			"rates": {"xp": 10, "sp": 2.5, "partyXp": 1.5, "partySp": 0, "deathDropChance": 3, "deathDropAmount": 4, "herbDropChance": 0, "herbDropAmount": 0.5,
 				"dropChanceByItem": {}, "dropAmountByItem": {"57": 5},
 				"dropMaxOccurrencesNormal": 0, "dropAdenaMinLevelDifference": 1, "dropAdenaMaxLevelDifference": 2, "dropAdenaMinLevelGapChance": 0,
 				"dropItemMinLevelDifference": 3, "dropItemMaxLevelDifference": 4, "dropItemMinLevelGapChance": 100,
@@ -222,14 +228,14 @@ func TestParseGameSections(t *testing.T) {
 			g.World.GridsAlwaysOn = true
 			g.World.GridTurnOnTime = Duration(2 * time.Second)
 			g.World.GridTurnOffTime = Duration(time.Minute)
-			g.NPCs = NPCs{MaxFreeTeleportLevel: DefaultMaxFreeTeleportLevel, InteractionRange: DefaultNPCInteractionRange,
+			g.NPCs = withWorldAINPCs(NPCs{MaxFreeTeleportLevel: DefaultMaxFreeTeleportLevel, InteractionRange: DefaultNPCInteractionRange,
 				DefaultCorpseTime: Duration(5 * time.Second), MaxAggroRange: 600,
-				AggroDistanceCheck: true, AggroDistanceCheckRange: 3000, AttackablesCampPlayerCorpses: true}
+				AggroDistanceCheck: true, AggroDistanceCheckRange: 3000, AttackablesCampPlayerCorpses: true})
 			g.Items = Items{Comment: "i", AutoDestroyHerbTime: Duration(30 * time.Second), ListOfProtectedItems: []int{57, 1060},
 				DestroyPlayerDroppedItem: true, DestroyEquipableItem: true, MaxAdena: 99999999999,
-				WarehouseSlotsNoDwarf: 50, WarehouseSlotsDwarf: 60, AutoLootSlotLimit: true}
+				WarehouseSlotsNoDwarf: 50, WarehouseSlotsDwarf: 60, WarehouseSlotsClan: 70, AutoLootSlotLimit: true}
 			g.Economy = Economy{MultisellAmountLimit: 1, CustomMultisell: true, FloodTransaction: Duration(500 * time.Millisecond), FloodMultisell: Duration(2 * time.Second)}
-			g.Rates = Rates{XP: 10, SP: 2.5, DeathDropChance: 3, DeathDropAmount: 4, HerbDropAmount: 0.5,
+			g.Rates = Rates{XP: 10, SP: 2.5, PartyXP: 1.5, DeathDropChance: 3, DeathDropAmount: 4, HerbDropAmount: 0.5,
 				DropChanceByItem: ItemRates{}, DropAmountByItem: ItemRates{57: 5},
 				DropAdenaMinLevelDifference: 1, DropAdenaMaxLevelDifference: 2,
 				DropItemMinLevelDifference: 3, DropItemMaxLevelDifference: 4, DropItemMinLevelGapChance: 100,
@@ -255,6 +261,33 @@ func TestParseGameSections(t *testing.T) {
 			g.Combat.RespawnRestoreHP = 0
 			g.Economy.OnlyGMItemsFree = false
 		}},
+		{"every social key", `{"id": 1,
+			"party": {"_comment": "p", "newLeaderOnLeave": true, "xpCutoffMethod": "HighFive", "xpCutoffPercent": 5.5, "xpCutoffLevel": 0,
+				"xpCutoffGaps": [[0, 4], [5, 99]], "xpCutoffGapPercents": [100, 0]},
+			"stores": {"_comment": "s", "sellSlotsDwarf": 8, "sellSlotsOther": 0, "buySlotsDwarf": 9, "buySlotsOther": 7, "minRangeFromPlayer": 0, "minRangeFromNpc": 0},
+			"clan": {"_comment": "c", "daysBeforeJoin": 0, "daysBeforeCreate": 2, "daysToDissolve": 3, "leaderInstantActivation": true, "membersForWar": 1,
+				"membersCanWithdrawFromWarehouse": true, "lifeCrystalNeeded": false, "nameTemplate": "[A-Za-z0-9]{2,16}",
+				"level6Cost": 1, "level7Cost": 2, "level8Cost": 3, "level6Members": 4, "level7Members": 5, "level8Members": 6,
+				"royalGuardCost": 7, "knightUnitCost": 8, "reputationPerKill": 0, "academyMinPoints": 10, "academyMaxPoints": 10},
+			"ally": {"_comment": "a", "maxClans": 5, "daysBeforeJoinWhenLeft": 0, "daysBeforeJoinWhenDismissed": 2, "daysBeforeAcceptWhenDismissed": 3, "daysBeforeCreateWhenDissolved": 0}}`, func(g *GameServer) {
+			g.Party = Party{Comment: "p", NewLeaderOnLeave: true, XPCutoffMethod: CutoffHighFive, XPCutoffPercent: 5.5,
+				XPCutoffGaps: [][2]int{{0, 4}, {5, 99}}, XPCutoffGapPercents: []int{100, 0}}
+			g.Stores = Stores{Comment: "s", SellSlotsDwarf: 8, BuySlotsDwarf: 9, BuySlotsOther: 7}
+			g.Clan = Clan{Comment: "c", DaysBeforeCreate: 2, DaysToDissolve: 3, LeaderInstantActivation: true, MembersForWar: 1,
+				MembersCanWithdrawFromWarehouse: true, NameTemplate: "[A-Za-z0-9]{2,16}",
+				Level6Cost: 1, Level7Cost: 2, Level8Cost: 3, Level6Members: 4, Level7Members: 5, Level8Members: 6,
+				RoyalGuardCost: 7, KnightUnitCost: 8, AcademyMinPoints: 10, AcademyMaxPoints: 10}
+			g.Ally = Ally{Comment: "a", MaxClans: 5, DaysBeforeJoinWhenDismissed: 2, DaysBeforeAcceptWhenDismissed: 3}
+		}},
+		{"some social keys", `{"id": 1, "party": {"xpCutoffMethod": "none"}, "clan": {"membersForWar": 0}, "ally": {"maxClans": 1}}`, func(g *GameServer) {
+			g.Party.XPCutoffMethod = CutoffNone
+			g.Clan.MembersForWar = 0
+			g.Ally.MaxClans = 1
+		}},
+		{"empty gap lists", `{"id": 1, "party": {"xpCutoffGaps": [], "xpCutoffGapPercents": []}}`, func(g *GameServer) {
+			g.Party.XPCutoffGaps = [][2]int{}
+			g.Party.XPCutoffGapPercents = []int{}
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -265,6 +298,8 @@ func TestParseGameSections(t *testing.T) {
 			want := GameServer{
 				World: DefaultWorld(), Chat: DefaultChat(), NPCs: DefaultNPCs(),
 				Items: DefaultItems(), Economy: DefaultEconomy(), Rates: DefaultRates(), Combat: DefaultCombat(), PvP: DefaultPvP(),
+				Party: DefaultParty(), Stores: DefaultStores(), Clan: DefaultClan(), Ally: DefaultAlly(),
+				Geodata: DefaultGeodata(), GrandBosses: DefaultGrandBosses(),
 			}
 			tt.want(&want)
 			got := cfg.GameServers[0]
@@ -287,6 +322,16 @@ func TestParseGameSections(t *testing.T) {
 			if !reflect.DeepEqual(got.PvP, want.PvP) {
 				t.Errorf("PvP = %+v\nwant %+v", got.PvP, want.PvP)
 			}
+			if !reflect.DeepEqual(got.Party, want.Party) {
+				t.Errorf("Party = %+v\nwant %+v", got.Party, want.Party)
+			}
+			if got.Stores != want.Stores || got.Clan != want.Clan || got.Ally != want.Ally {
+				t.Errorf("Stores, Clan, Ally = %+v %+v %+v\nwant %+v %+v %+v",
+					got.Stores, got.Clan, got.Ally, want.Stores, want.Clan, want.Ally)
+			}
+			if err := cfg.GameServers[0].validateSocial(); len(err) != 0 {
+				t.Errorf("validateSocial = %v", err)
+			}
 			// The other fields still get their usual defaults.
 			if got.ID != 1 || got.DataDir != DefaultDataDir || got.Scripts.Dir != DefaultScriptsDir {
 				t.Errorf("other fields: id %d dataDir %q scripts %q", got.ID, got.DataDir, got.Scripts.Dir)
@@ -307,6 +352,12 @@ func TestDefaultGameSections(t *testing.T) {
 		GridsAlwaysOn:       false,
 		GridTurnOnTime:      Duration(time.Second),
 		GridTurnOffTime:     Duration(90 * time.Second),
+		MinNpcAnimation:     Duration(5 * time.Second),
+		MaxNpcAnimation:     Duration(60 * time.Second),
+		MinMonsterAnimation: Duration(5 * time.Second),
+		MaxMonsterAnimation: Duration(60 * time.Second),
+		AllowBoat:           true,
+		BoatBroadcastRadius: 20000,
 	}
 	if gs.World != want {
 		t.Errorf("World = %+v, want %+v", gs.World, want)
@@ -314,7 +365,7 @@ func TestDefaultGameSections(t *testing.T) {
 	if want := (Chat{GeneralRange: 1250, Shout: ChatModeOn, Trade: ChatModeOn, MaxLength: 105}); gs.Chat != want {
 		t.Errorf("Chat = %+v, want %+v", gs.Chat, want)
 	}
-	wantNPCs := NPCs{
+	wantNPCs := withWorldAINPCs(NPCs{
 		MaxFreeTeleportLevel:    40,
 		InteractionRange:        250,
 		DefaultCorpseTime:       Duration(7 * time.Second),
@@ -323,11 +374,11 @@ func TestDefaultGameSections(t *testing.T) {
 		MaxDriftRange:           300,
 		MobAggroInPeaceZone:     true,
 		AggroDistanceCheckRange: 2000,
-	}
+	})
 	if gs.NPCs != wantNPCs {
 		t.Errorf("NPCs = %+v, want %+v", gs.NPCs, wantNPCs)
 	}
-	if gs.Geodata != (Geodata{}) {
+	if gs.Geodata != DefaultGeodata() || gs.Geodata.Dir != "" {
 		t.Errorf("Geodata = %+v, want no geodata", gs.Geodata)
 	}
 
@@ -341,6 +392,8 @@ func TestDefaultGameSections(t *testing.T) {
 		MaxAdena:                    2000000000,
 		WarehouseSlotsNoDwarf:       100,
 		WarehouseSlotsDwarf:         120,
+		WarehouseSlotsClan:          200,
+		AutoLootSlotLimit:           true,
 	}
 	if !reflect.DeepEqual(gs.Items, wantItems) {
 		t.Errorf("Items = %+v, want %+v", gs.Items, wantItems)
@@ -348,6 +401,7 @@ func TestDefaultGameSections(t *testing.T) {
 	wantEconomy := Economy{
 		AltKarmaPlayerCanShop:         true,
 		AltKarmaPlayerCanUseWarehouse: true,
+		AltKarmaPlayerCanTrade:        true,
 		OnlyGMItemsFree:               true,
 		MultisellAmountLimit:          10000,
 		FloodDropItem:                 Duration(time.Second),
@@ -358,7 +412,7 @@ func TestDefaultGameSections(t *testing.T) {
 		t.Errorf("Economy = %+v, want %+v", gs.Economy, wantEconomy)
 	}
 	wantRates := Rates{
-		XP: 1, SP: 1,
+		XP: 1, SP: 1, PartyXP: 1, PartySP: 1,
 		DeathDropChance: 1, DeathDropAmount: 1, HerbDropChance: 1, HerbDropAmount: 1,
 		DropChanceByItem:            ItemRates{57: 1},
 		DropAmountByItem:            ItemRates{57: 1, 6656: 1, 6657: 1, 6658: 1, 6659: 1, 6660: 1, 6661: 1, 6662: 1, 8191: 1},
@@ -403,6 +457,87 @@ func TestDefaultGameSections(t *testing.T) {
 	if !reflect.DeepEqual(gs.PvP, wantPvP) {
 		t.Errorf("PvP = %+v, want %+v", gs.PvP, wantPvP)
 	}
+	// Player.ini party and PARTY XP DISTRIBUTION.
+	wantParty := Party{
+		NewLeaderOnLeave:    false,
+		XPCutoffMethod:      CutoffLevel,
+		XPCutoffPercent:     3,
+		XPCutoffLevel:       20,
+		XPCutoffGaps:        [][2]int{{0, 9}, {10, 14}, {15, 99}},
+		XPCutoffGapPercents: []int{100, 30, 0},
+	}
+	if !reflect.DeepEqual(gs.Party, wantParty) {
+		t.Errorf("Party = %+v, want %+v", gs.Party, wantParty)
+	}
+	// Player.ini store slots and Custom/PrivateStoreRange.ini.
+	wantStores := Stores{SellSlotsDwarf: 4, SellSlotsOther: 3, BuySlotsDwarf: 5, BuySlotsOther: 4, MinRangeFromPlayer: 50, MinRangeFromNpc: 100}
+	if gs.Stores != wantStores {
+		t.Errorf("Stores = %+v, want %+v", gs.Stores, wantStores)
+	}
+	// Player.ini Clan, Feature.ini Clan Reputation Points, Server.ini.
+	wantClan := Clan{
+		DaysBeforeJoin:                  1,
+		DaysBeforeCreate:                10,
+		DaysToDissolve:                  7,
+		LeaderInstantActivation:         false,
+		MembersForWar:                   15,
+		MembersCanWithdrawFromWarehouse: false,
+		LifeCrystalNeeded:               true,
+		NameTemplate:                    ".*",
+		Level6Cost:                      5000,
+		Level7Cost:                      10000,
+		Level8Cost:                      20000,
+		Level6Members:                   30,
+		Level7Members:                   50,
+		Level8Members:                   80,
+		RoyalGuardCost:                  5000,
+		KnightUnitCost:                  10000,
+		ReputationPerKill:               1,
+		AcademyMinPoints:                190,
+		AcademyMaxPoints:                650,
+	}
+	if gs.Clan != wantClan {
+		t.Errorf("Clan = %+v, want %+v", gs.Clan, wantClan)
+	}
+	wantAlly := Ally{MaxClans: 3, DaysBeforeJoinWhenLeft: 1, DaysBeforeJoinWhenDismissed: 1, DaysBeforeAcceptWhenDismissed: 1, DaysBeforeCreateWhenDissolved: 10}
+	if gs.Ally != wantAlly {
+		t.Errorf("Ally = %+v, want %+v", gs.Ally, wantAlly)
+	}
+}
+
+func TestPartyXPCutoff(t *testing.T) {
+	for _, s := range []string{"LEVEL", "percentage", " Auto ", "HIGHFIVE", "none"} {
+		var c PartyXPCutoff
+		if err := c.UnmarshalText([]byte(s)); err != nil || !c.Valid() {
+			t.Errorf("UnmarshalText(%q) = %q, %v; want a valid method", s, c, err)
+		}
+	}
+	if PartyXPCutoff("vitality").Valid() {
+		t.Error(`"vitality" is valid`)
+	}
+}
+
+// The clan name template matches whole names, as Java's Matcher.matches.
+func TestClanNamePattern(t *testing.T) {
+	c := DefaultClan()
+	re, err := c.NamePattern()
+	if err != nil || !re.MatchString("Any Name!") {
+		t.Fatalf("default pattern: %v, %v", re, err)
+	}
+	c.NameTemplate = "[A-Z][a-z]*"
+	re, err = c.NamePattern()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]bool{"Knights": true, "knights": false, "Knights2": false, "xKnights": false} {
+		if got := re.MatchString(name); got != want {
+			t.Errorf("%q matches %v, want %v", name, got, want)
+		}
+	}
+	c.NameTemplate = "a|b"
+	if re, _ = c.NamePattern(); re.MatchString("ab") {
+		t.Error(`"a|b" matches "ab"; the alternation must stay inside the anchors`)
+	}
 }
 
 // Each call returns fresh maps and slices, so a game server that changes
@@ -412,8 +547,11 @@ func TestDefaultsDoNotShare(t *testing.T) {
 	a.GameServers[0].Rates.DropAmountByItem[57] = 9
 	a.GameServers[0].PvP.ListOfPetItems[0] = 1
 	a.GameServers[0].Items.ListOfProtectedItems = append(a.GameServers[0].Items.ListOfProtectedItems, 1)
+	a.GameServers[0].Party.XPCutoffGaps[0][1] = 5
+	a.GameServers[0].Party.XPCutoffGapPercents[1] = 50
 	if b.GameServers[0].Rates.DropAmountByItem[57] != 1 || b.GameServers[0].PvP.ListOfPetItems[0] != 2375 ||
-		len(b.GameServers[0].Items.ListOfProtectedItems) != 0 {
+		len(b.GameServers[0].Items.ListOfProtectedItems) != 0 ||
+		b.GameServers[0].Party.XPCutoffGaps[0][1] != 9 || b.GameServers[0].Party.XPCutoffGapPercents[1] != 30 {
 		t.Error("two Default() calls share maps or slices")
 	}
 }
@@ -620,6 +758,66 @@ func TestValidate(t *testing.T) {
 			c.GameServers[0].PvP.ListOfNonDroppableItems = []int{-57}
 		}, "pvp.listOfNonDroppableItems"},
 		{"negative pet item", func(c *Config) { c.GameServers[0].PvP.ListOfPetItems = []int{-1} }, "pvp.listOfPetItems"},
+		{"zero clan warehouse", func(c *Config) { c.GameServers[0].Items.WarehouseSlotsClan = 0 }, "items.warehouseSlotsClan"},
+		{"negative party xp rate", func(c *Config) { c.GameServers[0].Rates.PartyXP = -1 }, "rates.partyXp"},
+		{"NaN party sp rate", func(c *Config) { c.GameServers[0].Rates.PartySP = math.NaN() }, "rates.partySp"},
+		{"no party bonus", func(c *Config) { c.GameServers[0].Rates.PartyXP, c.GameServers[0].Rates.PartySP = 0, 0 }, ""},
+		{"highfive cutoff", func(c *Config) { c.GameServers[0].Party.XPCutoffMethod = CutoffHighFive }, ""},
+		{"unknown cutoff", func(c *Config) { c.GameServers[0].Party.XPCutoffMethod = "vitality" }, "party.xpCutoffMethod"},
+		{"cutoff percent over 100", func(c *Config) { c.GameServers[0].Party.XPCutoffPercent = 101 }, "party.xpCutoffPercent"},
+		{"cutoff percent NaN", func(c *Config) { c.GameServers[0].Party.XPCutoffPercent = math.NaN() }, "party.xpCutoffPercent"},
+		{"negative cutoff level", func(c *Config) { c.GameServers[0].Party.XPCutoffLevel = -1 }, "party.xpCutoffLevel"},
+		{"gap max below min", func(c *Config) { c.GameServers[0].Party.XPCutoffGaps[1] = [2]int{14, 10} }, "party.xpCutoffGaps[1]"},
+		{"negative gap", func(c *Config) { c.GameServers[0].Party.XPCutoffGaps[0] = [2]int{-1, 9} }, "party.xpCutoffGaps[0]"},
+		{"fewer percents than gaps", func(c *Config) {
+			c.GameServers[0].Party.XPCutoffGapPercents = []int{100, 30}
+		}, "party.xpCutoffGapPercents"},
+		{"negative gap percent", func(c *Config) {
+			c.GameServers[0].Party.XPCutoffGapPercents[2] = -1
+		}, "party.xpCutoffGapPercents[2]"},
+		{"no gaps", func(c *Config) {
+			c.GameServers[0].Party.XPCutoffGaps, c.GameServers[0].Party.XPCutoffGapPercents = nil, nil
+		}, ""},
+		{"negative sell slots", func(c *Config) { c.GameServers[0].Stores.SellSlotsDwarf = -1 }, "stores.sellSlotsDwarf"},
+		{"negative other sell slots", func(c *Config) { c.GameServers[0].Stores.SellSlotsOther = -1 }, "stores.sellSlotsOther"},
+		{"negative buy slots", func(c *Config) { c.GameServers[0].Stores.BuySlotsDwarf = -1 }, "stores.buySlotsDwarf"},
+		{"negative other buy slots", func(c *Config) { c.GameServers[0].Stores.BuySlotsOther = -1 }, "stores.buySlotsOther"},
+		{"no store range", func(c *Config) {
+			c.GameServers[0].Stores.MinRangeFromPlayer, c.GameServers[0].Stores.MinRangeFromNpc = 0, 0
+		}, ""},
+		{"negative store player range", func(c *Config) { c.GameServers[0].Stores.MinRangeFromPlayer = -1 }, "stores.minRangeFromPlayer"},
+		{"negative store npc range", func(c *Config) { c.GameServers[0].Stores.MinRangeFromNpc = -1 }, "stores.minRangeFromNpc"},
+		{"negative join days", func(c *Config) { c.GameServers[0].Clan.DaysBeforeJoin = -1 }, "clan.daysBeforeJoin"},
+		{"negative create days", func(c *Config) { c.GameServers[0].Clan.DaysBeforeCreate = -1 }, "clan.daysBeforeCreate"},
+		{"negative dissolve days", func(c *Config) { c.GameServers[0].Clan.DaysToDissolve = -1 }, "clan.daysToDissolve"},
+		{"negative war members", func(c *Config) { c.GameServers[0].Clan.MembersForWar = -1 }, "clan.membersForWar"},
+		{"bad name template", func(c *Config) { c.GameServers[0].Clan.NameTemplate = "[a-z" }, "clan.nameTemplate"},
+		{"empty name template", func(c *Config) { c.GameServers[0].Clan.NameTemplate = "" }, ""},
+		{"negative level 6 cost", func(c *Config) { c.GameServers[0].Clan.Level6Cost = -1 }, "clan.level6Cost"},
+		{"negative level 7 cost", func(c *Config) { c.GameServers[0].Clan.Level7Cost = -1 }, "clan.level7Cost"},
+		{"negative level 8 cost", func(c *Config) { c.GameServers[0].Clan.Level8Cost = -1 }, "clan.level8Cost"},
+		{"negative level 6 members", func(c *Config) { c.GameServers[0].Clan.Level6Members = -1 }, "clan.level6Members"},
+		{"negative level 7 members", func(c *Config) { c.GameServers[0].Clan.Level7Members = -1 }, "clan.level7Members"},
+		{"negative level 8 members", func(c *Config) { c.GameServers[0].Clan.Level8Members = -1 }, "clan.level8Members"},
+		{"negative royal guard cost", func(c *Config) { c.GameServers[0].Clan.RoyalGuardCost = -1 }, "clan.royalGuardCost"},
+		{"negative knight cost", func(c *Config) { c.GameServers[0].Clan.KnightUnitCost = -1 }, "clan.knightUnitCost"},
+		{"negative reputation per kill", func(c *Config) { c.GameServers[0].Clan.ReputationPerKill = -1 }, "clan.reputationPerKill"},
+		{"negative academy points", func(c *Config) {
+			c.GameServers[0].Clan.AcademyMinPoints, c.GameServers[0].Clan.AcademyMaxPoints = -1, 0
+		}, "clan.academyMinPoints"},
+		{"academy max below min", func(c *Config) { c.GameServers[0].Clan.AcademyMaxPoints = 100 }, "clan.academyMaxPoints"},
+		{"fixed academy points", func(c *Config) { c.GameServers[0].Clan.AcademyMaxPoints = 190 }, ""},
+		{"zero ally clans", func(c *Config) { c.GameServers[0].Ally.MaxClans = 0 }, "ally.maxClans"},
+		{"negative ally join days", func(c *Config) { c.GameServers[0].Ally.DaysBeforeJoinWhenLeft = -1 }, "ally.daysBeforeJoinWhenLeft"},
+		{"negative ally dismissed days", func(c *Config) {
+			c.GameServers[0].Ally.DaysBeforeJoinWhenDismissed = -1
+		}, "ally.daysBeforeJoinWhenDismissed"},
+		{"negative ally accept days", func(c *Config) {
+			c.GameServers[0].Ally.DaysBeforeAcceptWhenDismissed = -1
+		}, "ally.daysBeforeAcceptWhenDismissed"},
+		{"negative ally create days", func(c *Config) {
+			c.GameServers[0].Ally.DaysBeforeCreateWhenDissolved = -1
+		}, "ally.daysBeforeCreateWhenDissolved"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

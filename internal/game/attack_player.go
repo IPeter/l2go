@@ -332,15 +332,21 @@ func (s *Server) playerMoveToPawn(p *Player, ai *playerAI, pawn Creature, offset
 	}
 	offset = max(offset, attackPawnMinOffset)
 	tick := gameTick(s.Now())
-	if p.Move != nil && ai.pawnTarget == world.Object(pawn) && ai.pawnOffset == offset && tick < ai.pawnTimeout {
-		return
+	if p.Move != nil && ai.pawnTarget == world.Object(pawn) {
+		if ai.pawnOffset == offset && tick < ai.pawnTimeout {
+			return
+		}
+		// A route is kept 2 s at least (pathing.go).
+		if ai.pawnOffset != offset && s.onRoute(p) && tick < ai.pawnTimeout+attackPawnRepathTicks {
+			return
+		}
 	}
 	ai.pawnOffset, ai.pawnTarget, ai.pawnTimeout = offset, pawn, tick+attackPawnRepathTicks
 	ai.pawnWalking = true
 	s.MovePlayerTo(p, pawn.Position(), offset)
 	ai.pawnWalking = false
-	if p.state == stateInGame && p.InWorld() {
-		s.world.Broadcast(p, attackMoveToPawnPacket(p, pawn, offset), true)
+	if p.state == stateInGame && p.InWorld() && s.broadcastPawnWalk(p, pawn, offset) {
+		ai.pawnOffset = 0
 	}
 }
 

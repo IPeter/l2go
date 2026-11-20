@@ -176,7 +176,7 @@ The "Default" column is what a key gets when it is left out of the file. Keys wi
 | `scripts.devReload` | | `true` reloads the scripts when a file changes. |
 | `scripts.eventTimeout` | `"50ms"` | Time limit for the script handlers of one event. |
 
-The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `geodata`, `items`, `economy`, `rates`, `combat` and `pvp`. A section or key left out keeps its default, the L2J Mobius value. Most keys are L2J Mobius settings with the same name in camel case; the tables name the Mobius key where it differs. Durations are strings such as `"1s"` or `"10m"`. Some keys are read only once the feature using them is built.
+The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `geodata`, `items`, `economy`, `rates`, `combat`, `pvp`, `party`, `stores`, `clan`, `ally` and `grandBosses`. A section or key left out keeps its default, the L2J Mobius value. Most keys are L2J Mobius settings with the same name in camel case; the tables name the Mobius key where it differs. Durations are strings such as `"1s"` or `"10m"`. Some keys are read only once the feature using them is built.
 
 `world`:
 
@@ -190,6 +190,10 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `autoLearnSkills` | `false` | `true` gives players every skill of their class up to their level, without SP or spellbooks, at login and on every level change (Mobius `AutoLearnSkills`). Forgotten Scroll skills are not included. The Docker Compose test server turns it on. |
 | `gridsAlwaysOn` | `false` | `true` keeps every world region active, so monsters think even where no player is. |
 | `gridTurnOnTime`, `gridTurnOffTime` | `"1s"`, `"90s"` | Delay before the regions next to a player become active, and before regions with no player around become inactive (Mobius `GridNeighborTurnOnTime`/`TurnOffTime`). |
+| `minNpcAnimation`, `maxNpcAnimation` | `"5s"`, `"60s"` | Random wait between two idle animations of an NPC; `"0s"` for both turns them off. |
+| `minMonsterAnimation`, `maxMonsterAnimation` | `"5s"`, `"60s"` | The same for monsters. |
+| `allowBoat` | `true` | Runs the ferries. |
+| `boatBroadcastRadius` | `20000` | Players this close to a ferry's docks, in game units, hear its calls and see it. |
 
 `chat`:
 
@@ -212,12 +216,27 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `mobAggroInPeaceZone` | `true` | Aggressive monsters also attack players in peace zones (Mobius `AltMobAgroInPeaceZone`). |
 | `aggroDistanceCheck`, `aggroDistanceCheckRange` | `false`, `2000` | `true` makes monsters give up when pulled farther than the range from their spawn (Mobius `AggroDistanceCheckEnabled`). |
 | `attackablesCampPlayerCorpses` | `false` | `true` keeps monsters next to the player they killed. |
+| `raidMinionRespawnTime` | `"300s"` | How long a dead raid boss minion stays dead while its master lives (Mobius ms there). Other masters' minions do not come back. |
+| `customMinionsRespawnTime` | Mobius's list | Minions with their own respawn time: `"npcId,seconds"` entries separated by `;`, as in Mobius. |
+| `forceDeleteMinions` | `false` | `true` deletes the minions of every master that dies; by default only raid bosses take theirs along. |
+| `disableRaidCurse` | `false` | `true` turns off the curse of players more than 8 levels above a raid boss (petrify, or silence for magic). |
+| `raidChaosTime`, `grandChaosTime`, `minionChaosTime` | `30`, `30`, `30` | How many thinks raid bosses, grand bosses and raid minions keep their target before they may switch to another. |
+| `raidMinRespawnMultiplier`, `raidMaxRespawnMultiplier` | `1.0`, `1.0` | Scale the shortest and longest raid boss respawn time. |
+| `raidHpRegenMultiplier`, `raidMpRegenMultiplier` | `100`, `100` | Raid boss HP and MP regeneration, in percent. |
+| `raidPDefenceMultiplier`, `raidMDefenceMultiplier` | `100`, `100` | Raid boss P. Def. and M. Def., in percent. |
+| `raidPAttackMultiplier`, `raidMAttackMultiplier` | `100`, `100` | Raid boss P. Atk. and M. Atk., in percent. |
 
-`geodata`:
+`geodata` (Mobius `GeoEngine.ini`; see "Geodata" below):
 
 | Key | Default | Meaning |
 |---|---|---|
-| `dir` | `""` | Folder of L2J geodata tiles, one `X_Y.l2j` file per map tile, as Mobius reads them. The files are not part of L2Go or Mobius: bring your own. With them, ground heights, walls and closed cells count for movement, teleports and spawns; a tile without a file has no geodata. Empty, or a folder without tiles, means no geodata: heights come from the client and the spawns, and everything is walkable and visible, as in Mobius without geodata files. A folder that does not exist stops the game server. |
+| `dir` | `""` | Folder of L2J geodata tiles, one `X_Y.l2j` file per map tile, as Mobius reads them (Mobius `GeoDataPath`). The files are not part of L2Go or Mobius: bring your own. With them, ground heights, walls and closed cells count for movement, teleports and spawns; a tile without a file has no geodata, and a broken one is skipped with a warning. Empty, or a folder where no tile loads, means no geodata and no pathfinding: heights come from the client and the spawns, and everything is walkable and visible, as in Mobius without geodata files. A folder that does not exist stops the game server. The Docker Compose server uses `"geodata"`, the mounted folder. |
+| `pathfinding` | `true` | Walks go around walls and clicks on closed cells are refused (Mobius `PathFinding` above 0). Off anyway without tiles. |
+| `pathFindBuffers` | `"100x6;128x6;192x6;256x4;320x4;384x4;500x2"` | The path search windows, `size x count` (Mobius ignores the counts). A search needs a window of 64 + twice the larger cell distance of its ends, so the largest size, 500 cells, bounds a path's ends to about 3,500 units apart. |
+| `lowWeight`, `mediumWeight`, `highWeight` | `0.5`, `2`, `3` | Path costs of a plain step, a step beside an obstacle, and a step into a cell with a closed side or a height change above 16. |
+| `advancedDiagonalStrategy`, `diagonalWeight` | `false`, `0.707` | `true` lets paths step diagonally, at that cost. |
+| `avoidObstructedPathNodes` | `true` | Straight walks also check the plain movement flags of each cell. |
+| `maxPostfilterPasses` | `3` | How many times a player's path is straightened (NPC paths once); `0` never. |
 
 `items`:
 
@@ -230,13 +249,15 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `multipleItemDrop` | `true` | A count of a non-stackable item drops as that many items. |
 | `maxAdena` | `2000000000` | Most adena a player can hold. |
 | `warehouseSlotsNoDwarf`, `warehouseSlotsDwarf` | `100`, `120` | Private warehouse size (Mobius `MaximumWarehouseSlotsForNoDwarf`/`ForDwarf`). |
-| `autoLootSlotLimit` | `false` | A full inventory also refuses items that would stack onto one the player holds. |
+| `warehouseSlotsClan` | `200` | Clan warehouse size (Mobius `MaximumWarehouseSlotsForClan`). |
+| `autoLootSlotLimit` | `true` | A full inventory also refuses items that would stack onto one the player holds. |
 
 `economy`:
 
 | Key | Default | Meaning |
 |---|---|---|
 | `altKarmaPlayerCanShop`, `altKarmaPlayerCanUseWarehouse` | `true`, `true` | Players with karma may use shops, and warehouses. |
+| `altKarmaPlayerCanTrade` | `true` | Players with karma may trade with other players and give items to their pets. |
 | `onlyGMItemsFree` | `true` | Only GMs get shop items for free. |
 | `multisellAmountLimit` | `10000` | Most exchanges in one multisell request. |
 | `customMultisell` | `false` | Also load the custom multisell lists (Mobius `CustomMultisellLoad`). Their NPCs are custom spawns, off by default. |
@@ -247,6 +268,7 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | Key | Default | Meaning |
 |---|---|---|
 | `xp`, `sp` | `1`, `1` | Exp and SP from monsters (Mobius `RateXp`, `RateSp`). |
+| `partyXp`, `partySp` | `1`, `1` | Multiply the party exp and SP bonus of a party with 2 or more members in range (Mobius `RatePartyXp`, `RatePartySp`). |
 | `deathDropChance`, `deathDropAmount` | `1`, `1` | Chance and amount of monster drops (Mobius `DeathDrop*Multiplier`). |
 | `herbDropChance`, `herbDropAmount` | `1`, `1` | The same for herbs. |
 | `dropChanceByItem`, `dropAmountByItem` | `{"57": 1}`, adena and the grand boss jewels at `1` | Item ID to multiplier; a listed item uses this instead of the general rate. A map in the file replaces the default one (Mobius `Drop*MultiplierByItemId`). |
@@ -285,6 +307,83 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `canGMDropEquipment` | `false` | GMs with karma drop items too. |
 | `awardPKKillPVPPoint` | `false` | Killing a player with karma gives a PvP point. |
 | `karmaPlayerCanBeKilledInPeaceZone` | `false` | Players with karma can be attacked in peace zones (Mobius `AltKarmaPlayerCanBeKilledInPeaceZone`). |
+
+`party` (Mobius `Player.ini`; the party range is `combat.partyRange`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `newLeaderOnLeave` | `false` | When the leader leaves, the next member leads; `false` disbands the party (Mobius `AltLeavePartyLeader`). |
+| `xpCutoffMethod` | `"level"` | Which members a party exp share leaves out: `"level"` those more than `xpCutoffLevel` levels below the highest member, `"percentage"` those whose share is below `xpCutoffPercent` %, `"auto"` those whose share is below the bonus they bring, `"highfive"` scales shares by level gap (`xpCutoffGaps`), `"none"` nobody (Mobius `PartyXpCutoffMethod`). |
+| `xpCutoffPercent`, `xpCutoffLevel` | `3.0`, `20` | The limits of `"percentage"` and `"level"`. |
+| `xpCutoffGaps`, `xpCutoffGapPercents` | `[[0, 9], [10, 14], [15, 99]]`, `[100, 30, 0]` | For `"highfive"`: a member whose level gap to the highest member is in a range gets that percent of its share. One percent per range (Mobius `PartyXpCutoffGaps`, `PartyXpCutoffGapPercent`). |
+
+`stores` (private stores):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `sellSlotsDwarf`, `sellSlotsOther` | `4`, `3` | Most items in a private sell store of a dwarf, and of the other races (Mobius `MaxPvtStoreSellSlots*`). |
+| `buySlotsDwarf`, `buySlotsOther` | `5`, `4` | The same for private buy stores (Mobius `MaxPvtStoreBuySlots*`). |
+| `minRangeFromPlayer`, `minRangeFromNpc` | `50`, `100` | How far from a sitting player and from an NPC a store must be opened; `0` turns the check off (Mobius `Custom/PrivateStoreRange.ini` `ShopMinRangeFromPlayer`, `ShopMinRangeFromNpc`). |
+
+`clan` (Mobius `Player.ini`, the reputation costs of `Feature.ini`, and `Server.ini` `ClanNameTemplate`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `daysBeforeJoin` | `1` | Days a player who left or was dismissed waits before joining a clan, and a clan that dismissed a member before inviting one (Mobius `DaysBeforeJoinAClan`). |
+| `daysBeforeCreate` | `10` | Days a former leader waits before creating a clan (Mobius `DaysBeforeCreateAClan`). |
+| `daysToDissolve` | `7` | Days a clan dissolution takes (Mobius `DaysToPassToDissolveAClan`). |
+| `leaderInstantActivation` | `false` | A new clan leader takes over at once instead of at the Wednesday reset (Mobius `AltClanLeaderInstantActivation`). |
+| `membersForWar` | `15` | Members a clan needs to declare war (Mobius `AltClanMembersForWar`). |
+| `membersCanWithdrawFromWarehouse` | `false` | Members with the warehouse privilege may take items out of the clan warehouse, not only the leader (Mobius `AltMembersCanWithdrawFromClanWH`). |
+| `lifeCrystalNeeded` | `true` | Clan skills cost their items. |
+| `nameTemplate` | `".*"` | Regular expression (Go syntax) a whole clan or unit name must match (Mobius `ClanNameTemplate`). |
+| `level6Cost`, `level7Cost`, `level8Cost` | `5000`, `10000`, `20000` | Reputation it costs to reach clan level 6, 7 and 8 (Mobius `ClanLevel*Cost`). |
+| `level6Members`, `level7Members`, `level8Members` | `30`, `50`, `80` | Members a clan needs for those levels (Mobius `ClanLevel*Requirement`). |
+| `royalGuardCost`, `knightUnitCost` | `5000`, `10000` | Reputation it costs to create a Royal Guard and a Knight unit (Mobius `CreateRoyalGuardCost`, `CreateKnightUnitCost`). |
+| `reputationPerKill` | `1` | Reputation a clan war kill gives the killer's clan and takes from the victim's (Mobius `ReputationScorePerKill`). |
+| `academyMinPoints`, `academyMaxPoints` | `190`, `650` | Range of the reputation an academy member's graduation gives (Mobius `CompleteAcademyMinPoints`, `CompleteAcademyMaxPoints`). |
+
+`ally` (Mobius `Player.ini`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `maxClans` | `3` | Most clans in an alliance, the leader's included (Mobius `AltMaxNumOfClansInAlly`). |
+| `daysBeforeJoinWhenLeft`, `daysBeforeJoinWhenDismissed` | `1`, `1` | Days a clan that left, or was dismissed from, an alliance waits before joining one (Mobius `DaysBeforeJoinAllyWhenLeaved`, `DaysBeforeJoinAllyWhenDismissed`). |
+| `daysBeforeAcceptWhenDismissed` | `1` | Days an alliance that dismissed a clan waits before accepting one (Mobius `DaysBeforeAcceptNewClanWhenDismissed`). |
+| `daysBeforeCreateWhenDissolved` | `10` | Days a clan that dissolved its alliance waits before creating one (Mobius `DaysBeforeCreateNewAllyWhenDissolved`). |
+
+`grandBosses` (Mobius `GrandBoss.ini`). A grand boss respawns its interval plus or minus a random whole number of hours, up to its random time, after it died; both are durations in whole hours:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `intervalOfAntharasSpawn`, `randomOfAntharasSpawn` | `"264h"`, `"8h"` | Antharas's respawn. |
+| `intervalOfValakasSpawn`, `randomOfValakasSpawn` | `"264h"`, `"8h"` | Valakas's respawn. |
+| `intervalOfBaiumSpawn`, `randomOfBaiumSpawn` | `"168h"`, `"8h"` | Baium's respawn. |
+| `intervalOfCoreSpawn`, `randomOfCoreSpawn` | `"60h"`, `"8h"` | Core's respawn. |
+| `intervalOfOrfenSpawn`, `randomOfOrfenSpawn` | `"48h"`, `"8h"` | Orfen's respawn. |
+| `intervalOfQueenAntSpawn`, `randomOfQueenAntSpawn` | `"36h"`, `"8h"` | Queen Ant's respawn. |
+| `intervalOfZakenSpawn`, `randomOfZakenSpawn` | `"60h"`, `"8h"` | Zaken's respawn. |
+| `antharasWaitTime`, `valakasWaitTime` | `"20m"`, `"20m"` | How long Antharas and Valakas wait after the first player entered their lair (Mobius minutes there). |
+| `antharasRecognizeHero`, `valakasRecognizeHero`, `baiumRecognizeHero` | `true` | The boss greets heroes who enter. |
+
+Geodata
+----
+
+Geodata is the terrain the server knows: ground heights, floors, walls and closed cells. With it, monsters and players stand on the right floor, walk around walls and cannot hit, cast or aggro through them. Without it everything is walkable and visible and heights come from the client, which is how L2J Mobius plays without geodata, and fine for towns and fields.
+
+Neither L2Go nor L2J Mobius ships geodata, and it is never put into git or the Docker image: whoever runs a server supplies it. L2Go reads the L2J format that Mobius reads:
+
+- One file per map tile of 32,768 × 32,768 units, named `X_Y.l2j` (for example `22_22.l2j`), for tiles X 16–26 and Y 10–25: at most 176 files. The tile of world point (x, y) is X = 20 + floor(x / 32768), Y = 18 + floor(y / 32768).
+- A tile is 256 × 256 blocks of 8 × 8 cells, each cell 16 × 16 units. Each block is flat (one height), complex (a height and four movement flags per cell) or multilayer (several floors per cell). Mobius's `dist/game/data/geodata/Readme.txt` describes where such files come from.
+- Put the files in one folder and set `geodata.dir` to it. Each tile loads on its own: a missing file leaves that tile without geodata, a broken one is skipped with a warning, and the log reports how many tiles loaded. If none loads, the server runs without geodata and pathfinding, as Mobius does. Tiles are memory-mapped read-only, so tiles nobody walks on cost address space rather than memory; do not change the files while the server runs.
+
+With Docker Compose, put the tiles in `./geodata` (it holds only a placeholder in git), or point `GEODATA_DIR` at another folder (prefer an absolute path): `docker-compose.yml` mounts it read-only at `/opt/l2go/geodata`, the compose config's `geodata.dir`. The Mobius reference stack mounts the same folder, so both servers answer from the same terrain (`deploy/reference/README.md`, which also explains the `geoparity` harness that compares L2Go's geodata engine with Mobius's).
+
+```sh
+GEODATA_DIR=/srv/l2/geodata make up
+```
+
+The engine (`internal/geo`) answers terrain only. Doors and fences block too, but they are game objects that open and close, so the game checks them before the terrain, in Mobius's order. Tests never need real tiles: `internal/geo/geotest` builds synthetic ones from small ASCII pictures.
 
 Lua scripting
 ----
@@ -418,7 +517,8 @@ internal/gameserver/htmlutil/       the links of dialog pages (the bypass link c
 internal/game/                      the game on the world loop: players, NPCs, movement, chat, dialogs, ...
 internal/world/                     world loop, clock and timers, regions and visibility, broadcasting
 internal/stats/                     stat engine: Mobius formulas and modifiers
-internal/geo/                       geodata: L2J tiles, heights, walls, line of sight, paths
+internal/geo/                       geodata: L2J tiles, heights, walls, line of sight, paths, door and fence segments
+internal/geo/geotest/               synthetic geodata tiles from ASCII pictures, for tests
 internal/scripting/                 Lua engine: sandbox, loader, events, NPC scripts, reload
 internal/scripting/scripttest/      test harness for Lua scripts
 internal/testclient/                fake Interlude client for the tests, the bots and refdiff
@@ -427,6 +527,8 @@ scripts/                            Lua scripts (see scripts/README.md)
 data/                               game data (see data/README.md)
 deploy/compose/                     config for docker compose
 deploy/reference/                   Mobius reference stack (see deploy/reference/README.md)
+deploy/reference/geoparity/         geodata parity test against Mobius's engine (build tag refgeo)
+geodata/                            where docker compose looks for geodata tiles (none in git)
 extra/default_config_file/          example config
 tools/                              pinned lint and vulnerability tools
 ```

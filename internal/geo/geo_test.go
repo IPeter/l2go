@@ -1,14 +1,15 @@
-package geo
+package geo_test
 
 import (
-	"slices"
 	"testing"
+
+	"github.com/IPeter/l2go/internal/geo"
 )
 
 func TestNone(t *testing.T) {
-	var e Engine = None{}
-	from := Point{X: -84318, Y: 244579, Z: -3730}
-	to := Point{X: -83000, Y: 243000, Z: -3500}
+	var e geo.Engine = geo.None{}
+	from := geo.Point{X: -84318, Y: 244579, Z: -3730}
+	to := geo.Point{X: -83000, Y: 243000, Z: -3500}
 
 	if got := e.Height(from.X, from.Y, from.Z); got != from.Z {
 		t.Errorf("Height = %d, want the given z %d", got, from.Z)
@@ -16,22 +17,26 @@ func TestNone(t *testing.T) {
 	if got := e.SpawnHeight(to.X, to.Y, to.Z); got != to.Z {
 		t.Errorf("SpawnHeight = %d, want the given z %d", got, to.Z)
 	}
-	if e.HasGeo(from.X, from.Y) {
-		t.Error("HasGeo = true, want false")
+	if e.HasGeo(from.X, from.Y) || e.Pathfinding() || e.CompletelyBlocked(to.X, to.Y, to.Z) {
+		t.Error("None has geodata, pathfinding or a blocked cell")
 	}
-	if e.CompletelyBlocked(to.X, to.Y, to.Z) {
-		t.Error("CompletelyBlocked = true, want false")
-	}
-	if !e.CanSeeTarget(from, to) {
-		t.Error("CanSeeTarget = false, want true")
-	}
-	if !e.CanMoveToTarget(from, to) {
-		t.Error("CanMoveToTarget = false, want true")
+	if !e.CanSeeTarget(from, to) || !e.CanMoveToTarget(from, to) {
+		t.Error("None blocks sight or walking")
 	}
 	if got := e.ValidLocation(from, to); got != to {
 		t.Errorf("ValidLocation = %v, want the destination %v", got, to)
 	}
-	if got := e.FindPath(from, to); !slices.Equal(got, []Point{to}) {
-		t.Errorf("FindPath = %v, want the straight path [%v]", got, to)
+	if got := e.FindPath(from, to, true); got != nil {
+		t.Errorf("FindPath = %v, want no path", got)
+	}
+}
+
+// DefaultOptions are Mobius's GeoEngine.ini values.
+func TestDefaultOptions(t *testing.T) {
+	o := geo.DefaultOptions()
+	if !o.Pathfinding || o.LowWeight != 0.5 || o.MediumWeight != 2 || o.HighWeight != 3 || o.DiagonalWeight != 0.707 ||
+		o.AdvancedDiagonalStrategy || !o.AvoidObstructedPathNodes || o.MaxPostfilterPasses != 3 ||
+		len(o.BufferSizes) != 7 || o.BufferSizes[6] != 500 {
+		t.Errorf("DefaultOptions = %+v", o)
 	}
 }

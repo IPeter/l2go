@@ -27,6 +27,15 @@ func (s *Server) handleUseItem(p *Player, body []byte) {
 	if it == nil {
 		return
 	}
+	if s.Trading(p) { // trade.go; pet collars are exempt once there are pets
+		p.SendSystemMessage(tradeMsgCannotUseItems)
+		return
+	}
+	if p.InStoreMode() { // store.go; pet collars are exempt once there are pets
+		p.SendSystemMessage(storeMsgNoItemUse)
+		p.SendActionFailed()
+		return
+	}
 	t := it.Template()
 	if t.Type2 == typeQuest {
 		p.SendSystemMessage(sysMsgCannotUseQuestItems)
@@ -175,6 +184,10 @@ func (s *Server) handleDestroyItem(p *Player, body []byte) {
 	}
 	if s.flood(&p.items.nextTransaction, time.Duration(s.gs.Economy.FloodTransaction)) {
 		p.SendMessage("You are destroying items too fast.")
+		return
+	}
+	if s.ProcessingTransaction(p) || p.InStoreMode() { // trade.go
+		p.SendSystemMessage(tradeMsgStoreNoDiscard)
 		return
 	}
 	it := p.inv.ByObjectID(req.ObjectID)

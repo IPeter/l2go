@@ -84,10 +84,25 @@ type Reward struct {
 // that the player is alive and near.
 func (c *CombatRules) SoloReward(p *Player, m MonsterReward, damage, total int64) Reward {
 	exp, sp := c.ExpSpShare(m, p.Level(), damage, total)
-	addExp := javaRound(p.Calc(RExp, exp))
-	addSP := javaInt(p.Calc(RExp, sp))
-	toExp := mul(float64(addExp), bonusMultiplier(p, BonusExp, c.cfg.MaxExpBonus))
-	toSP := mul(float64(addSP), bonusMultiplier(p, BonusSP, c.cfg.MaxSPBonus))
+	addExp := javaRound(c.ExpSPRate(p, exp))
+	addSP := javaInt(c.ExpSPRate(p, sp))
+	return c.AddExpAndSP(p, float64(addExp), float64(addSP))
+}
+
+// ExpSPRate is Creature.calcStat(Stat.EXPSP_RATE, v): v through the
+// player's expSpRate modifiers. The kill rewards pass each share through
+// it before rounding (SoloReward; Party.distributeXpAndSp with the party
+// share).
+func (c *CombatRules) ExpSPRate(p *Player, v float64) float64 { return p.Calc(RExp, v) }
+
+// AddExpAndSP is PlayerStat.addExpAndSp(exp, sp, true) without pets and
+// vitality: each value times its bonus multiplier, 1 + (bonusExp / 100 − 1
+// when above 1), at least 1 and at most MaxExpBonus (bonusSp and
+// MaxSPBonus alike), then Math.round. The party rewards pass the member's
+// share after ExpSPRate and the cutoff, SP still a double.
+func (c *CombatRules) AddExpAndSP(p *Player, exp, sp float64) Reward {
+	toExp := mul(exp, bonusMultiplier(p, BonusExp, c.cfg.MaxExpBonus))
+	toSP := mul(sp, bonusMultiplier(p, BonusSP, c.cfg.MaxSPBonus))
 	return Reward{
 		Exp:      javaRound(toExp),
 		SP:       javaRound(toSP),

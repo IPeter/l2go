@@ -59,6 +59,8 @@ func (s *Server) ChangeClass(p *Player, id int) {
 	} else {
 		p.SendSystemMessage(sysMsgClassTransfer)
 	}
+	s.partyClassChanged(p) // party_window.go
+	s.clanClassChanged(p)  // clan_members.go
 	p.BroadcastUserInfo()
 	p.after(classChangeSkillListDelay, p.SendSkillList)
 	s.RequestSave(p)

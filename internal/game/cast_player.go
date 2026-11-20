@@ -246,7 +246,7 @@ func (s *Server) checkUseMagicConditions(p *Player, sk *skills.Skill, ctrl, shif
 			return false
 		}
 	}
-	if sk.CastRange > 0 && !s.geo.CanSeeTarget(geoPoint(p.Position()), geoPoint(obj.Position())) {
+	if sk.CastRange > 0 && !s.canSee(p, obj) {
 		p.SendSystemMessage(sysMsgCannotSeeTarget)
 		p.SendActionFailed()
 		return false

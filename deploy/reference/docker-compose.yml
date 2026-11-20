@@ -14,6 +14,11 @@
 # MOBIUS_DIR: the Mobius CT_0 Interlude checkout, mounted read-only, never
 # modified. Default: L2J_Mobius/L2J_Mobius_CT_0_Interlude at the repo root. A
 # relative path resolves from this folder, so prefer an absolute one.
+#
+# GEODATA_DIR: the geodata folder (L2J X_Y.l2j tiles), the same one the l2go
+# stack mounts, so both servers answer from the same terrain. Default: the
+# repo's geodata/ (empty). Mounted read-only into mobius-game; GeoDataPath in
+# config/game/GeoEngine.ini points to it. Prefer an absolute path here too.
 
 name: l2go-reference
 
@@ -109,6 +114,12 @@ services:
     volumes:
       - mobius-server:/srv/mobius
       - ./config/game:/opt/l2go-reference/overrides:ro
+      - type: bind
+        source: ${GEODATA_DIR:-../../geodata}
+        target: /opt/l2go-reference/geodata
+        read_only: true
+        bind:
+          create_host_path: false
     ports:
       - "127.0.0.1:17777:17777"
     # The game server registers with mobius-login and retries every 5 s until

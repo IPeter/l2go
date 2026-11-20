@@ -146,6 +146,8 @@ func startStack(t *testing.T) *stack {
 		Data:           gameData,
 		World:          worldData,
 		Characters:     s.chars,
+		Relations:      s.chars.Relations(),
+		Clans:          s.chars.Clans(),
 		IDs:            s.ids,
 		Skills:         skillData,
 		Scripts:        engine,

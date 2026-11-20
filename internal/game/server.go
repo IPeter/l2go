@@ -132,7 +132,7 @@ type Server struct {
 	ids       storage.IDAllocator
 	scripts   *scripting.Engine
 	output    *ScriptOutput
-	geo       geo.Engine
+	geo       *Geo // the terrain with the doors and fences (geo.go)
 	rules     *stats.Rules
 	combat    *stats.CombatRules
 	rnd       rnd.Source                   // the game's random source, loop-only
@@ -181,6 +181,16 @@ type Server struct {
 	itemSkill  itemSkillFeature  // item_skill.go
 	adminChar  adminCharFeature  // admin_char.go
 	adminWorld adminWorldFeature // admin_world.go
+	friends    friendsFeature    // friends.go
+	trade      tradeFeature      // trade.go
+	party      partyFeature      // party.go
+	stores     storeFeature      // store.go
+	clan       clanFeature       // clan.go
+	bosses     bossFeature       // raid.go
+	doors      doorFeature       // door.go
+	walkers    walkerFeature     // walker.go
+	animation  animationFeature  // animation.go
+	vehicles   vehicleFeature    // vehicle.go
 }
 
 var _ Service = (*Server)(nil)
@@ -252,7 +262,7 @@ func New(opts Options) (*Server, error) {
 		ids:          opts.IDs,
 		scripts:      opts.Scripts,
 		output:       output,
-		geo:          geoEngine,
+		geo:          newGeo(geoEngine),
 		rules:        rules,
 		combat:       combat,
 		rnd:          source,
@@ -270,6 +280,10 @@ func New(opts Options) (*Server, error) {
 	s.items.pool, s.items.passives, s.items.categories = opts.IDPool, opts.Passives, opts.Categories
 	s.quest.store, s.quest.settings = opts.GlobalVariables, opts.Quests.withDefaults()
 	s.adminChar.accounts = opts.Accounts
+	s.friends.store = opts.Relations
+	s.clan.store = opts.Clans
+	s.bosses.data, s.bosses.store = opts.Bosses, opts.BossStore
+	s.doors.data = opts.Objects
 	bg := context.Background()
 	s.bg.Store(&bg)
 	s.world.SetUpdateFlush(s.flushUpdate)
@@ -389,8 +403,9 @@ func (s *Server) WorldData() *data.World { return s.worldData }
 // configs), or nil when none was loaded. Safe on any goroutine.
 func (s *Server) Economy() *data.Economy { return s.economy }
 
-// Geo returns the geodata engine. Safe on any goroutine.
-func (s *Server) Geo() geo.Engine { return s.geo }
+// Geo returns the terrain geodata engine, without doors and fences. Safe on
+// any goroutine. Game code on the loop asks the composed view (Server.geo).
+func (s *Server) Geo() geo.Engine { return s.geo.Terrain() }
 
 // Rules returns the stat rules every stat set of the server shares. Safe on
 // any goroutine.

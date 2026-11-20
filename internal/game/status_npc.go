@@ -34,8 +34,13 @@ func (n *Npc) SetCurrentHPMP(hp, mp float64) {
 // ReduceHP takes damage (Mobius NpcStatus.reduceHp through
 // CreatureStatus.reduceHp): nothing on a dead NPC; the HP go down to 0;
 // under 0.5 HP the NPC dies (Server.Kill). The attacker is the killer; hate,
-// the attack-by list and overhit are the AI's. Loop-only.
-func (n *Npc) ReduceHP(value float64, attacker Creature) {
+// the attack-by list and overhit are the AI's. An invulnerable NPC takes
+// nothing, an immortal one does not die (quest_world_ai.go). Loop-only.
+func (n *Npc) ReduceHP(value float64, attacker Creature) { n.reduceHP(value, attacker, false) }
+
+// reduceHP is ReduceHP; damage over time (dot) also hits an invulnerable
+// NPC (Mobius CreatureStatus.reduceHp's isDOT).
+func (n *Npc) reduceHP(value float64, attacker Creature, dot bool) {
 	if n.Dead {
 		return
 	}
@@ -45,13 +50,13 @@ func (n *Npc) ReduceHP(value float64, attacker Creature) {
 		// attack-by list (ai.go, hate.go).
 		n.srv.npcDamaged(n, attacker, value)
 	}
-	if n.Dead {
+	if n.Dead || (!dot && n.isInvul()) {
 		return
 	}
 	if value > 0 {
 		n.setCurrentHP(max(n.CurHP-value, 0), true)
 	}
-	if n.CurHP < 0.5 && n.srv != nil {
+	if n.CurHP < 0.5 && n.srv != nil && !n.script.immortal {
 		n.srv.Kill(n, attacker)
 	}
 }

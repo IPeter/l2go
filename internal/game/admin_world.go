@@ -956,7 +956,7 @@ func (s *Server) gmServerInfo(p *Player, args []string) {
 		dayNight = "Night"
 	}
 	pathfinding := "Enabled"
-	if _, none := s.geo.(geo.None); none {
+	if _, none := s.geo.Terrain().(geo.None); none {
 		pathfinding = "Disabled"
 	}
 	up := s.Now().Sub(s.adminWorld.started)

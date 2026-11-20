@@ -118,7 +118,7 @@ func (s *Server) sitDown(p *Player) {
 // to walk, until the animation ends.
 func (s *Server) standUp(p *Player) {
 	m := s.motionOf(p)
-	if m.sitBusy || !p.Sitting || !p.InWorld() {
+	if m.sitBusy || !p.Sitting || !p.InWorld() || p.InStoreMode() { // store.go: a store keeps its owner seated
 		return
 	}
 	m.sitBusy = true

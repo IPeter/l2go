@@ -76,6 +76,7 @@ func (v *vm) modules() []module {
 		{name: "doors", funcs: v.doorsFuncs()},
 		{name: "grandboss", funcs: v.grandbossFuncs()},
 		{name: "cinematics", funcs: v.cinematicsFuncs()},
+		{name: "vehicles", funcs: v.vehiclesFuncs()},
 	}
 }
 

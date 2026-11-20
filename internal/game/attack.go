@@ -343,7 +343,7 @@ func (s *Server) doAttack(a, t Creature) AttackOutcome {
 	if p != nil && s.insidePeaceZone(p, t) {
 		return s.refuseAttack(a)
 	}
-	if !s.geo.CanSeeTarget(geoPoint(a.Position()), geoPoint(t.Position())) {
+	if !s.canSee(a, t) {
 		if p != nil {
 			p.SendSystemMessage(sysMsgCannotSeeTarget)
 		}
@@ -527,6 +527,12 @@ func (s *Server) onHitTimer(a, t Creature, h stats.Hit, recharge bool) {
 	}
 	if p, ok := a.(*Player); ok {
 		sendDamageMessage(p, t, h.Damage, h.Crit, h.Miss)
+	}
+	if s.raidCurses(t) && creatureLevel(a) > creatureLevel(t)+raidCurseLevelGap {
+		// raid.go: the raid boss petrifies an attacker more than 8 levels
+		// above it, and the hit does no damage.
+		s.applyRaidCurse(a, t, skillRaidCurse2)
+		h.Damage = 0
 	}
 	if tp, ok := t.(*Player); ok {
 		s.StartAutoAttack(tp)
@@ -733,10 +739,11 @@ func creatureTargetable(c Creature) bool {
 	return true
 }
 
-// creatureRaid is Mobius isRaid.
+// creatureRaid is Mobius isRaid: raid and grand bosses, and the minions of
+// a raid master (setIsRaidMinion sets _isRaid too).
 func creatureRaid(c Creature) bool {
 	n, ok := c.(*Npc)
-	return ok && n.class != nil && n.class.raid
+	return ok && ((n.class != nil && n.class.raid) || n.boss.raidMinion)
 }
 
 // creatureMoving is Mobius isMoving.

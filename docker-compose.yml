@@ -16,6 +16,12 @@
 # Saving a script reloads it (devReload in deploy/compose/server.json). To
 # reload by hand: make reload-scripts (docker compose kill -s HUP game).
 #
+# Geodata: the game server reads L2J X_Y.l2j tiles from the folder
+# GEODATA_DIR (default ./geodata, which holds none: bring your own, see the
+# README), mounted read-only at /opt/l2go/geodata (geodata.dir in
+# deploy/compose/server.json). Without tiles it runs without geodata. The
+# Mobius reference stack mounts the same folder.
+#
 # The game data is part of the image: data/, plus the NPC dialog pages in
 # data/html once `make data` has copied them from the Mobius checkout.
 # `make up` rebuilds the image, so it always has the current data.
@@ -86,6 +92,7 @@ services:
     volumes:
       - ./deploy/compose/server.json:/etc/l2go/server.json:ro
       - ./scripts:/opt/l2go/scripts:ro
+      - ${GEODATA_DIR:-./geodata}:/opt/l2go/geodata:ro
     ports:
       - "7777:7777"
     # On stop the game server saves every player in the world before it

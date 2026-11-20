@@ -84,6 +84,7 @@ func newEnv(t *testing.T, configure func(gs *config.GameServer), setup ...func(s
 		ServerID:       gs.ID,
 		Data:           d,
 		Characters:     store,
+		Relations:      store.Relations(),
 		IDs:            ids,
 		Passives:       testPassives(t),
 		Categories:     testCategories(t),

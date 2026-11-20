@@ -225,6 +225,7 @@ func (s *Server) npcDamaged(n *Npc, attacker Creature, value float64) {
 		s.notifyAttacked(n, attacker)
 		hate := stats.DamageHate(damage, n.Level(), s.hateRatio(n, attacker))
 		s.addDamageHate(n, attacker, int64(damage), int64(hate))
+		s.minionsAssist(n, attacker) // minion.go: Attackable.reduceCurrentHp's onAssist
 	}
 	if !n.Dead {
 		n.AddAttackBy(attacker)

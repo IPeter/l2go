@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -122,10 +123,11 @@ type GameServer struct {
 	// MaxCharactersPerAccount limits characters per account (0 = no limit).
 	MaxCharactersPerAccount int `json:"maxCharactersPerAccount"`
 
-	// World, Chat, NPCs, Geodata, Items, Economy, Rates, Combat and PvP are
-	// the game rules. A section or a field left out of the file keeps its
-	// default (see DefaultWorld, DefaultChat, DefaultNPCs, DefaultItems,
-	// DefaultEconomy, DefaultRates, DefaultCombat and DefaultPvP).
+	// World, Chat, NPCs, Geodata, Items, Economy, Rates, Combat, PvP, Party,
+	// Stores, Clan and Ally are the game rules. A section or a field left
+	// out of the file keeps its default (see DefaultWorld, DefaultChat,
+	// DefaultNPCs, DefaultItems, DefaultEconomy, DefaultRates, DefaultCombat,
+	// DefaultPvP, DefaultParty, DefaultStores, DefaultClan and DefaultAlly).
 	World   World   `json:"world"`
 	Chat    Chat    `json:"chat"`
 	NPCs    NPCs    `json:"npcs"`
@@ -135,6 +137,14 @@ type GameServer struct {
 	Rates   Rates   `json:"rates"`
 	Combat  Combat  `json:"combat"`
 	PvP     PvP     `json:"pvp"`
+	Party   Party   `json:"party"`
+	Stores  Stores  `json:"stores"`
+	Clan    Clan    `json:"clan"`
+	Ally    Ally    `json:"ally"`
+
+	// GrandBosses are game rules too (DefaultGrandBosses); Geodata's
+	// defaults are DefaultGeodata.
+	GrandBosses GrandBosses `json:"grandBosses"`
 }
 
 // UnmarshalJSON decodes a game server on top of the default game rule
@@ -151,6 +161,13 @@ func (g *GameServer) UnmarshalJSON(b []byte) error {
 		Rates:   DefaultRates(),
 		Combat:  DefaultCombat(),
 		PvP:     DefaultPvP(),
+		Party:   DefaultParty(),
+		Stores:  DefaultStores(),
+		Clan:    DefaultClan(),
+		Ally:    DefaultAlly(),
+		Geodata: DefaultGeodata(),
+
+		GrandBosses: DefaultGrandBosses(),
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
@@ -195,6 +212,20 @@ type World struct {
 	// GridTurnOffTime is the delay before regions with no player around
 	// become inactive, for example "90s" (Mobius GridNeighborTurnOffTime).
 	GridTurnOffTime Duration `json:"gridTurnOffTime"`
+
+	// MinNpcAnimation and MaxNpcAnimation bound the random wait between two
+	// idle animations of an NPC, MinMonsterAnimation and MaxMonsterAnimation
+	// those of a monster; 0 turns them off (Mobius General.ini keys of the
+	// same names, in seconds there).
+	MinNpcAnimation     Duration `json:"minNpcAnimation"`
+	MaxNpcAnimation     Duration `json:"maxNpcAnimation"`
+	MinMonsterAnimation Duration `json:"minMonsterAnimation"`
+	MaxMonsterAnimation Duration `json:"maxMonsterAnimation"`
+	// AllowBoat runs the ferries (Mobius AllowBoat).
+	AllowBoat bool `json:"allowBoat"`
+	// BoatBroadcastRadius is how far from a ferry's docks players hear its
+	// calls, in game units (Mobius BoatBroadcastRadius).
+	BoatBroadcastRadius int `json:"boatBroadcastRadius"`
 }
 
 // DefaultWorld returns the Mobius defaults.
@@ -208,6 +239,13 @@ func DefaultWorld() World {
 		// General.ini GridNeighborTurnOnTime and GridNeighborTurnOffTime.
 		GridTurnOnTime:  Duration(time.Second),
 		GridTurnOffTime: Duration(90 * time.Second),
+		// General.ini animations and boats.
+		MinNpcAnimation:     Duration(5 * time.Second),
+		MaxNpcAnimation:     Duration(60 * time.Second),
+		MinMonsterAnimation: Duration(5 * time.Second),
+		MaxMonsterAnimation: Duration(60 * time.Second),
+		AllowBoat:           true,
+		BoatBroadcastRadius: 20000,
 	}
 }
 
@@ -308,6 +346,39 @@ type NPCs struct {
 	// AttackablesCampPlayerCorpses keeps monsters next to the player they
 	// killed (Mobius AttackablesCampPlayerCorpses).
 	AttackablesCampPlayerCorpses bool `json:"attackablesCampPlayerCorpses"`
+
+	// RaidMinionRespawnTime is how long a dead raid boss minion stays dead
+	// while its master lives (Mobius RaidMinionRespawnTime, in ms there).
+	RaidMinionRespawnTime Duration `json:"raidMinionRespawnTime"`
+	// CustomMinionsRespawnTime gives minions their own respawn time:
+	// "npcId,seconds" entries separated by ";" (Mobius
+	// CustomMinionsRespawnTime; see MinionRespawnTimes).
+	CustomMinionsRespawnTime string `json:"customMinionsRespawnTime"`
+	// ForceDeleteMinions deletes the minions of every master that dies, not
+	// only those of raid bosses (Mobius ForceDeleteMinions).
+	ForceDeleteMinions bool `json:"forceDeleteMinions"`
+	// DisableRaidCurse turns off the curse of players more than 8 levels
+	// above a raid boss (Mobius DisableRaidCurse).
+	DisableRaidCurse bool `json:"disableRaidCurse"`
+	// RaidChaosTime, GrandChaosTime and MinionChaosTime are how many thinks
+	// raid bosses, grand bosses and raid minions keep their target before
+	// they may pick another (Mobius keys of the same names).
+	RaidChaosTime   int `json:"raidChaosTime"`
+	GrandChaosTime  int `json:"grandChaosTime"`
+	MinionChaosTime int `json:"minionChaosTime"`
+	// RaidMinRespawnMultiplier and RaidMaxRespawnMultiplier scale the
+	// shortest and longest raid boss respawn times (Mobius keys of the same
+	// names).
+	RaidMinRespawnMultiplier float64 `json:"raidMinRespawnMultiplier"`
+	RaidMaxRespawnMultiplier float64 `json:"raidMaxRespawnMultiplier"`
+	// The raid boss regeneration, defence and attack multipliers, in
+	// percent (Mobius RaidHpRegenMultiplier ... RaidMAttackMultiplier).
+	RaidHPRegenMultiplier  float64 `json:"raidHpRegenMultiplier"`
+	RaidMPRegenMultiplier  float64 `json:"raidMpRegenMultiplier"`
+	RaidPDefenceMultiplier float64 `json:"raidPDefenceMultiplier"`
+	RaidMDefenceMultiplier float64 `json:"raidMDefenceMultiplier"`
+	RaidPAttackMultiplier  float64 `json:"raidPAttackMultiplier"`
+	RaidMAttackMultiplier  float64 `json:"raidMAttackMultiplier"`
 }
 
 // DefaultNPCs returns the Mobius defaults.
@@ -321,6 +392,20 @@ func DefaultNPCs() NPCs {
 		MaxDriftRange:           300,
 		MobAggroInPeaceZone:     true,
 		AggroDistanceCheckRange: 2000,
+		// NPC.ini raid bosses and minions.
+		RaidMinionRespawnTime:    Duration(300 * time.Second),
+		CustomMinionsRespawnTime: DefaultCustomMinionsRespawnTime,
+		RaidChaosTime:            30,
+		GrandChaosTime:           30,
+		MinionChaosTime:          30,
+		RaidMinRespawnMultiplier: 1,
+		RaidMaxRespawnMultiplier: 1,
+		RaidHPRegenMultiplier:    100,
+		RaidMPRegenMultiplier:    100,
+		RaidPDefenceMultiplier:   100,
+		RaidMDefenceMultiplier:   100,
+		RaidPAttackMultiplier:    100,
+		RaidMAttackMultiplier:    100,
 	}
 }
 
@@ -356,6 +441,10 @@ type Items struct {
 	// MaximumWarehouseSlotsForDwarf).
 	WarehouseSlotsNoDwarf int `json:"warehouseSlotsNoDwarf"`
 	WarehouseSlotsDwarf   int `json:"warehouseSlotsDwarf"`
+	// WarehouseSlotsClan is the clan warehouse size (Mobius
+	// MaximumWarehouseSlotsForClan; its Player.ini sets 200, the code
+	// default is 150).
+	WarehouseSlotsClan int `json:"warehouseSlotsClan"`
 	// AutoLootSlotLimit refuses items that would stack onto one the player
 	// holds when the inventory is full too (Mobius AutoLootSlotLimit).
 	AutoLootSlotLimit bool `json:"autoLootSlotLimit"`
@@ -374,6 +463,8 @@ func DefaultItems() Items {
 		MaxAdena:                    2000000000,
 		WarehouseSlotsNoDwarf:       100,
 		WarehouseSlotsDwarf:         120,
+		WarehouseSlotsClan:          200,
+		AutoLootSlotLimit:           true, // Player.ini (the Java fallback is false)
 	}
 }
 
@@ -386,6 +477,9 @@ type Economy struct {
 	// AltKarmaPlayerCanUseWarehouse lets players with karma use warehouses
 	// (Mobius AltKarmaPlayerCanUseWareHouse).
 	AltKarmaPlayerCanUseWarehouse bool `json:"altKarmaPlayerCanUseWarehouse"`
+	// AltKarmaPlayerCanTrade lets players with karma trade with other
+	// players and give items to their pets (Mobius AltKarmaPlayerCanTrade).
+	AltKarmaPlayerCanTrade bool `json:"altKarmaPlayerCanTrade"`
 	// OnlyGMItemsFree makes only GMs get shop items for free; other players
 	// with free access pay as usual (Mobius OnlyGMItemsFree).
 	OnlyGMItemsFree bool `json:"onlyGMItemsFree"`
@@ -413,6 +507,7 @@ func DefaultEconomy() Economy {
 	return Economy{
 		AltKarmaPlayerCanShop:         true,
 		AltKarmaPlayerCanUseWarehouse: true,
+		AltKarmaPlayerCanTrade:        true,
 		OnlyGMItemsFree:               true,
 		MultisellAmountLimit:          10000,
 		FloodDropItem:                 Duration(time.Second),
@@ -444,6 +539,11 @@ type Rates struct {
 	// RateXp, RateSp).
 	XP float64 `json:"xp"`
 	SP float64 `json:"sp"`
+	// PartyXP and PartySP multiply the party exp and SP bonus of a party
+	// with 2 or more members in range, on top of XP and SP (Mobius
+	// RatePartyXp, RatePartySp; Party.getExpBonus and getSpBonus).
+	PartyXP float64 `json:"partyXp"`
+	PartySP float64 `json:"partySp"`
 	// DeathDropChance and DeathDropAmount multiply the chance and amount of
 	// monster drops (Mobius DeathDropChanceMultiplier,
 	// DeathDropAmountMultiplier).
@@ -487,6 +587,8 @@ func DefaultRates() Rates {
 	return Rates{
 		XP:              1,
 		SP:              1,
+		PartyXP:         1,
+		PartySP:         1,
 		DeathDropChance: 1,
 		DeathDropAmount: 1,
 		HerbDropChance:  1,
@@ -665,12 +767,231 @@ func DefaultPvP() PvP {
 	}
 }
 
-// Geodata configures the geodata.
-type Geodata struct {
+// PartyXPCutoff is how the party exp share leaves out low members (Mobius
+// PartyXpCutoffMethod, PartyExpType), written in lower case. The file may
+// use any case.
+type PartyXPCutoff string
+
+// The PartyXPCutoff methods.
+const (
+	// CutoffLevel leaves out members more than Party.XPCutoffLevel levels
+	// below the highest one (the Mobius Interlude setting).
+	CutoffLevel PartyXPCutoff = "level"
+	// CutoffPercentage leaves out members whose share is below
+	// Party.XPCutoffPercent percent.
+	CutoffPercentage PartyXPCutoff = "percentage"
+	// CutoffAuto leaves out members whose share is below the party bonus
+	// they would bring.
+	CutoffAuto PartyXPCutoff = "auto"
+	// CutoffHighFive scales each member's share by the level gap to the
+	// highest member (Party.XPCutoffGaps and XPCutoffGapPercents).
+	CutoffHighFive PartyXPCutoff = "highfive"
+	// CutoffNone leaves out nobody.
+	CutoffNone PartyXPCutoff = "none"
+)
+
+// Valid reports whether c is one of the PartyXPCutoff methods.
+func (c PartyXPCutoff) Valid() bool {
+	switch c {
+	case CutoffLevel, CutoffPercentage, CutoffAuto, CutoffHighFive, CutoffNone:
+		return true
+	}
+	return false
+}
+
+// UnmarshalText reads a method in any case, so Mobius's "LEVEL" works too.
+func (c *PartyXPCutoff) UnmarshalText(b []byte) error {
+	*c = PartyXPCutoff(strings.ToLower(strings.TrimSpace(string(b))))
+	return nil
+}
+
+// Party configures parties (Mobius Player.ini, Party and PARTY XP
+// DISTRIBUTION). The party range is Combat.PartyRange.
+type Party struct {
 	Comment string `json:"_comment,omitempty"`
-	// Dir is the geodata folder. Empty means no geodata: heights come from
-	// the client and the spawns, and everything is walkable and visible.
-	Dir string `json:"dir"`
+	// NewLeaderOnLeave makes the next member the leader when the leader
+	// leaves; false disbands the party (Mobius AltLeavePartyLeader).
+	NewLeaderOnLeave bool `json:"newLeaderOnLeave"`
+	// XPCutoffMethod is "level", "percentage", "auto", "highfive" or "none"
+	// (Mobius PartyXpCutoffMethod).
+	XPCutoffMethod PartyXPCutoff `json:"xpCutoffMethod"`
+	// XPCutoffPercent is the share in percent below which "percentage"
+	// leaves a member out (Mobius PartyXpCutoffPercent).
+	XPCutoffPercent float64 `json:"xpCutoffPercent"`
+	// XPCutoffLevel is the level gap to the highest member from which
+	// "level" leaves a member out (Mobius PartyXpCutoffLevel).
+	XPCutoffLevel int `json:"xpCutoffLevel"`
+	// XPCutoffGaps are the level gap ranges [min, max] of "highfive"; a
+	// member whose gap to the highest member is in range i gets
+	// XPCutoffGapPercents[i] percent of its share, a gap in no range the
+	// full share (Mobius PartyXpCutoffGaps "0,9;10,14;15,99" and
+	// PartyXpCutoffGapPercent "100;30;0").
+	XPCutoffGaps        [][2]int `json:"xpCutoffGaps"`
+	XPCutoffGapPercents []int    `json:"xpCutoffGapPercents"`
+}
+
+// DefaultParty returns the Mobius Player.ini values.
+func DefaultParty() Party {
+	return Party{
+		XPCutoffMethod:      CutoffLevel,
+		XPCutoffPercent:     3,
+		XPCutoffLevel:       20,
+		XPCutoffGaps:        [][2]int{{0, 9}, {10, 14}, {15, 99}},
+		XPCutoffGapPercents: []int{100, 30, 0},
+	}
+}
+
+// Stores configures private stores (Mobius Player.ini and
+// Custom/PrivateStoreRange.ini).
+type Stores struct {
+	Comment string `json:"_comment,omitempty"`
+	// SellSlotsDwarf and SellSlotsOther are the most items in a private
+	// sell store of a dwarf and of the other races (Mobius
+	// MaxPvtStoreSellSlotsDwarf, MaxPvtStoreSellSlotsOther).
+	SellSlotsDwarf int `json:"sellSlotsDwarf"`
+	SellSlotsOther int `json:"sellSlotsOther"`
+	// BuySlotsDwarf and BuySlotsOther are the same for private buy stores
+	// (Mobius MaxPvtStoreBuySlotsDwarf, MaxPvtStoreBuySlotsOther).
+	BuySlotsDwarf int `json:"buySlotsDwarf"`
+	BuySlotsOther int `json:"buySlotsOther"`
+	// MinRangeFromPlayer and MinRangeFromNpc are how far from a sitting
+	// player and from an NPC a store must be opened, in game units; 0 turns
+	// the check off (Mobius ShopMinRangeFromPlayer, ShopMinRangeFromNpc).
+	MinRangeFromPlayer int `json:"minRangeFromPlayer"`
+	MinRangeFromNpc    int `json:"minRangeFromNpc"`
+}
+
+// DefaultStores returns the Mobius values.
+func DefaultStores() Stores {
+	return Stores{
+		SellSlotsDwarf:     4,
+		SellSlotsOther:     3,
+		BuySlotsDwarf:      5,
+		BuySlotsOther:      4,
+		MinRangeFromPlayer: 50,
+		MinRangeFromNpc:    100,
+	}
+}
+
+// Clan configures clans (Mobius Player.ini Clan, Feature.ini Clan
+// Reputation Points, Server.ini ClanNameTemplate).
+type Clan struct {
+	Comment string `json:"_comment,omitempty"`
+	// DaysBeforeJoin is how long a player who left or was dismissed waits
+	// before joining a clan, and a clan that dismissed a member waits
+	// before inviting one (Mobius DaysBeforeJoinAClan).
+	DaysBeforeJoin int `json:"daysBeforeJoin"`
+	// DaysBeforeCreate is how long a former leader waits before creating a
+	// clan (Mobius DaysBeforeCreateAClan).
+	DaysBeforeCreate int `json:"daysBeforeCreate"`
+	// DaysToDissolve is how long a dissolution takes (Mobius
+	// DaysToPassToDissolveAClan).
+	DaysToDissolve int `json:"daysToDissolve"`
+	// LeaderInstantActivation changes the clan leader at once instead of at
+	// the next Wednesday reset (Mobius AltClanLeaderInstantActivation).
+	LeaderInstantActivation bool `json:"leaderInstantActivation"`
+	// MembersForWar is how many members a clan needs to declare war (Mobius
+	// AltClanMembersForWar).
+	MembersForWar int `json:"membersForWar"`
+	// MembersCanWithdrawFromWarehouse lets members with the warehouse
+	// privilege, not only the leader, take items out of the clan warehouse
+	// (Mobius AltMembersCanWithdrawFromClanWH).
+	MembersCanWithdrawFromWarehouse bool `json:"membersCanWithdrawFromWarehouse"`
+	// LifeCrystalNeeded makes clan skills cost their items (Mobius
+	// LifeCrystalNeeded).
+	LifeCrystalNeeded bool `json:"lifeCrystalNeeded"`
+	// NameTemplate is the regular expression a whole clan or unit name
+	// must match (Mobius ClanNameTemplate). It is Go syntax (RE2), which
+	// covers the usual Java patterns except backreferences and lookarounds.
+	NameTemplate string `json:"nameTemplate"`
+	// Level6Cost, Level7Cost and Level8Cost are the reputation it costs to
+	// reach clan level 6, 7 and 8 (Mobius ClanLevel6Cost ... ClanLevel8Cost).
+	Level6Cost int `json:"level6Cost"`
+	Level7Cost int `json:"level7Cost"`
+	Level8Cost int `json:"level8Cost"`
+	// Level6Members, Level7Members and Level8Members are the members a clan
+	// needs for those levels (Mobius ClanLevel6Requirement ...
+	// ClanLevel8Requirement).
+	Level6Members int `json:"level6Members"`
+	Level7Members int `json:"level7Members"`
+	Level8Members int `json:"level8Members"`
+	// RoyalGuardCost and KnightUnitCost are the reputation it costs to
+	// create a Royal Guard and a Knight unit (Mobius CreateRoyalGuardCost,
+	// CreateKnightUnitCost).
+	RoyalGuardCost int `json:"royalGuardCost"`
+	KnightUnitCost int `json:"knightUnitCost"`
+	// ReputationPerKill is the reputation a clan war kill gives the
+	// killer's clan and takes from the victim's (Mobius
+	// ReputationScorePerKill).
+	ReputationPerKill int `json:"reputationPerKill"`
+	// AcademyMinPoints and AcademyMaxPoints bound the reputation an academy
+	// member's graduation gives (Mobius CompleteAcademyMinPoints,
+	// CompleteAcademyMaxPoints).
+	AcademyMinPoints int `json:"academyMinPoints"`
+	AcademyMaxPoints int `json:"academyMaxPoints"`
+}
+
+// DefaultClan returns the Mobius values.
+func DefaultClan() Clan {
+	return Clan{
+		DaysBeforeJoin:    1,
+		DaysBeforeCreate:  10,
+		DaysToDissolve:    7,
+		MembersForWar:     15,
+		LifeCrystalNeeded: true,
+		NameTemplate:      ".*",
+		Level6Cost:        5000,
+		Level7Cost:        10000,
+		Level8Cost:        20000,
+		Level6Members:     30,
+		Level7Members:     50,
+		Level8Members:     80,
+		RoyalGuardCost:    5000,
+		KnightUnitCost:    10000,
+		ReputationPerKill: 1,
+		AcademyMinPoints:  190,
+		AcademyMaxPoints:  650,
+	}
+}
+
+// NamePattern compiles NameTemplate to match whole names, as Java's
+// Matcher.matches does.
+func (c Clan) NamePattern() (*regexp.Regexp, error) {
+	return regexp.Compile(`^(?:` + c.NameTemplate + `)$`)
+}
+
+// Ally configures alliances (Mobius Player.ini Clan).
+type Ally struct {
+	Comment string `json:"_comment,omitempty"`
+	// MaxClans is the most clans in an alliance, its leader's included
+	// (Mobius AltMaxNumOfClansInAlly).
+	MaxClans int `json:"maxClans"`
+	// DaysBeforeJoinWhenLeft and DaysBeforeJoinWhenDismissed are how long a
+	// clan that left, or was dismissed from, an alliance waits before
+	// joining one (Mobius DaysBeforeJoinAllyWhenLeaved,
+	// DaysBeforeJoinAllyWhenDismissed).
+	DaysBeforeJoinWhenLeft      int `json:"daysBeforeJoinWhenLeft"`
+	DaysBeforeJoinWhenDismissed int `json:"daysBeforeJoinWhenDismissed"`
+	// DaysBeforeAcceptWhenDismissed is how long an alliance that dismissed
+	// a clan waits before accepting one (Mobius
+	// DaysBeforeAcceptNewClanWhenDismissed).
+	DaysBeforeAcceptWhenDismissed int `json:"daysBeforeAcceptWhenDismissed"`
+	// DaysBeforeCreateWhenDissolved is how long a clan that dissolved its
+	// alliance waits before creating one (Mobius
+	// DaysBeforeCreateNewAllyWhenDissolved; Player.ini sets 10, the code
+	// default is 1).
+	DaysBeforeCreateWhenDissolved int `json:"daysBeforeCreateWhenDissolved"`
+}
+
+// DefaultAlly returns the Mobius Player.ini values.
+func DefaultAlly() Ally {
+	return Ally{
+		MaxClans:                      3,
+		DaysBeforeJoinWhenLeft:        1,
+		DaysBeforeJoinWhenDismissed:   1,
+		DaysBeforeAcceptWhenDismissed: 1,
+		DaysBeforeCreateWhenDissolved: 10,
+	}
 }
 
 // Scripts configures the Lua scripts of a game server.
@@ -798,6 +1119,12 @@ func Default() Config {
 			Rates:                   DefaultRates(),
 			Combat:                  DefaultCombat(),
 			PvP:                     DefaultPvP(),
+			Party:                   DefaultParty(),
+			Stores:                  DefaultStores(),
+			Clan:                    DefaultClan(),
+			Ally:                    DefaultAlly(),
+			Geodata:                 DefaultGeodata(),
+			GrandBosses:             DefaultGrandBosses(),
 		}},
 	}
 }
@@ -833,8 +1160,8 @@ func Load(path string) (Config, error) {
 // Parse decodes a config file. Fields left out of the file stay at their
 // zero value, except the listen addresses, internal networks, scripts
 // folder, event timeout and the game rule sections of each game server
-// (world, chat, npcs, items, economy, rates, combat, pvp), which get their
-// defaults.
+// (world, chat, npcs, geodata, items, economy, rates, combat, pvp, party,
+// stores, clan, ally, grandBosses), which get their defaults.
 //
 // Before decoding, ${NAME} and ${NAME:-default} are replaced with the
 // environment variable NAME (or default when NAME is unset or empty). A
@@ -1023,6 +1350,82 @@ func (g GameServer) validateGame() []error {
 		add("npcs.interactionRange: %d is not positive", g.NPCs.InteractionRange)
 	}
 	errs = append(errs, g.validateItemsAndCombat()...)
+	errs = append(errs, g.validateSocial()...)
+	errs = append(errs, g.validateWorldAI()...)
+	return errs
+}
+
+// validateSocial checks the party, stores, clan and ally sections.
+func (g GameServer) validateSocial() []error {
+	var errs []error
+	add := func(format string, args ...any) {
+		errs = append(errs, fmt.Errorf(format, args...))
+	}
+	nonNeg := func(name string, v int) {
+		if v < 0 {
+			add("%s: %d is negative", name, v)
+		}
+	}
+
+	p := g.Party
+	if !p.XPCutoffMethod.Valid() {
+		add("party.xpCutoffMethod: %q is not one of level, percentage, auto, highfive, none", p.XPCutoffMethod)
+	}
+	if !(p.XPCutoffPercent >= 0 && p.XPCutoffPercent <= 100) {
+		add("party.xpCutoffPercent: %v is not in 0-100", p.XPCutoffPercent)
+	}
+	nonNeg("party.xpCutoffLevel", p.XPCutoffLevel)
+	for i, gap := range p.XPCutoffGaps {
+		if gap[0] < 0 || gap[1] < gap[0] {
+			add("party.xpCutoffGaps[%d]: %v is not a range [min, max] with 0 <= min <= max", i, gap)
+		}
+	}
+	// Mobius indexes the percents with the gap's position.
+	if len(p.XPCutoffGapPercents) != len(p.XPCutoffGaps) {
+		add("party.xpCutoffGapPercents: %d percents for %d xpCutoffGaps", len(p.XPCutoffGapPercents), len(p.XPCutoffGaps))
+	}
+	for i, v := range p.XPCutoffGapPercents {
+		nonNeg(fmt.Sprintf("party.xpCutoffGapPercents[%d]", i), v)
+	}
+
+	s := g.Stores
+	nonNeg("stores.sellSlotsDwarf", s.SellSlotsDwarf)
+	nonNeg("stores.sellSlotsOther", s.SellSlotsOther)
+	nonNeg("stores.buySlotsDwarf", s.BuySlotsDwarf)
+	nonNeg("stores.buySlotsOther", s.BuySlotsOther)
+	nonNeg("stores.minRangeFromPlayer", s.MinRangeFromPlayer)
+	nonNeg("stores.minRangeFromNpc", s.MinRangeFromNpc)
+
+	c := g.Clan
+	nonNeg("clan.daysBeforeJoin", c.DaysBeforeJoin)
+	nonNeg("clan.daysBeforeCreate", c.DaysBeforeCreate)
+	nonNeg("clan.daysToDissolve", c.DaysToDissolve)
+	nonNeg("clan.membersForWar", c.MembersForWar)
+	if _, err := c.NamePattern(); err != nil {
+		add("clan.nameTemplate: %w", err)
+	}
+	nonNeg("clan.level6Cost", c.Level6Cost)
+	nonNeg("clan.level7Cost", c.Level7Cost)
+	nonNeg("clan.level8Cost", c.Level8Cost)
+	nonNeg("clan.level6Members", c.Level6Members)
+	nonNeg("clan.level7Members", c.Level7Members)
+	nonNeg("clan.level8Members", c.Level8Members)
+	nonNeg("clan.royalGuardCost", c.RoyalGuardCost)
+	nonNeg("clan.knightUnitCost", c.KnightUnitCost)
+	nonNeg("clan.reputationPerKill", c.ReputationPerKill)
+	nonNeg("clan.academyMinPoints", c.AcademyMinPoints)
+	if c.AcademyMaxPoints < c.AcademyMinPoints {
+		add("clan.academyMaxPoints: %d is below academyMinPoints %d", c.AcademyMaxPoints, c.AcademyMinPoints)
+	}
+
+	a := g.Ally
+	if a.MaxClans < 1 {
+		add("ally.maxClans: %d is less than 1", a.MaxClans)
+	}
+	nonNeg("ally.daysBeforeJoinWhenLeft", a.DaysBeforeJoinWhenLeft)
+	nonNeg("ally.daysBeforeJoinWhenDismissed", a.DaysBeforeJoinWhenDismissed)
+	nonNeg("ally.daysBeforeAcceptWhenDismissed", a.DaysBeforeAcceptWhenDismissed)
+	nonNeg("ally.daysBeforeCreateWhenDissolved", a.DaysBeforeCreateWhenDissolved)
 	return errs
 }
 
@@ -1095,6 +1498,9 @@ func (g GameServer) validateItemsAndCombat() []error {
 	if it.WarehouseSlotsDwarf <= 0 {
 		add("items.warehouseSlotsDwarf: %d is not positive", it.WarehouseSlotsDwarf)
 	}
+	if it.WarehouseSlotsClan <= 0 {
+		add("items.warehouseSlotsClan: %d is not positive", it.WarehouseSlotsClan)
+	}
 
 	e := g.Economy
 	if e.MultisellAmountLimit < 1 {
@@ -1107,6 +1513,8 @@ func (g GameServer) validateItemsAndCombat() []error {
 	r := g.Rates
 	nonNegF("rates.xp", r.XP)
 	nonNegF("rates.sp", r.SP)
+	nonNegF("rates.partyXp", r.PartyXP)
+	nonNegF("rates.partySp", r.PartySP)
 	nonNegF("rates.deathDropChance", r.DeathDropChance)
 	nonNegF("rates.deathDropAmount", r.DeathDropAmount)
 	nonNegF("rates.herbDropChance", r.HerbDropChance)

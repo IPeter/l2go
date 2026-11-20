@@ -67,6 +67,7 @@ type vm struct {
 	timerSeq  uint64                         // start order of quest timers
 	quest     questEnv                       // what the quest API works with
 	engine    *Engine                        // the engine running this vm, nil while prepared
+	vehicles  []VehicleRoute                 // the ferry schedules of vehicles.add_route (api_vehicles.go)
 
 	files int // .lua files compiled
 }

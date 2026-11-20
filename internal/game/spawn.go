@@ -13,11 +13,6 @@ import (
 // night before 06:00).
 const spawnNightEndHour = 6
 
-// spawnHeightCorrection bounds the height correction of a monster's spawn
-// point to the geodata ground (Mobius Spawn.initializeNpc: "do not correct
-// Z distances greater than 300").
-const spawnHeightCorrection = 300
-
 // spawnRandomHeading is Mobius's bound for a random spawn heading
 // (Rnd.get(61794)).
 const spawnRandomHeading = 61794
@@ -252,25 +247,18 @@ func (s *Server) spawnSlot(sp *npcSpawn) *Npc {
 
 // spawnPoint picks where the slot's NPC spawns (Mobius initializeNpc): a
 // random point of the territory with a random heading, or the fixed point.
-// A monster that does not fly gets the geodata ground height when it is
-// within 300 of the point, but never above the territory. Without geodata
+// A territory point stands on the geodata ground (geo_spawn.go). A monster
+// that neither flies nor spawns in water gets the geodata ground height when
+// it is close to the point, but never above the territory. Without geodata
 // the height stays the territory's middle (decision N2) or the list's Z.
-// The water check of Mobius waits for zones of NPCs; it changes nothing
-// without geodata.
 func (s *Server) spawnPoint(sp *npcSpawn, n *Npc) world.Position {
 	pos := sp.point
 	if t := sp.territory; t != nil {
-		loc := t.RandomPoint(s.npc.rnd.IntN)
-		x, y := int32(loc.X), int32(loc.Y)                                                 //nolint:gosec // world coordinates fit
-		pos = world.Position{X: x, Y: y, Z: s.geo.Height(x, y, int32(loc.Z)), Heading: -1} //nolint:gosec // world coordinates fit
+		pos = s.territoryPoint(t) // geo_spawn.go
+		pos.Heading = -1
 	}
-	if n.class.monster && !sp.tmpl.Status.Flying {
-		if geoZ := s.geo.Height(pos.X, pos.Y, pos.Z); spawnAbs(pos.Z-geoZ) < spawnHeightCorrection {
-			pos.Z = geoZ
-		}
-		if t := sp.territory; t != nil {
-			pos.Z = min(pos.Z, int32(t.Shape.HighZ())) //nolint:gosec // world coordinates fit
-		}
+	if n.class.monster && !sp.tmpl.Status.Flying && s.zoneAt(pos, "WaterZone") == nil {
+		pos.Z = s.spawnGroundZ(pos, sp.territory) // geo_spawn.go
 	}
 	if pos.Heading == -1 {
 		pos.Heading = int32(s.npc.rnd.IntN(spawnRandomHeading)) //nolint:gosec // below 61794
@@ -360,6 +348,7 @@ func (s *Server) deleteSpawn(sp *npcSpawn) {
 	sp.respawn = false
 	s.cancelRespawn(sp)
 	if n := sp.npc; n != nil {
+		s.minionsDeleted(n) // minion.go: Mobius Monster.deleteMe
 		if n.InWorld() {
 			s.removeNpc(n)
 		}

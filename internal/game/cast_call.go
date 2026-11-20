@@ -141,7 +141,7 @@ func (s *Server) castSkillSeen(p *Player, sk *skills.Skill, targets []skills.Cre
 				}
 			}
 		}
-		if !sk.IsStatic() && creatureRaid(n) && s.InCombat(n) && p.Level()-n.Level() > raidCurseLevelGap {
+		if !sk.IsStatic() && s.raidCurses(n) && s.InCombat(n) && p.Level()-n.Level() > raidCurseLevelGap {
 			id := skillRaidCurse
 			if sk.HasNegativeEffect() {
 				id = skillRaidCurse2
@@ -158,11 +158,11 @@ func (s *Server) castSkillSeen(p *Player, sk *skills.Skill, targets []skills.Cre
 // It reports whether the cast stops there.
 func (s *Server) castRaidCurse(c Creature, b *skillBase, sk *skills.Skill, gt Creature) bool {
 	level := b.Level()
-	cursed := creatureRaid(gt) && level > creatureLevel(gt)+raidCurseLevelGap
+	cursed := s.raidCurses(gt) && level > creatureLevel(gt)+raidCurseLevelGap
 	if !cursed && !sk.HasNegativeEffect() {
 		for _, r := range s.castFightTargets(gt) {
 			n, ok := r.(*Npc)
-			if ok && creatureRaid(n) && n.inAttackBy(gt) && level > n.Level()+raidCurseLevelGap {
+			if ok && s.raidCurses(n) && n.inAttackBy(gt) && level > n.Level()+raidCurseLevelGap {
 				cursed = true
 				break
 			}

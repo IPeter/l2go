@@ -184,6 +184,10 @@ func (s *Server) npcCommand(p *Player, n *Npc, command string) {
 		if s.teleporterCommand(p, n, command) {
 			return
 		}
+	case s.npcIs(n, "VillageMaster"):
+		if s.villageMasterCommand(p, n, command) { // clan_vm.go
+			return
+		}
 	case s.npcIs(n, "Doorman"):
 		if strings.HasPrefix(command, "Chat") {
 			s.showFirstPage(p, n)

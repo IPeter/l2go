@@ -194,14 +194,29 @@ func (w skillWorld) CanSee(from, to skills.Creature) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return w.s.geo.CanSeeTarget(geoPoint(a.Position()), geoPoint(b.Position()))
+	return w.s.canSee(a, b)
 }
 
-// Party returns nil: parties come with Milestone 9.
-func (skillWorld) Party(skills.Creature) []skills.Creature { return nil }
+// Party returns the members of c's party in party order, nil when c is not
+// a player in a party (party.go).
+func (w skillWorld) Party(c skills.Creature) []skills.Creature {
+	p, ok := w.s.gameCreature(c).(*Player)
+	if !ok || p.party.party == nil {
+		return nil
+	}
+	out := make([]skills.Creature, 0, len(p.party.party.members))
+	for _, m := range p.party.party.members {
+		out = append(out, m.skill)
+	}
+	return out
+}
 
-// SameParty is false: parties come with Milestone 9.
-func (skillWorld) SameParty(_, _ skills.Creature) bool { return false }
+// SameParty reports whether a and b are players of the same party.
+func (w skillWorld) SameParty(a, b skills.Creature) bool {
+	pa, okA := w.s.gameCreature(a).(*Player)
+	pb, okB := w.s.gameCreature(b).(*Player)
+	return okA && okB && w.s.SameParty(pa, pb)
+}
 
 // Summon returns nil: summons come with Milestone 11.
 func (skillWorld) Summon(skills.Creature) skills.Creature { return nil }

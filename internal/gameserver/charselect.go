@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/IPeter/l2go/internal/game"
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/storage"
@@ -67,9 +68,9 @@ func (s *Server) purge(ctx context.Context, c *client, ch storage.Character) {
 // GameClient.markToDeleteChar): the character is marked for deletion in
 // DeleteCharAfterDays days, or deleted at once when that is 0. Success gets
 // CharDeleteSuccess. The list follows in every case; an empty slot or a
-// storage error gets only the list, as in Mobius.
-//
-// TODO(M9): clan members get CharDeleteFail (clan member, clan leader).
+// storage error gets only the list, as in Mobius. A clan member or leader
+// gets CharDeleteFail with its reason instead (markToDeleteChar answers 1
+// and 2), when the game knows the clans (game.ClanDeletionChecker).
 func (s *Server) characterDelete(ctx context.Context, c *client, data []byte) error {
 	req, err := clientpackets.ParseCharacterDelete(data)
 	if err != nil {
@@ -77,12 +78,42 @@ func (s *Server) characterDelete(ctx context.Context, c *client, data []byte) er
 		return err
 	}
 	id, ok := c.slotObjectID(req.Slot)
-	if !ok {
+	switch {
+	case !ok:
 		c.log().Info("CharacterDelete for an empty slot", "slot", req.Slot)
-	} else if s.markForDeletion(ctx, c, id) {
+	case s.refuseClanDeletion(ctx, c, id):
+	case s.markForDeletion(ctx, c, id):
 		c.Send(serverpackets.NewCharDeleteSuccessPacket())
 	}
 	return s.sendCharacterList(ctx, c)
+}
+
+// refuseClanDeletion sends CharDeleteFail and reports true when the
+// character is a clan member or leader. On a storage error it reports true
+// without a packet: nothing is deleted, as with Mobius's answer -1.
+func (s *Server) refuseClanDeletion(ctx context.Context, c *client, id int32) bool {
+	checker, ok := s.game.(game.ClanDeletionChecker)
+	if !ok {
+		return false
+	}
+	ch, err := s.chars.Get(ctx, id)
+	if err != nil {
+		c.log().Warn("cannot read a character to delete", "objectId", id, "err", err)
+		return true
+	}
+	answer, err := checker.CharacterClanDeletion(ctx, id, ch.ClanID)
+	switch {
+	case err != nil:
+		c.log().Warn("cannot check the clan of a character to delete", "objectId", id, "err", err)
+		return true
+	case answer == game.ClanDeletionMember:
+		c.Send(serverpackets.NewCharDeleteFailPacket(serverpackets.CharDeleteFailClanMember))
+		return true
+	case answer == game.ClanDeletionLeader:
+		c.Send(serverpackets.NewCharDeleteFailPacket(serverpackets.CharDeleteFailClanLeader))
+		return true
+	}
+	return false
 }
 
 // markForDeletion sets the delete time of character id, or deletes it when

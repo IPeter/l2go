@@ -67,6 +67,14 @@ func (s *Server) handleMoveToLocation(p *Player, body []byte) {
 		p.SendActionFailed()
 		return
 	}
+	if s.geo.doorsBetween(geoPoint(m.lastServer), geoPoint(p.Position()), false) {
+		// A door stands between the last checked position and the player
+		// (Mobius's door logout and move-over exploit check): back there.
+		back := m.lastServer
+		s.stopWalk(p, m, &back)
+		p.SendActionFailed()
+		return
+	}
 	if req.Mode == clientpackets.MoveModeMouse {
 		m.keyboard = false
 	} else {
@@ -136,6 +144,9 @@ func (s *Server) handleValidatePosition(p *Player, body []byte) {
 	if req.X == 0 && req.Y == 0 && known.X != 0 {
 		return
 	}
+	if p.vehicle.boat != nil {
+		return // vehicle.go: Mobius trusts nothing a passenger reports
+	}
 	m := s.motionOf(p)
 	if req.Z < -validateMaxZ || req.Z > validateMaxZ {
 		if err := s.Teleport(p, m.lastServer); err != nil {
@@ -177,8 +188,12 @@ func (s *Server) handleValidatePosition(p *Player, body []byte) {
 		return // a hook made the player leave
 	}
 	m.clientZ = req.Z
-	// There are no doors yet, so nothing stands between the two positions.
-	m.lastServer = world.Position{X: known.X, Y: known.Y, Z: knownZ}
+	// The last server position moves on only when no door stands between it
+	// and the client's report (Mobius's door exploit check).
+	server := world.Position{X: known.X, Y: known.Y, Z: knownZ}
+	if !s.geo.doorsBetween(geoPoint(server), geoPoint(world.Position{X: req.X, Y: req.Y, Z: req.Z}), false) {
+		m.lastServer = server
+	}
 	if m.keyboard {
 		s.syncWalk(p, m, req.X, req.Y, req.Z)
 		s.world.Broadcast(p, validateLocation(p), true)

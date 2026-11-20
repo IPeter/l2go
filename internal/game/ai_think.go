@@ -6,12 +6,13 @@ import (
 
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/geo"
+	"github.com/IPeter/l2go/internal/npcai"
 	"github.com/IPeter/l2go/internal/world"
 )
 
 // The thinks of the monster AI (Mobius AttackableAI.thinkActive and
-// thinkAttack), without skills, minions, raids and fake players. Skill use
-// comes with Milestone 7: until then monsters only swing.
+// thinkAttack), without fake players. The skill decisions are npcai's
+// (ai_npcai.go); minions follow and help with minion.go.
 
 // npcThinkActive is Mobius AttackableAI.thinkActive:
 //   - the post-spawn counter moves towards 0; from 0 an aggressive NPC
@@ -38,14 +39,17 @@ func (s *Server) npcThinkActive(n *Npc) {
 			}
 		}
 		for _, target := range scan {
-			if s.isAggressiveTowards(n, target) && n.Hating(target) == 0 {
+			if !s.isAggressiveTowards(n, target) || !s.npcMayHate(n, target) {
+				continue
+			}
+			if n.Hating(target) == 0 {
 				s.addDamageHate(n, target, 0, 0)
 			}
 		}
 		clear(scan)
 		s.ai.scan = scan[:0]
 
-		if hated := n.MostHated(); hated != nil {
+		if hated := n.MostHated(); hated != nil && !ai.x.coreAIDisabled {
 			if n.Hating(hated)+int64(ai.globalAggro) > 0 {
 				if !n.Running() {
 					s.SetNpcRunning(n, true)
@@ -64,7 +68,7 @@ func (s *Server) npcThinkActive(n *Npc) {
 	home, terr, hasHome := s.npcHome(n)
 	pos := n.Position()
 	drift := s.settings.NPCs.MaxDriftRange
-	if hasHome {
+	if hasHome && !n.isWalker() { // walker.go: Mobius lets walkers be away
 		away := false
 		if terr != nil {
 			away = !territoryContainsXY(terr, pos.X, pos.Y)
@@ -80,10 +84,28 @@ func (s *Server) npcThinkActive(n *Npc) {
 	if p, ok := ai.target.(*Player); ok && p.IsDead() {
 		return // Mobius: do not leave a dead player
 	}
-	if !hasHome || s.rnd.Get(aiRandomWalkRate) != 0 || !s.aiClassOf(n).randomWalk {
+	if s.minionFollow(n) {
+		return // minion.go: the minion follows its living leader
+	}
+	if !hasHome || s.rnd.Get(aiRandomWalkRate) != 0 || !s.npcRandomWalks(n) {
+		return
+	}
+	if d := npcai.Buff(aiNpcOf(n)); d.Action != npcai.ActNone {
+		s.npcDo(n, d) // a buff on itself instead of the walk
 		return
 	}
 	s.randomWalk(n, home, terr)
+}
+
+// npcMayHate is the on_npc_hate veto of thinkActive (Mobius OnAttackableHate,
+// notified synchronously): a script registered for the NPC may refuse that it
+// hates a player.
+func (s *Server) npcMayHate(n *Npc, target Creature) bool {
+	p, ok := target.(*Player)
+	if !ok || s.scripts == nil || !s.scripts.Listens("npc_hate", n.Template.ID) {
+		return true
+	}
+	return s.scripts.NpcHate(s.background(), n.ScriptRef(), p, false)
 }
 
 // targetGone is Mobius's "no target" test of the walk home: no target, an
@@ -157,10 +179,7 @@ func (s *Server) validLocation(from, to world.Position) world.Position {
 }
 
 // canSee is Mobius GeoEngine.canSeeTarget between two objects.
-func (s *Server) canSee(a, b world.Object) bool {
-	pa, pb := a.Position(), b.Position()
-	return s.geo.CanSeeTarget(geo.Point{X: pa.X, Y: pa.Y, Z: pa.Z}, geo.Point{X: pb.X, Y: pb.Y, Z: pb.Z})
-}
+func (s *Server) canSee(a, b world.Object) bool { return s.geo.canSeeObject(a, b) }
 
 // isAggressiveTowards is Mobius AttackableAI.isAggressiveTowards for the
 // creatures that exist: only players can draw aggression (NPCs are never
@@ -195,11 +214,22 @@ func (s *Server) isAggressiveTowards(n *Npc, target Creature) bool {
 // combat or no player sees it); walk towards an enemy it cannot see; step
 // around a crowded target; archers step back; chase an enemy out of reach
 // with MoveToPawn; swing at one in reach.
+//
+// The skill steps are npcai's, at Mobius's points (npcai's doc.go): the
+// immobilized branch, the suicide skills after the sight check, the chaos
+// target change of raids after the archer step, and the skill use before the
+// reach check. A casting NPC does not think it over.
 func (s *Server) npcThinkAttack(n *Npc) {
+	if s.CastingNow(n) {
+		return
+	}
 	ai := &n.ai
 	c := s.aiClassOf(n)
 	if c.monster && s.settings.NPCs.AggroDistanceCheck && s.hasStrayed(n) {
 		s.leash(n)
+		return
+	}
+	if ai.x.coreAIDisabled {
 		return
 	}
 	most := n.MostHated()
@@ -213,8 +243,10 @@ func (s *Server) npcThinkAttack(n *Npc) {
 	if ai.target != world.Object(most) {
 		ai.target = most
 	}
+	th, self := s.npcThinker(), aiNpcOf(n)
 	if npcMovementDisabled(n) {
-		s.movementDisabledThink(n)
+		// Mobius movementDisable: npc.getTarget() is the most hated by now.
+		s.npcDo(n, th.MovementDisabled(self, aiView(ai.attackTarget)))
 		return
 	}
 	if most.IsDead() {
@@ -230,6 +262,13 @@ func (s *Server) npcThinkAttack(n *Npc) {
 			s.NpcMoveTo(n, most.Position())
 		}
 		return
+	}
+
+	if d := th.Suicide(self, aiView(most)); d.Action != npcai.ActNone {
+		s.npcDo(n, d)
+		return
+	} else if d.Pawn != nil {
+		s.npcDo(n, d) // the move cast() started before it gave up
 	}
 
 	pos, tpos := n.Position(), most.Position()
@@ -273,6 +312,25 @@ func (s *Server) npcThinkAttack(n *Npc) {
 		}
 	}
 
+	// Raid bosses, grand bosses and raid minions may change target.
+	if d, stop := th.Chaos(&ai.x.brain, self); d.Action == npcai.ActRetarget || stop {
+		if t := gameOf(d.Target); d.Action == npcai.ActRetarget && t != nil {
+			ai.attackTarget, ai.target = t, t
+			most = t
+		}
+		if stop {
+			return
+		}
+	}
+
+	if d := th.UseSkills(self, aiView(most)); d.Action != npcai.ActNone {
+		s.npcDo(n, d)
+		return
+	}
+
+	// The reach check measures the new target with the collision radii of
+	// the first (Mobius computes combinedCollision once).
+	pos, tpos = n.Position(), most.Position()
 	rng := int32(n.Stats.PhysicalAttackRange()) + combined //nolint:gosec // a weapon's reach
 	if n.Move != nil {
 		rng *= 2
@@ -285,11 +343,11 @@ func (s *Server) npcThinkAttack(n *Npc) {
 			s.NpcMoveToPawn(n, most, rng)
 			return
 		}
-		most = s.targetReconsider(n)
-		if most == nil {
+		t := gameOf(th.TargetReconsider(self, false))
+		if t == nil {
 			return
 		}
-		ai.attackTarget, ai.target = most, most
+		ai.attackTarget, ai.target = t, t
 	}
 	s.npcDoAttack(n, ai.attackTarget)
 }
@@ -361,26 +419,7 @@ func (s *Server) leash(n *Npc) {
 	n.ClearAggroList()
 	n.clearAttackBy()
 	s.npcSetMoveTo(n, home)
-}
-
-// movementDisabledThink is Mobius movementDisable without skills: swing at
-// a target in reach and sight, or look for another.
-func (s *Server) movementDisabledThink(n *Npc) {
-	target := n.ai.attackTarget
-	if target == nil {
-		return
-	}
-	dist := n.Position().Distance2D(target.Position())
-	s.rnd.Get(100) // Mobius draws for its skill chances
-	//nolint:gosec // a weapon's reach
-	reach := int32(n.Stats.PhysicalAttackRange()) + npcCollision(n) + creatureCollision(target)
-	if dist <= float64(reach) && s.canSee(n, target) {
-		s.npcDoAttack(n, target)
-		return
-	}
-	if t := s.targetReconsider(n); t != nil {
-		n.ai.attackTarget, n.ai.target = t, t
-	}
+	s.minionsLeashed(n, home) // minion.go: "Minions should return as well."
 }
 
 // checkTarget is Mobius AttackableAI.checkTarget: a living creature the NPC
@@ -398,30 +437,6 @@ func (s *Server) checkTarget(n *Npc, target Creature) bool {
 	}
 	p, ok := target.(*Player)
 	return ok && p.state == stateInGame
-}
-
-// targetReconsider is Mobius targetReconsider(false): the most hated
-// attacker that passes checkTarget (hate 0 included), or for an aggressive
-// NPC the first player in its aggro range that does.
-func (s *Server) targetReconsider(n *Npc) Creature {
-	var best Creature
-	bestHate := int64(math.MinInt64)
-	for i := range n.ai.hate {
-		a := &n.ai.hate[i]
-		if s.checkTarget(n, a.Attacker) && a.Hate > bestHate {
-			best, bestHate = a.Attacker, a.Hate
-		}
-	}
-	if best != nil || !s.aiClassOf(n).aggressive {
-		return best
-	}
-	r := s.npcAggroRange(n)
-	for v := range s.world.VisiblePlayersInRange(n, int32(r)) { //nolint:gosec // aggro ranges are small template values
-		if p, ok := v.(*Player); ok && s.checkTarget(n, p) {
-			return p
-		}
-	}
-	return nil
 }
 
 // isClan is Mobius NpcTemplate.isClan(Set): both have clans, and they share
@@ -463,15 +478,31 @@ func (s *Server) callClanHelp(n *Npc, attacker Creature) {
 		if !isClan(c, oc) || slices.Contains(oc.ignoreIDs, n.Template.ID) {
 			continue
 		}
-		if _, ok := attacker.(*Player); ok {
+		if p, ok := attacker.(*Player); ok {
 			if s.canSee(other, attacker) {
 				s.notifyAggression(other, attacker, 1)
 			}
+			s.factionCall(other, n, p)
 		} else if other.ai.intention != NpcAttack && s.canSee(other, attacker) {
 			s.addDamageHate(other, attacker, 0, n.Hating(attacker))
 			s.npcSetAttack(other, attacker)
 		}
 	}
+}
+
+// factionCall raises on_faction_call(npc, caller, attacker) for the scripts
+// registered for npc (Mobius OnAttackableFactionCall, notified
+// asynchronously: it runs after the current command).
+func (s *Server) factionCall(npc, caller *Npc, attacker *Player) {
+	if s.scripts == nil || !s.scripts.Listens("faction_call", npc.Template.ID) {
+		return
+	}
+	npcRef, callerRef := npc.ScriptRef(), caller.ScriptRef()
+	s.loop.Post(func() {
+		if s.scripts != nil {
+			_ = s.scripts.FactionCall(s.background(), npcRef, callerRef, attacker, false) // failures are logged
+		}
+	})
 }
 
 // callClanOnKill is the clan call of Mobius Creature.doDie: the NPCs of the

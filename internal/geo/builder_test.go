@@ -1,139 +1,115 @@
-package geo
+package geo_test
 
 import (
-	"encoding/binary"
+	"strings"
 	"testing"
-	"testing/fstest"
+
+	"github.com/IPeter/l2go/internal/geo/geotest"
 )
 
-// testTile builds an L2J file for tile (20, 18), whose local cell (x, y)
-// is world (16x+8, 16y+8) at its centre. Blocks are flat at the ground
-// height until a cell in them is set: blocks whose cells have one layer
-// each become complex, blocks with more become multilayer. The other cells
-// of such a block are ground, open in every direction.
-type testTile struct {
-	ground int
-	blocks map[int]*[blockCells][]int16
-}
-
-// newTestTile starts a tile at the ground height, a multiple of 8.
-func newTestTile(ground int) *testTile {
-	return &testTile{ground: ground, blocks: map[int]*[blockCells][]int16{}}
-}
-
-// layer is the height (a multiple of 8) and the NSWE flags of a floor.
-type layer struct{ h, nswe int }
-
-func (l layer) value() int16 { return int16(l.h<<1 | l.nswe) }
-
-// set gives local cell (x, y) the floors ls.
-func (tt *testTile) set(x, y int, ls ...layer) *testTile {
-	// The format's own layout, x-major, not the package's helpers.
-	bi, ci := (x/8)*256+y/8, (x%8)*8+y%8
-	blk := tt.blocks[bi]
-	if blk == nil {
-		blk = new([blockCells][]int16)
-		tt.blocks[bi] = blk
+// The geotest builder writes the three block kinds the way geo reads them.
+func TestGeotestBlocks(t *testing.T) {
+	m := geotest.New(
+		"....",
+		"A.#.",
+		"...m",
+	).Ground(-1000).Define('m', geotest.Cell{Floors: []int{-1000, 400}})
+	g := m.Load(t)
+	tiles := g.Tiles()
+	if len(tiles) != 1 || tiles[0].X != 20 || tiles[0].Y != 18 {
+		t.Fatalf("Tiles = %+v, want tile 20_18", tiles)
 	}
-	vs := make([]int16, len(ls))
-	for i, l := range ls {
-		vs[i] = l.value()
+	// The picture fits one block, multilayer for its two-floor cell, and
+	// its wall is inside it; the rest of the tile is flat.
+	if tl := tiles[0]; tl.Multilayer != 1 || tl.Complex != 0 || tl.Flat != 256*256-1 {
+		t.Errorf("blocks %+v, want 1 multilayer and the rest flat", tl)
 	}
-	blk[ci] = vs
-	return tt
+	if a := m.Point('A'); a.Z != -1000 || g.Height(a.X, a.Y, 0) != -1000 {
+		t.Errorf("A = %v at height %d, want the ground at -1000", a, g.Height(a.X, a.Y, 0))
+	}
+	if p := m.At(2, 1, 0); g.Height(p.X, p.Y, 0) != -1000+geotest.WallHeight {
+		t.Errorf("wall height %d, want %d", g.Height(p.X, p.Y, 0), -1000+geotest.WallHeight)
+	}
+	if p := m.At(3, 2, 300); g.Height(p.X, p.Y, p.Z) != 400 {
+		t.Errorf("upper floor %d, want 400", g.Height(p.X, p.Y, p.Z))
+	}
+	if far := m.At(-40, -40, 7); g.Height(far.X, far.Y, far.Z) != -1000 {
+		t.Errorf("flat ground %d, want -1000", g.Height(far.X, far.Y, far.Z))
+	}
+
+	single := geotest.New("....", "....").Load(t).Tiles()[0]
+	if single.Complex != 1 || single.Multilayer != 0 {
+		t.Errorf("one-floor picture blocks %+v, want 1 complex", single)
+	}
+	multi := geotest.New("....", "....").Multilayer().Load(t).Tiles()[0]
+	if multi.Complex != 0 || multi.Multilayer != 1 {
+		t.Errorf("Multilayer() picture blocks %+v, want 1 multilayer", multi)
+	}
 }
 
-// cell gives local cell (x, y) one floor.
-func (tt *testTile) cell(x, y, h, nswe int) *testTile { return tt.set(x, y, layer{h, nswe}) }
-
-// wallX puts a wall between local columns x and x+1 over rows y0 to y1.
-func (tt *testTile) wallX(x, y0, y1 int) *testTile {
-	for y := y0; y <= y1; y++ {
-		tt.cell(x, y, tt.ground, nsweAll&^nsweEast)
-		tt.cell(x+1, y, tt.ground, nsweAll&^nsweWest)
+// A picture placed across a tile corner writes every tile it touches.
+func TestGeotestTiles(t *testing.T) {
+	m := geotest.New("..", "..").Place(-8, -8)
+	g := m.Load(t)
+	if n := len(g.Tiles()); n != 4 {
+		t.Errorf("%d tiles, want the 4 around world (0, 0)", n)
 	}
-	return tt
+	if !g.HasGeo(-8, -8) || !g.HasGeo(8, 8) || g.HasGeo(40000, 8) {
+		t.Error("HasGeo does not follow the written tiles")
+	}
+	x0, y0, x1, y1 := m.Bounds()
+	if x0 != -16 || y0 != -16 || x1 != 16 || y1 != 16 {
+		t.Errorf("Bounds = %d %d %d %d, want -16 -16 16 16", x0, y0, x1, y1)
+	}
 }
 
-// closeOff makes local cell (x, y) unreachable: none of its four
-// neighbours may step into it.
-func (tt *testTile) closeOff(x, y int) *testTile {
-	return tt.cell(x-1, y, tt.ground, nsweAll&^nsweEast).
-		cell(x+1, y, tt.ground, nsweAll&^nsweWest).
-		cell(x, y-1, tt.ground, nsweAll&^nsweSouth).
-		cell(x, y+1, tt.ground, nsweAll&^nsweNorth)
+// Walls close the cells beside them, also outside the picture; closed
+// cells close only themselves.
+func TestGeotestWalls(t *testing.T) {
+	m := geotest.New(
+		"#..",
+		"Ax.",
+	)
+	g := m.Load(t)
+	west := m.At(-1, 0, 0) // outside the picture, beside the wall
+	if g.CanMoveToTarget(west, m.At(0, 0, 0)) {
+		t.Error("the ground west of the picture steps into the wall")
+	}
+	if g.CanMoveToTarget(m.Point('A'), m.At(0, 0, 0)) {
+		t.Error("A steps north into the wall")
+	}
+	if !g.CanMoveToTarget(m.Point('A'), m.At(1, 1, 0)) {
+		t.Error("A cannot step into the closed cell")
+	}
+	if g.CanMoveToTarget(m.At(1, 1, 0), m.Point('A')) {
+		t.Error("the closed cell lets a walker out")
+	}
+	if !g.CompletelyBlocked(m.At(1, 1, 0).X, m.At(1, 1, 0).Y, 0) {
+		t.Error("the closed cell is not completely blocked")
+	}
 }
 
-// corridor makes cells, each next to the one before, a corridor one cell
-// wide: each cell opens only towards its neighbours in the list.
-func (tt *testTile) corridor(cells [][2]int) *testTile {
-	nswe := make(map[[2]int]int, len(cells))
-	for i := 1; i < len(cells); i++ {
-		a, b := cells[i-1], cells[i]
-		nswe[a] |= computeNSWE(a[0], a[1], b[0], b[1])
-		nswe[b] |= computeNSWE(b[0], b[1], a[0], a[1])
+// The builder refuses what the format cannot hold.
+func TestGeotestPanics(t *testing.T) {
+	tests := map[string]func(){
+		"empty":           func() { geotest.New() },
+		"ragged rows":     func() { geotest.New("..", ".") },
+		"odd height":      func() { geotest.New(".").Ground(5) },
+		"bad flags":       func() { geotest.New(".").Define('q', geotest.Cell{NSWE: 16}) },
+		"unknown char":    func() { geotest.New("?").Files() },
+		"missing marker":  func() { geotest.New(".").Point('A') },
+		"two markers":     func() { geotest.New("AA").Point('A') },
+		"floor too high":  func() { geotest.New(".").Define('q', geotest.Cell{Floors: []int{16384}}) },
+		"floor not by 8s": func() { geotest.New(".").Define('q', geotest.Cell{Floors: []int{12}}) },
 	}
-	for _, c := range cells {
-		tt.cell(c[0], c[1], tt.ground, nswe[c])
-	}
-	return tt
-}
-
-// bytes encodes the tile.
-func (tt *testTile) bytes() []byte {
-	ground := layer{tt.ground, nsweAll}.value()
-	out := make([]byte, 0, 3*tileBlocks)
-	for bi := range tileBlocks {
-		blk := tt.blocks[bi]
-		if blk == nil {
-			out = append(out, blockFlat)
-			out = binary.LittleEndian.AppendUint16(out, uint16(int16(tt.ground)))
-			continue
-		}
-		multi := false
-		for _, vs := range blk {
-			multi = multi || len(vs) > 1
-		}
-		if !multi {
-			out = append(out, blockComplex)
-			for _, vs := range blk {
-				v := ground
-				if len(vs) == 1 {
-					v = vs[0]
+	for name, f := range tests {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil || !strings.Contains(r.(string), "geotest") {
+					t.Errorf("panic %v, want a geotest panic", r)
 				}
-				out = binary.LittleEndian.AppendUint16(out, uint16(v))
-			}
-			continue
-		}
-		out = append(out, blockMultilayer)
-		for _, vs := range blk {
-			if len(vs) == 0 {
-				vs = []int16{ground}
-			}
-			out = append(out, byte(len(vs)))
-			for _, v := range vs {
-				out = binary.LittleEndian.AppendUint16(out, uint16(v))
-			}
-		}
+			}()
+			f()
+		})
 	}
-	return out
 }
-
-// load returns a Geo with the tile as tile (20, 18), the only one.
-func (tt *testTile) load(tb testing.TB) *Geo {
-	tb.Helper()
-	g, err := LoadFS(fstest.MapFS{"20_18.l2j": {Data: tt.bytes()}})
-	if err != nil {
-		tb.Fatal(err)
-	}
-	return g
-}
-
-// at returns the world point at the centre of local cell (x, y) of tile
-// (20, 18), at height z.
-func at(x, y, z int) Point {
-	return Point{X: int32(16*x + 8), Y: int32(16*y + 8), Z: int32(z)}
-}
-
-// outside is a point of tile (21, 18), which has no file in these tests.
-var outside = Point{X: 40000, Y: 100, Z: 1234}

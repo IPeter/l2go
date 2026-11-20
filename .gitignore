@@ -34,3 +34,8 @@ coverage.out
 # NPC dialog pages, copied from the Mobius checkout by make data (not
 # committed: they are NCSoft's text)
 /data/html/
+
+# Geodata tiles (L2J X_Y.l2j), supplied by whoever runs a server and never
+# committed. docker compose mounts this folder; only its placeholder is kept.
+/geodata/*
+!/geodata/.gitkeep

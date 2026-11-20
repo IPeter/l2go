@@ -3,11 +3,10 @@ package geo
 import (
 	"math"
 	"slices"
-	"sync"
 )
 
 // The pathfinder: Mobius's cell A* (NodeBuffer) and its post-filter
-// (PathFinding), with the defaults of its GeoEngine.ini.
+// (PathFinding), with the weights, windows and passes of the Options.
 const (
 	// pathMaxIterations is how many cells a search may close before it
 	// gives up.
@@ -18,97 +17,77 @@ const (
 	// pathZStepLimit: a step changing height by more than this costs the
 	// high weight.
 	pathZStepLimit = 16
-
-	// Step costs: the weights scaled by 1000. Low is a plain step, medium a
-	// step to a cell beside an obstacle, high a step to a cell with a
-	// closed direction or a steep one; diagonal is a plain diagonal step
-	// (LowWeight 0.5, MediumWeight 2, HighWeight 3, DiagonalWeight 0.707).
-	costLow      = 500
-	costMedium   = 2000
-	costHigh     = 3000
-	costDiagonal = 707
-
-	// maxPostFilterPasses is how many times a player's path is smoothed;
-	// other creatures' paths are smoothed once (MaxPostfilterPasses).
-	maxPostFilterPasses = 3
+	// pathWindowMargin: a search window is at least this plus twice the
+	// larger cell distance of its ends.
+	pathWindowMargin = 64
 )
 
-// pathBufferSizes are the sides of the square cell windows searches run in
-// (PathFindBuffers). A search takes the smallest window of at least
-// 64 + 2 × its larger cell distance, so ends more than 218 cells (3,488
-// units) apart along an axis get no path.
-var pathBufferSizes = [...]int{100, 128, 192, 256, 320, 384, 500}
-
-// pathBuffers pools the windows of each size; Mobius keeps one per thread.
-var pathBuffers [len(pathBufferSizes)]sync.Pool
-
-// FindPath returns the waypoints of a walk from from to to (Mobius
-// PathFinding.findPath for a player), or nil when Mobius finds no path:
-// none within its search limits, or the ends are too far apart. The
-// waypoints are cell centres at their geodata height, except the last,
-// which has to's X and Y (as the Mobius mover walks it) and the ground
-// height there. A path that needs no turn is to alone, and so is any path
-// with an end outside the geodata.
-func (g *Geo) FindPath(from, to Point) []Point { return g.FindPathFor(from, to, true) }
-
-// FindPathFor is FindPath for a player or another creature: Mobius
-// smooths a player's path with up to three passes and other creatures'
-// paths with one.
-func (g *Geo) FindPathFor(from, to Point, player bool) []Point {
-	if !g.HasGeo(from.X, from.Y) || !g.HasGeo(to.X, to.Y) {
-		return []Point{to}
-	}
-	path, ok := g.findPath(from, to, player)
-	if !ok {
-		return nil
-	}
-	if len(path) < 2 {
-		// Mobius walks straight to the target when the path has no turn.
-		return []Point{to}
-	}
-	last := &path[len(path)-1]
-	last.X, last.Y = to.X, to.Y
-	return path
+// FindPath returns Mobius's path from from to to (PathFinding.findPath)
+// with the terrain-only post-filter; see FindPathWith.
+func (g *Geo) FindPath(from, to Point, playable bool) []Point {
+	return g.FindPathWith(from, to, playable, nil)
 }
 
-// findPath runs Mobius's search and smoothing. ok is false when there is
-// no path; a path may be empty when the ends share a cell.
-func (g *Geo) findPath(from, to Point, player bool) (path []Point, ok bool) {
+// FindPathWith returns Mobius's path from from to to for a playable or
+// another creature (PathFinding.findPath): the A* waypoints, start
+// excluded, where the direction changes and at the target's cell, each at
+// its cell's centre and geodata height, smoothed by the post-filter. It is
+// nil when Mobius finds none: pathfinding is off, an end has no geodata,
+// the ends are too far apart for the largest window, or the search ends
+// without reaching the target. The path may also be empty (both ends in
+// one cell); like Mobius's mover, callers treat fewer than two waypoints as
+// no path.
+//
+// The post-filter drops a waypoint when canMove says the walk from the
+// last kept point (or from) to the next waypoint is clear: up to
+// MaxPostfilterPasses passes for a playable, one for other creatures.
+// Mobius checks doors and fences there too, so the game passes its
+// composed walk test; nil means CanMoveToTarget.
+func (g *Geo) FindPathWith(from, to Point, playable bool, canMove func(from, to Point) bool) []Point {
+	if !g.pathfinding || !g.HasGeo(from.X, from.Y) || !g.HasGeo(to.X, to.Y) {
+		return nil
+	}
 	gx, gy := toGeoX(from.X), toGeoY(from.Y)
 	gtx, gty := toGeoX(to.X), toGeoY(to.Y)
-	buf, pool := takeNodeBuffer(64 + 2*max(abs(gx-gtx), abs(gy-gty)))
+	buf, i := g.takeNodeBuffer(pathWindowMargin + 2*max(abs(gx-gtx), abs(gy-gty)))
 	if buf == nil {
-		return nil, false
+		return nil
 	}
 	gz := g.nearestZ(gx, gy, int(from.Z))
 	gtz := g.nearestZ(gtx, gty, int(to.Z))
 	nodes, ok := buf.find(g, gx, gy, gz, gtx, gty, gtz)
 	buf.reset()
-	pool.Put(buf)
+	g.pools[i].Put(buf)
 	if !ok {
-		return nil, false
+		return nil
 	}
-	path = make([]Point, len(nodes))
+	path := make([]Point, len(nodes))
 	for i, n := range nodes {
+		// Mobius's GeoLocation reads the cell's height again from the
+		// search's floor.
 		path[i] = cellPoint(n.x, n.y, g.nearestZ(n.x, n.y, n.z))
 	}
-	if len(path) < 3 {
-		return path, true
+	if len(path) < 3 || g.passes <= 0 {
+		return path
 	}
-	return g.smoothPath(path, from, player), true
+	if canMove == nil {
+		canMove = g.CanMoveToTarget
+	}
+	return g.postFilter(path, from, playable, canMove)
 }
 
-// smoothPath drops the waypoints a creature can walk past in a straight
+// postFilter drops the waypoints a creature can walk past in a straight
 // line (Mobius applyPostFiltering): a waypoint goes when the walk from the
-// last kept point (or from) to the next waypoint is clear. A player's path
-// gets passes until one changes nothing, at most three; other paths one.
-func (g *Geo) smoothPath(path []Point, from Point, player bool) []Point {
+// last kept point (or from) to the next waypoint is clear. A playable's
+// path gets passes until one changes nothing or it has two waypoints, at
+// most MaxPostfilterPasses; other paths one.
+func (g *Geo) postFilter(path []Point, from Point, playable bool, canMove func(from, to Point) bool) []Point {
 	for pass := 1; ; pass++ {
 		changed := false
 		cur := from
 		kept := make([]Point, 0, len(path))
 		for i := range len(path) - 1 {
-			if g.CanMoveToTarget(cur, path[i+1]) {
+			if canMove(cur, path[i+1]) {
 				changed = true
 				continue
 			}
@@ -117,26 +96,26 @@ func (g *Geo) smoothPath(path []Point, from Point, player bool) []Point {
 		}
 		kept = append(kept, path[len(path)-1])
 		path = kept
-		if !player || !changed || len(path) <= 2 || pass >= maxPostFilterPasses {
+		if !playable || !changed || len(path) <= 2 || pass >= g.passes {
 			return path
 		}
 	}
 }
 
-// takeNodeBuffer returns a pooled window of at least size cells per side
-// and its pool, or nil when size is above the largest.
-func takeNodeBuffer(size int) (*nodeBuffer, *sync.Pool) {
-	for i, side := range pathBufferSizes {
+// takeNodeBuffer returns a pooled window of the smallest size of at least
+// size cells per side and the index of its pool, or nil when size is above
+// the largest.
+func (g *Geo) takeNodeBuffer(size int) (*nodeBuffer, int) {
+	for i, side := range g.sizes {
 		if side < size {
 			continue
 		}
-		pool := &pathBuffers[i]
-		if b, ok := pool.Get().(*nodeBuffer); ok {
-			return b, pool
+		if b, ok := g.pools[i].Get().(*nodeBuffer); ok {
+			return b, i
 		}
-		return newNodeBuffer(side), pool
+		return newNodeBuffer(side), i
 	}
-	return nil, nil
+	return nil, -1
 }
 
 // Cell flags of a search.
@@ -162,7 +141,7 @@ type pathNode struct{ x, y, z int }
 
 // nodeBuffer is a square window of cells that one search at a time runs in
 // (Mobius NodeBuffer): a data-oriented A* with an indexed binary heap of
-// open cells ordered by f, then h. 32 bytes per cell: 8 MB for the largest.
+// open cells ordered by f, then h. 24 bytes per cell: 6 MB for 500 cells.
 type nodeBuffer struct {
 	size    int
 	cells   []pathCell
@@ -171,7 +150,6 @@ type nodeBuffer struct {
 	heapLen int
 
 	geo                       *Geo
-	diagonal                  bool
 	baseX, baseY              int
 	targetX, targetY, targetZ int
 }
@@ -191,7 +169,7 @@ func newNodeBuffer(size int) *nodeBuffer {
 // the cells where the direction changes and the target. ok is false when
 // the open cells run out or the search closes 7,000 cells first.
 func (b *nodeBuffer) find(g *Geo, x, y, z, tx, ty, tz int) (path []pathNode, ok bool) {
-	b.geo, b.diagonal = g, g.diagonal
+	b.geo = g
 	b.baseX = x + (tx-x-b.size)/2
 	b.baseY = y + (ty-y-b.size)/2
 	b.targetX, b.targetY, b.targetZ = tx, ty, tz
@@ -264,10 +242,10 @@ func (b *nodeBuffer) touch(i, gx, gy, refZ int) {
 }
 
 // heuristic is the octile distance from cell (gx, gy) to the target with
-// plain and diagonal step costs; it never overestimates.
+// the low and diagonal weights (Mobius computeH).
 func (b *nodeBuffer) heuristic(gx, gy int) int32 {
 	dx, dy := abs(gx-b.targetX), abs(gy-b.targetY)
-	return cellRef(max(dx, dy)*costLow + min(dx, dy)*(costDiagonal-costLow))
+	return cellRef(max(dx, dy))*b.geo.wLow + cellRef(min(dx, dy))*(b.geo.wDiagonal-b.geo.wLow)
 }
 
 // expand relaxes the neighbours of cell cur, (x, y) at height z: the four
@@ -291,7 +269,7 @@ func (b *nodeBuffer) expand(cur, x, y, z int) {
 	if nswe&nsweNorth != 0 {
 		north = b.consider(cur, x, y-1, z, false)
 	}
-	if !b.diagonal {
+	if !b.geo.diagonal {
 		return
 	}
 	if east >= 0 && south >= 0 && b.cells[east].nswe&nsweSouth != 0 && b.cells[south].nswe&nsweEast != 0 {
@@ -326,13 +304,13 @@ func (b *nodeBuffer) consider(parent, nx, ny, parentZ int, diagonal bool) int {
 	var cost int32
 	switch {
 	case c.nswe&nsweAll != nsweAll || abs(z-parentZ) > pathZStepLimit:
-		cost = costHigh
+		cost = b.geo.wHigh
 	case b.highCost(nx+1, ny, z) || b.highCost(nx-1, ny, z) || b.highCost(nx, ny+1, z) || b.highCost(nx, ny-1, z):
-		cost = costMedium
+		cost = b.geo.wMedium
 	case diagonal:
-		cost = costDiagonal
+		cost = b.geo.wDiagonal
 	default:
-		cost = costLow
+		cost = b.geo.wLow
 	}
 	g := b.cells[parent].g + cost
 	open := c.flags&flagOpen != 0
@@ -435,14 +413,14 @@ func (b *nodeBuffer) siftDown(pos int) {
 // the diagonal strategy, a staircase of side steps counts as one diagonal
 // direction.
 func (b *nodeBuffer) construct(end int) []pathNode {
-	var path []pathNode
+	path := []pathNode{}
 	prevDX, prevDY := math.MinInt, math.MinInt
 	for cur := end; b.cells[cur].parent != -1; {
 		parent := int(b.cells[cur].parent)
 		grand := int(b.cells[parent].parent)
 		cx, cy := b.cellX(cur), b.cellY(cur)
 		dx, dy := cx-b.cellX(parent), cy-b.cellY(parent)
-		if !b.diagonal && grand != -1 {
+		if !b.geo.diagonal && grand != -1 {
 			if gdx, gdy := cx-b.cellX(grand), cy-b.cellY(grand); abs(gdx) == abs(gdy) {
 				dx, dy = gdx, gdy
 			}
@@ -457,8 +435,9 @@ func (b *nodeBuffer) construct(end int) []pathNode {
 	return path
 }
 
-// cellRef converts a window index or a cost: indexes stay below 500×500
-// and costs below 7,000 × 3,000 plus the heuristic.
+// cellRef converts a window index, a cell distance or a cost: indexes stay
+// below 500×500 and costs below 7,000 steps of the high weight plus the
+// heuristic.
 func cellRef(v int) int32 {
 	return int32(v) //nolint:gosec // see above
 }

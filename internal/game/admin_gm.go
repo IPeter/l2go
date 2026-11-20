@@ -148,19 +148,16 @@ var adminNotAvailable = map[string]string{
 	// Effects page.
 	"mobmenu": "Mob groups are not available yet.",
 	// Game page.
-	"pledge":            "Clans are not available yet.",
-	"clan_show_pending": "Clans are not available yet.",
-	"siege":             "Sieges are not available yet.",
-	"cw_info_menu":      "Cursed weapons are not available yet.",
-	"cw_add":            "Cursed weapons are not available yet.",
-	"cw_remove":         "Cursed weapons are not available yet.",
-	"mammon_find":       "The Seven Signs are not available yet.",
-	"mammon_respawn":    "The Seven Signs are not available yet.",
-	"manor":             "The manor is not available yet.",
-	"grandboss":         "Grand bosses are not available yet.",
-	"checkolympiad":     "The Olympiad is not available yet.",
-	"saveolymp":         "The Olympiad is not available yet.",
-	"givehero":          "The Olympiad is not available yet.",
+	"siege":          "Sieges are not available yet.",
+	"cw_info_menu":   "Cursed weapons are not available yet.",
+	"cw_add":         "Cursed weapons are not available yet.",
+	"cw_remove":      "Cursed weapons are not available yet.",
+	"mammon_find":    "The Seven Signs are not available yet.",
+	"mammon_respawn": "The Seven Signs are not available yet.",
+	"manor":          "The manor is not available yet.",
+	"checkolympiad":  "The Olympiad is not available yet.",
+	"saveolymp":      "The Olympiad is not available yet.",
+	"givehero":       "The Olympiad is not available yet.",
 }
 
 // adminEnchantSlots are the commands of the enchant page (Mobius

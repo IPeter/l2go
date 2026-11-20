@@ -77,6 +77,8 @@ func (s *Server) questHit(target, attacker Creature, damage int) {
 // Before the scripts started, startScripts runs them for the NPCs there.
 func (s *Server) questNpcSpawned(n *Npc) {
 	delete(s.quest.scriptValues, n)
+	s.scriptStateSpawned(n) // quest_world_ai.go: Mobius Npc.onSpawn and Chest.onSpawn
+	s.creatureSeeSpawned(n) // ai_see.go: Mobius Npc.onSpawn's initSeenCreatures
 	if s.scripts == nil || !s.quest.started {
 		return
 	}

@@ -45,7 +45,7 @@
       },
 
       "world": {
-        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off). autoLearnSkills gives players every skill of their class up to their level at login and level-up, without SP or spellbooks (true on this test server; Mobius default false). World regions become active when a player comes near (neighbours after gridTurnOnTime) and inactive gridTurnOffTime after the last one left; gridsAlwaysOn keeps them all active.",
+        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off). autoLearnSkills gives players every skill of their class up to their level at login and level-up, without SP or spellbooks (true on this test server; Mobius default false). World regions become active when a player comes near (neighbours after gridTurnOnTime) and inactive gridTurnOffTime after the last one left; gridsAlwaysOn keeps them all active. Idle NPCs and monsters play an animation every min*Animation to max*Animation (0 = never). allowBoat runs the ferries; players within boatBroadcastRadius of a dock hear their calls.",
         "tickInterval": "100ms",
         "autosaveInterval": "15m",
         "deleteCharAfterDays": 7,
@@ -54,7 +54,13 @@
         "autoLearnSkills": true,
         "gridsAlwaysOn": false,
         "gridTurnOnTime": "1s",
-        "gridTurnOffTime": "90s"
+        "gridTurnOffTime": "90s",
+        "minNpcAnimation": "5s",
+        "maxNpcAnimation": "60s",
+        "minMonsterAnimation": "5s",
+        "maxMonsterAnimation": "60s",
+        "allowBoat": true,
+        "boatBroadcastRadius": 20000
       },
 
       "chat": {
@@ -66,7 +72,7 @@
       },
 
       "npcs": {
-        "_comment": "spawnCustom also spawns the custom spawn lists. Players up to maxFreeTeleportLevel teleport for free. Players talk to NPCs within interactionRange units. The other keys are the L2J Mobius NPC.ini monster settings of the same names (corpse times, aggro and drift ranges, the optional leash of aggroDistanceCheckRange).",
+        "_comment": "spawnCustom also spawns the custom spawn lists. Players up to maxFreeTeleportLevel teleport for free. Players talk to NPCs within interactionRange units. The other keys are the L2J Mobius NPC.ini monster settings of the same names (corpse times, aggro and drift ranges, the optional leash of aggroDistanceCheckRange; raid minion respawns, customMinionsRespawnTime as npcId,seconds;..., the raid curse, the chaos thinks and the raid boss multipliers).",
         "spawnCustom": false,
         "maxFreeTeleportLevel": 40,
         "interactionRange": 250,
@@ -77,16 +83,40 @@
         "mobAggroInPeaceZone": true,
         "aggroDistanceCheck": false,
         "aggroDistanceCheckRange": 2000,
-        "attackablesCampPlayerCorpses": false
+        "attackablesCampPlayerCorpses": false,
+        "raidMinionRespawnTime": "300s",
+        "customMinionsRespawnTime": "22450,30;22371,120;22543,0;25545,0;22424,30;22425,30;22426,30;22427,30;22428,30;22429,30;22430,30;22432,30;22433,30;22434,30;22435,30;22436,30;22437,30;22438,30;25596,30;25605,0;25606,0;25607,0;25608,0",
+        "forceDeleteMinions": false,
+        "disableRaidCurse": false,
+        "raidChaosTime": 30,
+        "grandChaosTime": 30,
+        "minionChaosTime": 30,
+        "raidMinRespawnMultiplier": 1.0,
+        "raidMaxRespawnMultiplier": 1.0,
+        "raidHpRegenMultiplier": 100,
+        "raidMpRegenMultiplier": 100,
+        "raidPDefenceMultiplier": 100,
+        "raidMDefenceMultiplier": 100,
+        "raidPAttackMultiplier": 100,
+        "raidMAttackMultiplier": 100
       },
 
       "geodata": {
-        "_comment": "dir is the geodata folder; empty means no geodata.",
-        "dir": ""
+        "_comment": "dir is the geodata folder, relative to the working directory /opt/l2go: docker-compose.yml mounts the host folder GEODATA_DIR (default ./geodata) there read-only. Put L2J X_Y.l2j tiles in it; a folder where no tile loads means no geodata. The other keys are L2J Mobius GeoEngine.ini (pathfinding = PathFinding > 0; pathFindBuffers sizes in cells bound how far a path reaches).",
+        "dir": "geodata",
+        "pathfinding": true,
+        "pathFindBuffers": "100x6;128x6;192x6;256x4;320x4;384x4;500x2",
+        "lowWeight": 0.5,
+        "mediumWeight": 2,
+        "highWeight": 3,
+        "advancedDiagonalStrategy": false,
+        "diagonalWeight": 0.707,
+        "avoidObstructedPathNodes": true,
+        "maxPostfilterPasses": 3
       },
 
       "items": {
-        "_comment": "L2J Mobius General.ini/Player.ini item settings of the same names. Ground items vanish after autoDestroyDroppedItemAfter (0 = never), herbs after autoDestroyHerbTime.",
+        "_comment": "L2J Mobius General.ini/Player.ini item settings of the same names. Ground items vanish after autoDestroyDroppedItemAfter (0 = never), herbs after autoDestroyHerbTime. warehouseSlotsClan is the clan warehouse size (MaximumWarehouseSlotsForClan).",
         "allowDiscardItem": true,
         "autoDestroyDroppedItemAfter": "600s",
         "autoDestroyHerbTime": "60s",
@@ -97,13 +127,15 @@
         "maxAdena": 2000000000,
         "warehouseSlotsNoDwarf": 100,
         "warehouseSlotsDwarf": 120,
-        "autoLootSlotLimit": false
+        "warehouseSlotsClan": 200,
+        "autoLootSlotLimit": true
       },
 
       "economy": {
         "_comment": "Shops, warehouses and multisell (L2J Mobius names). The flood* keys are the shortest time between two item drops, trades or shop actions, and multisell exchanges (0 = no limit).",
         "altKarmaPlayerCanShop": true,
         "altKarmaPlayerCanUseWarehouse": true,
+        "altKarmaPlayerCanTrade": true,
         "onlyGMItemsFree": true,
         "multisellAmountLimit": 10000,
         "customMultisell": false,
@@ -113,9 +145,11 @@
       },
 
       "rates": {
-        "_comment": "L2J Mobius Rates.ini. The *ByItem maps (item ID: multiplier) replace the general drop rate for the items they list. karmaLost -1 means the xp rate.",
+        "_comment": "L2J Mobius Rates.ini. partyXp and partySp multiply the party bonus (RatePartyXp, RatePartySp). The *ByItem maps (item ID: multiplier) replace the general drop rate for the items they list. karmaLost -1 means the xp rate.",
         "xp": 1,
         "sp": 1,
+        "partyXp": 1,
+        "partySp": 1,
         "deathDropChance": 1,
         "deathDropAmount": 1,
         "herbDropChance": 1,
@@ -170,6 +204,81 @@
         "canGMDropEquipment": false,
         "awardPKKillPVPPoint": false,
         "karmaPlayerCanBeKilledInPeaceZone": false
+      },
+
+      "party": {
+        "_comment": "L2J Mobius Player.ini party settings. newLeaderOnLeave (AltLeavePartyLeader) passes the lead on when the leader leaves instead of disbanding. xpCutoffMethod is level, percentage, auto, highfive or none; the other xpCutoff* keys belong to those methods. The party range is combat.partyRange.",
+        "newLeaderOnLeave": false,
+        "xpCutoffMethod": "level",
+        "xpCutoffPercent": 3.0,
+        "xpCutoffLevel": 20,
+        "xpCutoffGaps": [[0, 9], [10, 14], [15, 99]],
+        "xpCutoffGapPercents": [100, 30, 0]
+      },
+
+      "stores": {
+        "_comment": "Private store slots for dwarves and the other races (Mobius MaxPvtStore*Slots*), and how far from a sitting player and from an NPC a store must be opened (Custom/PrivateStoreRange.ini; 0 = no check).",
+        "sellSlotsDwarf": 4,
+        "sellSlotsOther": 3,
+        "buySlotsDwarf": 5,
+        "buySlotsOther": 4,
+        "minRangeFromPlayer": 50,
+        "minRangeFromNpc": 100
+      },
+
+      "clan": {
+        "_comment": "L2J Mobius Player.ini clan settings, Feature.ini reputation costs and Server.ini ClanNameTemplate (a Go regular expression the whole name must match). Days are wall-clock days.",
+        "daysBeforeJoin": 1,
+        "daysBeforeCreate": 10,
+        "daysToDissolve": 7,
+        "leaderInstantActivation": false,
+        "membersForWar": 15,
+        "membersCanWithdrawFromWarehouse": false,
+        "lifeCrystalNeeded": true,
+        "nameTemplate": ".*",
+        "level6Cost": 5000,
+        "level7Cost": 10000,
+        "level8Cost": 20000,
+        "level6Members": 30,
+        "level7Members": 50,
+        "level8Members": 80,
+        "royalGuardCost": 5000,
+        "knightUnitCost": 10000,
+        "reputationPerKill": 1,
+        "academyMinPoints": 190,
+        "academyMaxPoints": 650
+      },
+
+      "ally": {
+        "_comment": "L2J Mobius Player.ini alliance settings: the most clans in an alliance, and the waiting days after leaving, a dismissal and a dissolution.",
+        "maxClans": 3,
+        "daysBeforeJoinWhenLeft": 1,
+        "daysBeforeJoinWhenDismissed": 1,
+        "daysBeforeAcceptWhenDismissed": 1,
+        "daysBeforeCreateWhenDissolved": 10
+      },
+
+      "grandBosses": {
+        "_comment": "L2J Mobius GrandBoss.ini: a grand boss respawns intervalOf<Boss>Spawn plus or minus up to randomOf<Boss>Spawn (whole hours) after it died. Antharas and Valakas wait *WaitTime after the first player entered; *RecognizeHero greets heroes.",
+        "antharasWaitTime": "20m",
+        "intervalOfAntharasSpawn": "264h",
+        "randomOfAntharasSpawn": "8h",
+        "antharasRecognizeHero": true,
+        "valakasWaitTime": "20m",
+        "intervalOfValakasSpawn": "264h",
+        "randomOfValakasSpawn": "8h",
+        "valakasRecognizeHero": true,
+        "intervalOfBaiumSpawn": "168h",
+        "randomOfBaiumSpawn": "8h",
+        "baiumRecognizeHero": true,
+        "intervalOfCoreSpawn": "60h",
+        "randomOfCoreSpawn": "8h",
+        "intervalOfOrfenSpawn": "48h",
+        "randomOfOrfenSpawn": "8h",
+        "intervalOfQueenAntSpawn": "36h",
+        "randomOfQueenAntSpawn": "8h",
+        "intervalOfZakenSpawn": "60h",
+        "randomOfZakenSpawn": "8h"
       }
     }
   ]

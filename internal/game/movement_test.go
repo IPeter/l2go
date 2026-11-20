@@ -1,15 +1,13 @@
 package game
 
 import (
-	"encoding/binary"
-	"fmt"
 	"math"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
 	"github.com/IPeter/l2go/internal/geo"
+	"github.com/IPeter/l2go/internal/geo/geotest"
 	"github.com/IPeter/l2go/internal/packets"
 	"github.com/IPeter/l2go/internal/stats"
 	"github.com/IPeter/l2go/internal/testclient"
@@ -285,44 +283,8 @@ func TestValidatePositionPolicy(t *testing.T) {
 // heights are), except blocked's own cell, which is closed on every side.
 func walkGeoTile(t *testing.T, blocked world.Position) *geo.Geo {
 	t.Helper()
-	const (
-		worldMinX, worldMinY = -655360, -589824 // where geodata cell (0, 0) starts
-		cellSize, tileCells  = 16, 2048
-		tileBlocks           = 256 // blocks per tile side
-		blockCells           = 8   // cells per block side
-	)
-	gx, gy := (int(blocked.X)-worldMinX)/cellSize, (int(blocked.Y)-worldMinY)/cellSize
-	tileX, tileY := gx/tileCells, gy/tileCells
-	gx, gy = gx%tileCells, gy%tileCells
-	z := int16(blocked.Z) &^ 7
-	// The blocks, x-major, each starting with its type: 0 flat (one height
-	// for all cells), 1 complex (8×8 cells, x-major, each the height doubled
-	// above 4 bits of NSWE flags).
-	var b []byte
-	for bx := range tileBlocks {
-		for by := range tileBlocks {
-			if bx != gx/blockCells || by != gy/blockCells {
-				b = append(b, 0)
-				b = binary.LittleEndian.AppendUint16(b, uint16(z))
-				continue
-			}
-			b = append(b, 1)
-			for cx := range blockCells {
-				for cy := range blockCells {
-					nswe := int16(0xF)
-					if cx == gx%blockCells && cy == gy%blockCells {
-						nswe = 0
-					}
-					b = binary.LittleEndian.AppendUint16(b, uint16(z<<1|nswe))
-				}
-			}
-		}
-	}
-	g, err := geo.LoadFS(fstest.MapFS{fmt.Sprintf("%d_%d.l2j", tileX, tileY): {Data: b}})
-	if err != nil {
-		t.Fatalf("geodata: %v", err)
-	}
-	return g
+	ground := int(blocked.Z) &^ 7
+	return geotest.New("x").Ground(ground).Place(blocked.X, blocked.Y).Load(t)
 }
 
 // With geodata, a click on a cell closed on every side gets ActionFailed
@@ -331,7 +293,7 @@ func TestWalkRefusedOnABlockedCell(t *testing.T) {
 	start := npcTestStart(t)
 	blocked := world.Position{X: int32(start.X) + 300, Y: int32(start.Y), Z: int32(start.Z)}
 	g := walkGeoTile(t, blocked)
-	e := newEnv(t, nil, func(s *Server) { s.geo = g })
+	e := newEnv(t, nil, func(s *Server) { s.geo.setTerrain(g) })
 	sa, sb, pa, _ := twoPlayers(t, e)
 	walkSettle(t, e, sa, sb)
 	home := e.position(pa)

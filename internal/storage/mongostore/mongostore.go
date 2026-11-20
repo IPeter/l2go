@@ -16,6 +16,8 @@
 //   - character_relations: one document per friend or block, unique on
 //     owner, target and relation, indexed on target (see Relations).
 //   - counters: the object ID and crest ID counters (see IDs and Crests).
+//   - raidbosses, grandbosses, grandboss_zone_players and raid_points: the
+//     boss state (see Bosses).
 //
 // A character and its items are written in one transaction, and so is a
 // storage.Batch (Characters.WriteBatch), so the

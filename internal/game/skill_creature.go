@@ -326,10 +326,14 @@ func (b *skillBase) IsAlikeDead() bool {
 
 // IsInvul reports invulnerability: an Invincible effect, or a player
 // waiting for Appearing after a teleport (Mobius isTeleporting) or made
-// invulnerable by //invul (admin_gm.go).
+// invulnerable by //invul (admin_gm.go), or an NPC a script made
+// invulnerable (quest_world_ai.go).
 func (b *skillBase) IsInvul() bool {
 	if b.el.IsAffected(skills.FlagInvul) {
 		return true
+	}
+	if b.n != nil {
+		return b.n.script.invul
 	}
 	return b.p != nil && (b.p.Teleporting() || b.p.admin.invul)
 }
@@ -755,10 +759,16 @@ func (b *skillBase) SendDamageMessage(target skills.Creature, damage int, mcrit,
 }
 
 // ReduceCurrentHP takes damage: the effects that end on damage end, then
-// the status takes the HP with hate, death and packets.
-func (b *skillBase) ReduceCurrentHP(damage float64, attacker skills.Creature, _ *skills.Skill) {
+// the status takes the HP with hate, death and packets. A player takes no
+// damage from a ranged skill whose caster cannot see it (Mobius
+// reduceCurrentHp, geo_sight.go).
+func (b *skillBase) ReduceCurrentHP(damage float64, attacker skills.Creature, sk *skills.Skill) {
 	b.el.StopOnDamage(true)
-	b.gc().ReduceHP(damage, b.srv.gameCreature(attacker))
+	ga := b.srv.gameCreature(attacker)
+	if b.srv.skillUnseen(b.p, ga, sk) {
+		damage = 0
+	}
+	b.gc().ReduceHP(damage, ga)
 }
 
 // ReduceCurrentHPByDOT takes the damage of a damage-over-time effect; a
@@ -767,6 +777,10 @@ func (b *skillBase) ReduceCurrentHPByDOT(damage float64, attacker skills.Creatur
 	b.el.StopOnDamage(sk == nil || !sk.IsToggle())
 	if b.p != nil {
 		b.p.reduceHP(damage, b.srv.gameCreature(attacker), true) // invulnerability does not stop it
+		return
+	}
+	if b.n != nil {
+		b.n.reduceHP(damage, b.srv.gameCreature(attacker), true)
 		return
 	}
 	b.gc().ReduceHP(damage, b.srv.gameCreature(attacker))
@@ -863,8 +877,11 @@ func (b *skillBase) UpdateAbnormalEffect() {
 }
 
 // IsLethalable reports whether lethal strikes work: on players, and on NPCs
-// that are not undying.
-func (b *skillBase) IsLethalable() bool { return b.n == nil || !b.n.Template.Status.Undying }
+// that are not undying, raid bosses or grand bosses (their constructors call
+// setLethalable(false)).
+func (b *skillBase) IsLethalable() bool {
+	return b.n == nil || (!b.n.Template.Status.Undying && (b.n.class == nil || !b.n.class.raid))
+}
 
 // SetTarget changes the target.
 func (b *skillBase) SetTarget(t skills.Creature) {
@@ -906,6 +923,8 @@ func (b *skillBase) NotifyAI(ev skills.AIEvent, other skills.Creature) {
 		b.srv.NotifyAttacked(b.n, o)
 	case b.n != nil && ev == skills.AIAttack && o != nil:
 		b.srv.NotifyAggression(b.n, o, 1)
+	case b.n != nil && (ev == skills.AIAfraidStart || ev == skills.AIAfraid):
+		b.srv.npcAfraid(b.n, o, ev == skills.AIAfraidStart) // ai_fear.go
 	case b.p != nil && ev == skills.AIAttack && o != nil:
 		b.srv.AttackIntention(b.p, o)
 	case b.p != nil && ev == skills.AIIdle:
@@ -1195,12 +1214,16 @@ func (a *skillPlayer) CheckPvPSkill(target skills.Player, sk *skills.Skill) bool
 	return a.srv.checkPvPSkill(a.p, t.p, sk)
 }
 
-// SendEffectIcons sends AbnormalStatusUpdate; parties and the Olympiad do
-// not exist yet.
+// SendEffectIcons sends AbnormalStatusUpdate, and PartySpelled to the
+// party (party_window.go); the Olympiad does not exist yet.
 func (a *skillPlayer) SendEffectIcons(u skills.IconUpdate) {
-	if u.SendAbnormal && a.p.InGame() {
+	if !a.p.InGame() {
+		return
+	}
+	if u.SendAbnormal {
 		a.p.Send(serverpackets.NewAbnormalStatusUpdatePacket(u.Icons))
 	}
+	a.srv.partySpelled(a.p, u.Party)
 }
 
 // SendShortBuff sends ShortBuffStatusUpdate.
@@ -1303,12 +1326,18 @@ func (a *skillPlayer) CheckInventorySlotsAndWeight(itemIDs []int, _, _ bool) boo
 	return a.InventoryNonQuestSize()+slots <= a.InventoryLimit() && a.CurrentLoad()+weight <= a.MaxLoad()
 }
 
-// PartyDistributeItem gives the item to the player: parties come with
-// Milestone 9.
-func (a *skillPlayer) PartyDistributeItem(item skills.ItemHolder, _ bool, from skills.Creature) {
-	if item.Count > 0 {
-		a.AddItem(item.ID, int(min(item.Count, math.MaxInt32)), 0, from, true)
+// PartyDistributeItem hands the item to the player's party by its loot
+// mode (Party.distributeItem, party_reward.go); without a party the player
+// gets it.
+func (a *skillPlayer) PartyDistributeItem(item skills.ItemHolder, spoil bool, from skills.Creature) {
+	if item.Count <= 0 {
+		return
 	}
+	if a.p.party.party != nil {
+		a.srv.partyDistributeItem(a.p, int32(item.ID), item.Count, spoil, a.srv.gameCreature(from)) //nolint:gosec // item IDs are small
+		return
+	}
+	a.AddItem(item.ID, int(min(item.Count, math.MaxInt32)), 0, from, true)
 }
 
 // The skills.Attackable methods.
@@ -1357,8 +1386,8 @@ func (a *skillNpc) AggroList() []skills.Creature {
 	return out
 }
 
-// SetFearTime records how long the AI runs away; the fear AI comes with
-// Phase 7.4.
+// SetFearTime sets how long the AI runs away, in seconds (AttackableAI
+// setFearTime; ai_fear.go).
 func (a *skillNpc) SetFearTime(t int) { a.fearTime = t }
 
 // ClanHelpRange returns the template's clan help range.

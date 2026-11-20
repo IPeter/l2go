@@ -78,6 +78,7 @@ Everything is Mobius's default except these keys. Each file in `config/login/` a
 | | `PacketEncryption` | `True` | The client path matches L2Go's (default `False`). |
 | | `AllowedProtocolRevisions` | `746` | Mobius default (Interlude), kept explicit. |
 | game `ipconfig.xml` | whole file | `127.0.0.1` | The address announced to every client. Without this file, Mobius configures the network itself and asks `checkip.amazonaws.com`. |
+| game `GeoEngine.ini` | `GeoDataPath` | `/opt/l2go-reference/geodata/` | The geodata folder `GEODATA_DIR` (default the repo's `geodata/`), mounted read-only: the same tiles as L2Go's (default `./data/geodata/`). |
 
 To change a setting, add `Key = Value` to the matching file in `config/login/` or `config/game/`, then restart that server:
 
@@ -147,5 +148,35 @@ docker compose -p l2go-reference -f deploy/reference/docker-compose.yml exec mar
 
 ## Notes
 
-- Mobius ships no geodata (`data/geodata/` holds only a readme), so the reference runs without geodata, like L2Go's `geo.None`.
+- Mobius ships no geodata (`data/geodata/` holds only a readme). Both stacks read the tiles of `GEODATA_DIR` (default the repo's empty `geodata/`; give an absolute path, as a relative one resolves from each compose file's folder): with none, both run without geodata, Mobius with pathfinding off and L2Go with `geo.None`. Restart `mobius-game` after changing the tiles.
+- `geoparity/` compares Mobius's own geodata engine with L2Go's on synthetic and real tiles; see the next section.
 - The stack is for local comparison only: fixed passwords, ports on 127.0.0.1.
+
+## Geodata parity (`geoparity`)
+
+`deploy/reference/geoparity` runs Mobius's `GeoEngine` and `PathFinding` on the same tiles as L2Go's `internal/geo` and compares every answer exactly: heights, spawn heights, `isCompletelyBlocked`, sight, walks, `getValidLocation` and paths (Plan 13, test strategy 2). `GeoParity.java` is a small Java main built against Mobius's `GameServer.jar`; the Go test behind the `refgeo` build tag writes the `geotest` maps as tiles, generates 10,000 random queries per map, runs the Java main on them and compares its answers with `internal/geo`'s.
+
+It needs a JDK (Mobius needs Java 27) and a Mobius build. The reference image has both:
+
+```sh
+# Compile the main against the jars of the mobius-server volume (after make reference-up or reference-build):
+docker compose -p l2go-reference -f deploy/reference/docker-compose.yml run --rm --no-deps \
+  -v "$PWD/deploy/reference/geoparity:/geoparity" mobius-build \
+  javac -cp '/srv/mobius/libs/*' -d /geoparity/classes /geoparity/GeoParity.java
+```
+
+Then, on a machine with Java and the jars (copy `/srv/mobius/libs` out of the volume, or run the test inside a container with Go and Java):
+
+```sh
+L2GO_GEOPARITY_CLASSPATH='/path/to/libs/*:deploy/reference/geoparity/classes' \
+  go test -tags refgeo -count=1 ./deploy/reference/geoparity/
+```
+
+- `L2GO_GEOPARITY_JAVA` names the `java` binary (default `java` from the `PATH`).
+- `L2GO_GEOPARITY_REAL=/path/to/geodata` also samples 10,000 queries across the loaded real tiles.
+- `L2GO_GEOPARITY_QUERIES` changes the number of queries per map.
+- Without `L2GO_GEOPARITY_CLASSPATH` the test skips. Without the tag the package is empty, so `go test ./...` never needs Java.
+
+The Java main runs in an empty working folder, so Mobius finds no `Doors.xml` or `FenceData.xml` and compares terrain only, as `internal/geo` answers; doors and fences have their own Go tests against Mobius's formulas.
+
+The harness has not been run against Mobius yet (no Java on the machine that wrote it); its Go side builds with `go vet -tags refgeo ./deploy/reference/geoparity/`.

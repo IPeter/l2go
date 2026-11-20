@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
-	"github.com/IPeter/l2go/internal/geo"
 	"github.com/IPeter/l2go/internal/world"
 )
 
@@ -37,9 +36,6 @@ const (
 	// back to its spawn (Mobius updatePosition: "prevent attackables
 	// teleporting to another ground layer while moving").
 	npcMaxZStep = 300
-	// npcPathShortening is how much getValidLocation must shorten a walk for
-	// Mobius to look for a path (moveToLocation).
-	npcPathShortening = 30
 )
 
 // npcCollision is the NPC's collision radius as Mobius's template keeps it
@@ -50,10 +46,11 @@ func npcCollision(n *Npc) int32 { return int32(n.Template.Collision.Radius) }
 func npcFlying(n *Npc) bool { return n.Template.Status.Flying }
 
 // npcMovementDisabled is Mobius isMovementDisabled for an NPC: dead,
-// immobile (canMove false), paralyzed by //para or not in the world. Stuns,
-// roots and the like come with skills.
+// immobile (canMove false), paralyzed by //para, not in the world, or
+// immobilized, stunned, rooted, asleep or paralyzed by an effect.
 func npcMovementDisabled(n *Npc) bool {
-	return n.Dead || !n.Template.Status.CanMove || !n.InWorld() || adminParalyzed(n)
+	return n.Dead || !n.Template.Status.CanMove || !n.InWorld() || adminParalyzed(n) ||
+		(n.skill != nil && n.skill.IsMovementDisabled()) || n.script.box // Mobius Chest.isMovementDisabled
 }
 
 // NpcRunning reports whether the NPC runs (Mobius isRunning). Loop-only.
@@ -87,9 +84,8 @@ func (s *Server) SetNpcRunning(n *Npc, run bool) {
 // reports whether a walk started. When n already stands within the offset,
 // the AI hears that it arrived.
 //
-// Geodata may shorten the walk (getValidLocation) while the NPC's
-// neighbourhood is active. Mobius would then look for a path; paths are not
-// followed yet, so the NPC walks straight as Mobius does when it finds none.
+// While the NPC's neighbourhood is active, geodata, doors and fences clip
+// the walk or route it around (pathing.go).
 func (s *Server) npcMoveToLocation(n *Npc, x, y, z, offset int32) bool {
 	speed := n.Stats.MoveSpeed()
 	if !(speed > 0) || npcMovementDisabled(n) {
@@ -123,27 +119,14 @@ func (s *Server) npcMoveToLocation(n *Npc, x, y, z, offset int32) bool {
 		sin, cos = dy/distance, dx/distance
 	}
 
+	var route *geoRoute
 	if s.world.NeighborsActive(n) && !flying {
-		ox, oy, oz, odist := x, y, z, distance
-		if !(float64(cur.Z)-float64(z) > 300 && distance < 300) {
-			to := s.geo.ValidLocation(geo.Point{X: cur.X, Y: cur.Y, Z: cur.Z}, geo.Point{X: x, Y: y, Z: z})
-			x, y, z = to.X, to.Y, to.Z
-			dx, dy, dz = walkDelta(cur, x, y, z)
-			distance = math.Sqrt(dx*dx + dy*dy)
-			if vertical {
-				distance = dz * dz
-			}
-		}
-		if odist-distance > npcPathShortening {
-			// Mobius looks for a path here; without one it walks straight.
-			x, y, z, distance = ox, oy, oz, odist
-		}
-		if distance < 1 {
-			if in := n.ai.intention; in != NpcAttack {
-				s.npcSetIdle(n)
-			}
+		// pathing.go: clipped by geodata, doors and fences, or a route.
+		g := geoMove{cur: cur, x: x, y: y, z: z, distance: distance, sin: sin, cos: cos, vertical: vertical}
+		if !s.npcGeoMove(n, &g) {
 			return false
 		}
+		x, y, z, distance, sin, cos, route = g.x, g.y, g.z, g.distance, g.sin, g.cos, g.route
 	}
 	if flying && !vertical {
 		distance = math.Sqrt(distance*distance + dz*dz)
@@ -165,6 +148,7 @@ func (s *Server) npcMoveToLocation(n *Npc, x, y, z, offset int32) bool {
 	}
 	n.Move = walk
 	n.ai.walk = walkTrack{state: walk, started: gameTick(now)}
+	n.ai.walk.geo.route = route
 	if !n.ai.moving {
 		n.ai.moving = true
 		s.ai.moving = append(s.ai.moving, n)
@@ -240,7 +224,7 @@ func (s *Server) advanceNpc(n *Npc, tick int64) {
 			return // the move's visibility changes stopped or replaced the walk
 		}
 	}
-	if arrived {
+	if arrived && !s.nextNpcLeg(n) { // pathing.go: a route walks on
 		s.broadcastNpcMove(n, true)
 		n.Move = nil
 		s.npcArrived(n)
@@ -316,8 +300,14 @@ func (s *Server) NpcMoveToPawn(n *Npc, pawn world.Object, offset int32) {
 	offset = max(offset, npcPawnMinOffset)
 	now := gameTick(s.Now())
 	ai := &n.ai
-	if n.Move != nil && ai.target == pawn && ai.pawnOffset == offset && now < ai.pawnTimeout {
-		return
+	if n.Move != nil && ai.target == pawn {
+		if ai.pawnOffset == offset && now < ai.pawnTimeout {
+			return
+		}
+		// A route is kept 2 s at least (pathing.go).
+		if ai.pawnOffset != offset && s.onRoute(n) && now < ai.pawnTimeout+npcPawnRepathTicks {
+			return
+		}
 	}
 	ai.pawnOffset = offset
 	ai.target = pawn
@@ -328,7 +318,11 @@ func (s *Server) NpcMoveToPawn(n *Npc, pawn world.Object, offset int32) {
 	to := pawn.Position()
 	s.npcMoveToLocation(n, to.X, to.Y, to.Z, offset)
 	if _, ok := pawn.(Creature); ok {
-		if s.world.RegionActive(n) {
+		if s.onRoute(n) {
+			// On a route the client gets the leg, not the pawn.
+			s.broadcastNpcMove(n, false)
+			ai.pawnOffset = 0
+		} else if s.world.RegionActive(n) {
 			s.world.Broadcast(n, npcMoveToPawnPacket(n, pawn, offset), false)
 		}
 	} else {
@@ -388,4 +382,6 @@ func (s *Server) TeleportNpc(n *Npc, pos world.Position) {
 		return
 	}
 	s.npcSpawned(n, nil, nil)
+	s.npcTeleported(n)           // quest_world_ai_events.go: on_teleport
+	s.minionsMasterTeleported(n) // minion.go: Mobius Monster.onTeleported
 }

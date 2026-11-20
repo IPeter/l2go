@@ -117,7 +117,15 @@ type Options struct {
 	// storage.CharacterSaver: players are saved with the changes to their
 	// items.
 	Characters storage.CharacterStore
-	IDs        storage.IDAllocator
+	// Relations reads the friend and block lists (decision T4), loaded with
+	// the character. They are written with the character store's
+	// storage.BatchWriter. Nil starts every list empty.
+	Relations storage.RelationStore
+	// Clans reads the clans and their members, loaded by New before the
+	// loop starts (decision T1). They are written with the character
+	// store's storage.BatchWriter. Nil starts without clans.
+	Clans storage.ClanStore
+	IDs   storage.IDAllocator
 	// IDPool gives new items their object IDs on the loop (decision I3).
 	// Fill it before Run. Nil makes New create one on IDs and fill it.
 	IDPool *storage.IDPool
@@ -153,6 +161,16 @@ type Options struct {
 
 	// Geo answers the geodata questions; nil means geo.None (no geodata).
 	Geo geo.Engine
+	// Objects are the doors, static objects and fences (data.LoadObjects)
+	// the door feature spawns (door.go); nil spawns none.
+	Objects *data.Objects
+
+	// Bosses are the raid boss spawns, grand boss seeds and boss zone
+	// parameters (data.LoadBosses); nil spawns no raid bosses. BossStore
+	// keeps the boss state (respawn times, grand boss status, zone players,
+	// raid points); nil keeps it in memory only.
+	Bosses    *data.Bosses
+	BossStore storage.BossStore
 
 	// Accounts changes access levels of accounts on the login server (the
 	// account bans of the admin panel, admin_char.go); the login link

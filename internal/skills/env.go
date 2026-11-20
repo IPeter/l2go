@@ -225,6 +225,21 @@ type World interface {
 	ValidLocation(from, to Location) Location
 }
 
+// Summoner is a World that can summon players (Plan 12 Phase 3): the CallPc
+// and CallParty effects use it when the World implements it, and do nothing
+// otherwise.
+type Summoner interface {
+	// CallPc is Mobius CallPc.onStart for effected (not the effector): a
+	// player effector asks effected with ConfirmDlg after
+	// checkSummonTargetStatus, taking itemCount of itemID from effected
+	// first when both are set; any other effector teleports effected to
+	// itself.
+	CallPc(effector, effected Creature, itemID, itemCount int)
+	// CallParty is Mobius CallParty.onStart: the effector's party members
+	// that pass checkSummonTargetStatus come to it.
+	CallParty(effector Creature)
+}
+
 // ZoneKind is a kind of zone the skills ask about (Mobius ZoneId).
 type ZoneKind uint8
 

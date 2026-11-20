@@ -446,12 +446,19 @@ func etcStatusPacket(p *Player) []byte {
 	return serverpackets.NewEtcStatusUpdatePacket(serverpackets.EtcStatusUpdate{
 		Charges:           charges,
 		WeightPenalty:     p.items.weightPenalty,
-		ChatBlocked:       p.admin.silence || p.chatBanned(), // //silence (admin_gm.go), chat ban (admin_char.go)
+		ChatBlocked:       p.chatBlockIcon(),
 		DangerArea:        p.Zones.Inside(ZoneDangerArea),
 		GradePenalty:      p.GradePenalty(),
 		CharmOfCourage:    p.CharmOfCourage(),
 		DeathPenaltyLevel: p.char.DeathPenaltyLevel,
 	})
+}
+
+// chatBlockIcon reports whether EtcStatusUpdate shows the chat block icon
+// (Mobius: message refusal, a chat ban or silence mode): //silence
+// (admin_gm.go), a chat ban (admin_char.go), message refusal (friends.go).
+func (p *Player) chatBlockIcon() bool {
+	return p.admin.silence || p.chatBanned() || p.social.refuseAll
 }
 
 // itemCondition is a player as item conditions test it.
