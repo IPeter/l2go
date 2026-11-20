@@ -200,7 +200,7 @@ func TestParseGameSections(t *testing.T) {
 				"mobAggroInPeaceZone": false, "aggroDistanceCheck": true, "aggroDistanceCheckRange": 3000, "attackablesCampPlayerCorpses": true},
 			"items": {"_comment": "i", "allowDiscardItem": false, "autoDestroyDroppedItemAfter": "0s", "autoDestroyHerbTime": "30s", "listOfProtectedItems": [57, 1060],
 				"destroyPlayerDroppedItem": true, "destroyEquipableItem": true, "multipleItemDrop": false, "maxAdena": 99999999999,
-				"warehouseSlotsNoDwarf": 50, "warehouseSlotsDwarf": 60},
+				"warehouseSlotsNoDwarf": 50, "warehouseSlotsDwarf": 60, "autoLootSlotLimit": true},
 			"economy": {"altKarmaPlayerCanShop": false, "altKarmaPlayerCanUseWarehouse": false, "onlyGMItemsFree": false, "multisellAmountLimit": 1,
 				"customMultisell": true, "floodDropItem": "0s", "floodTransaction": "500ms", "floodMultisell": "2s"},
 			"rates": {"xp": 10, "sp": 2.5, "deathDropChance": 3, "deathDropAmount": 4, "herbDropChance": 0, "herbDropAmount": 0.5,
@@ -222,7 +222,7 @@ func TestParseGameSections(t *testing.T) {
 				AggroDistanceCheck: true, AggroDistanceCheckRange: 3000, AttackablesCampPlayerCorpses: true}
 			g.Items = Items{Comment: "i", AutoDestroyHerbTime: Duration(30 * time.Second), ListOfProtectedItems: []int{57, 1060},
 				DestroyPlayerDroppedItem: true, DestroyEquipableItem: true, MaxAdena: 99999999999,
-				WarehouseSlotsNoDwarf: 50, WarehouseSlotsDwarf: 60}
+				WarehouseSlotsNoDwarf: 50, WarehouseSlotsDwarf: 60, AutoLootSlotLimit: true}
 			g.Economy = Economy{MultisellAmountLimit: 1, CustomMultisell: true, FloodTransaction: Duration(500 * time.Millisecond), FloodMultisell: Duration(2 * time.Second)}
 			g.Rates = Rates{XP: 10, SP: 2.5, DeathDropChance: 3, DeathDropAmount: 4, HerbDropAmount: 0.5,
 				DropChanceByItem: ItemRates{}, DropAmountByItem: ItemRates{57: 5},
@@ -344,7 +344,7 @@ func TestDefaultGameSections(t *testing.T) {
 		AltKarmaPlayerCanUseWarehouse: true,
 		OnlyGMItemsFree:               true,
 		MultisellAmountLimit:          10000,
-		FloodDropItem:                Duration(time.Second),
+		FloodDropItem:                 Duration(time.Second),
 		FloodTransaction:              Duration(time.Second),
 		FloodMultisell:                Duration(time.Second),
 	}

@@ -195,12 +195,7 @@ func chatItemsOwned(p *Player, text string) bool {
 
 // chatHasItem reports whether p has the item with the given object ID.
 func chatHasItem(p *Player, objectID int32) bool {
-	for _, it := range p.inv.Items() {
-		if it.ObjectID == objectID {
-			return true
-		}
-	}
-	return false
+	return p.inv.ByObjectID(objectID) != nil
 }
 
 // chatSay is the CreatureSay of a message p sends in a channel, shown with

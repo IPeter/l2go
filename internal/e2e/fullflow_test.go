@@ -209,7 +209,7 @@ func (s *stack) giveItems(t *testing.T, account string, itemID int32, count int6
 		t.Fatalf("NextID: %v", err)
 	}
 	s.updateCharacter(t, account, func(c *storage.Character) {
-		c.Items = append(c.Items, storage.Item{ObjectID: id, ItemID: itemID, Count: count, Slot: storage.PaperdollNone})
+		c.Items = append(c.Items, storage.Item{ObjectID: id, ItemID: itemID, Count: count, Slot: storage.PaperdollNone, Mana: storage.NoMana})
 	})
 }
 

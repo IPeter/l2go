@@ -142,7 +142,7 @@ func (s *Server) doTeleport(p *Player, n *Npc, name string, index int) {
 		p.SendMessage("Go away, you're not welcome here.")
 		return
 	}
-	if s.paysTeleportFee(p, list, loc) && !s.destroyItemByItemID(p, int32(loc.FeeItemID), int64(s.teleportFee(p, list, loc)), true) { //nolint:gosec // item IDs fit in int32
+	if s.paysTeleportFee(p, list, loc) && !s.DestroyItemByItemID(p, int32(loc.FeeItemID), int64(s.teleportFee(p, list, loc)), true) { //nolint:gosec // item IDs fit in int32
 		if loc.FeeItemID == adenaID {
 			p.SendSystemMessage(sysMsgNotEnoughAdena)
 		} else {

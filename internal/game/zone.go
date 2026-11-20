@@ -415,7 +415,7 @@ func (s *Server) enterZone(p *Player, r *zoneRule) {
 		p.BroadcastUserInfo()
 	}
 	if r.danger {
-		p.Send(serverpackets.NewEtcStatusUpdatePacket(serverpackets.EtcStatusUpdate{DangerArea: true}))
+		p.Send(etcStatusPacket(p))
 	}
 }
 
@@ -441,7 +441,7 @@ func (s *Server) exitZone(p *Player, id int) {
 		}
 	}
 	if r.danger && !p.Zones.Inside(ZoneDangerArea) {
-		p.Send(serverpackets.NewEtcStatusUpdatePacket(serverpackets.EtcStatusUpdate{}))
+		p.Send(etcStatusPacket(p))
 	}
 }
 

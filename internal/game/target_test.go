@@ -184,7 +184,8 @@ func TestSecondClickOnMonsterDoesNotTalk(t *testing.T) {
 	npcTestClick(e, sa, gremlin, false)
 	sa.take(t)
 	npcTestClick(e, sa, gremlin, false)
-	checkNames(t, "Alice clicks her Gremlin target", sa.take(t), "ActionFailed")
+	// She attacks it instead: she runs up to it (attack_test.go).
+	checkNames(t, "Alice clicks her Gremlin target", sa.take(t), "MoveToPawn", "ActionFailed")
 	if got := npcTalks(e, &talks); len(got) != 0 {
 		t.Errorf("interaction hooks ran %v for a monster", got)
 	}
@@ -201,9 +202,10 @@ func TestAttackRequest(t *testing.T) {
 	// On an object that is not the target, Mobius clicks it.
 	attack()
 	checkNames(t, "AttackRequest on a new object", sa.take(t), "ValidateLocation", "MyTargetSelected", "StatusUpdate", "ActionFailed")
-	// On the target it attacks, which comes with combat.
+	// On the target it attacks (onForcedAttack): Alice runs up to the
+	// Gremlin (attack_test.go has the swings).
 	attack()
-	checkNames(t, "AttackRequest on the target", sa.take(t), "ActionFailed")
+	checkNames(t, "AttackRequest on the target", sa.take(t), "MoveToPawn")
 	e.onLoop(func() {
 		if pa.Target != world.Object(gremlin) {
 			t.Errorf("Alice's target %v, want the Gremlin", pa.Target)
@@ -306,9 +308,10 @@ func TestTargetPlayer(t *testing.T) {
 	if ts := pbs[0].(testclient.TargetSelected); ts.ObjectID != pa.ObjectID() || ts.TargetID != pb.ObjectID() {
 		t.Errorf("TargetSelected %+v, want Alice targeting Bob", ts)
 	}
-	// A second click follows or attacks, which come later.
+	// A second click on a player she may not attack would follow him, which
+	// comes later: Mobius sends ActionFailed before and after.
 	npcTestClick(e, sa, pb, false)
-	checkNames(t, "Alice clicks Bob again", sa.take(t), "ActionFailed")
+	checkNames(t, "Alice clicks Bob again", sa.take(t), "ActionFailed", "ActionFailed")
 
 	// Bob leaves: Alice drops him.
 	e.srv.Logout(sb)

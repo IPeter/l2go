@@ -93,8 +93,8 @@ func (s *Server) handleAction(p *Player, body []byte) {
 
 // handleAttackRequest handles AttackRequest (0x0A). Mobius treats it as a
 // click when the object is not the target yet, and as a forced attack on
-// the target, which needs combat (Milestone 6): until then that is
-// ActionFailed.
+// the target (onForcedAttack), except on the player itself, which gets
+// ActionFailed (private stores and requests do not exist yet).
 func (s *Server) handleAttackRequest(p *Player, body []byte) {
 	req, err := clientpackets.ParseAttackRequest(body)
 	if err != nil {
@@ -111,7 +111,11 @@ func (s *Server) handleAttackRequest(p *Player, body []byte) {
 		s.onAction(p, obj, true)
 		return
 	}
-	p.SendActionFailed()
+	if obj.ID() == p.ID() {
+		p.SendActionFailed()
+		return
+	}
+	s.onForcedAttack(p, obj)
 }
 
 // handleTargetCanceld handles RequestTargetCanceld (0x37): the player drops
@@ -168,7 +172,9 @@ func (s *Server) onAction(p *Player, obj world.Object, interact bool) {
 	case *Npc:
 		s.npcClick(p, o, interact)
 	case *Player:
-		s.playerClick(p, o)
+		s.playerClick(p, o, interact)
+	case *GroundItem:
+		s.itemClick(p, o)
 	}
 	p.SendActionFailed()
 }
@@ -190,16 +196,23 @@ func (s *Server) onActionShift(p *Player, obj world.Object) {
 }
 
 // npcClick is Mobius NpcClick: the first click targets the NPC; a click on
-// the target talks to it when it is not attackable, walking up to it first
-// when it is out of reach. Attacking needs combat (Milestone 6). Every
-// click makes the NPC the player's last NPC (Mobius setLastFolkNPC).
+// the target attacks it when it is attackable and alive, and talks to it
+// when it is not attackable, walking up to it first when it is out of
+// reach. Every click makes the NPC the player's last NPC (Mobius
+// setLastFolkNPC).
 func (s *Server) npcClick(p *Player, n *Npc, interact bool) {
 	p.LastNpc = n.ID()
 	if p.Target != world.Object(n) {
 		s.SetTarget(p, n)
 		return
 	}
-	if !interact || n.autoAttackableBy(p) {
+	if !interact {
+		return
+	}
+	if n.autoAttackableBy(p) {
+		if !n.IsDead() {
+			s.playerIntendAttack(p, n)
+		}
 		return
 	}
 	if !s.npcCanInteract(p, n) {
@@ -210,12 +223,23 @@ func (s *Server) npcClick(p *Player, n *Npc, interact bool) {
 }
 
 // playerClick is Mobius PlayerClick: the first click targets the player. A
-// click on the target attacks it or follows it, which come in later
-// milestones; until then it only gets ActionFailed.
-func (s *Server) playerClick(p, target *Player) {
+// click on the target attacks it when p may attack it without Ctrl;
+// otherwise p gets ActionFailed (following comes later; private stores and
+// cursed weapons do not exist yet).
+func (s *Server) playerClick(p, target *Player, interact bool) {
 	if p.Target != world.Object(target) {
 		s.SetTarget(p, target)
+		return
 	}
+	if !interact {
+		return
+	}
+	if target.autoAttackableBy(p) {
+		s.playerIntendAttack(p, target)
+		s.onActionRequest(p)
+		return
+	}
+	p.SendActionFailed()
 }
 
 // npcCanInteract reports whether p may talk to n now (Mobius
@@ -242,7 +266,7 @@ func (s *Server) npcInteractionRange() int32 {
 func (s *Server) talkToNpc(p *Player, n *Npc) {
 	delete(s.npc.approaches, p)
 	if p.Move != nil {
-		s.StopPlayer(p)
+		s.playerIntendIdle(p) // stops the walk (StopPlayer) and any attack
 	}
 	p.Send(npcMoveToPawnPacket(p, n, targetTalkTurnDistance))
 	s.npcTalkAnimation(n)
@@ -273,7 +297,11 @@ func (s *Server) npcTalkAnimation(n *Npc) {
 func (s *Server) approachNpc(p *Player, n *Npc) {
 	s.npc.ensureMaps()
 	delete(s.npc.approaches, p)
-	if p.Sitting || !s.MovePlayerTo(p, n.Position(), targetApproachOffset) {
+	if p.Sitting {
+		return
+	}
+	s.playerIntendInteract(p) // the INTERACT intention ends an attack
+	if !s.MovePlayerTo(p, n.Position(), targetApproachOffset) {
 		return
 	}
 	a := &npcApproach{npc: n, started: s.Now()}

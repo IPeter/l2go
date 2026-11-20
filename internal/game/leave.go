@@ -21,11 +21,12 @@ const (
 // Restart takes the player out of the world and back to the character
 // screen (Mobius RequestRestart): it is saved and removed, and once the save
 // is written the session sends RestartResponse and the character list, so
-// that the list shows the saved state (Service).
+// that the list shows the saved state. In combat it is refused
+// (refuseRestart) (Service).
 func (s *Server) Restart(sess Session) {
 	s.runFor(sess, func() {
 		p := s.playerOf(sess)
-		if p == nil || p.state != stateInGame {
+		if p == nil || p.state != stateInGame || s.refuseRestart(p) {
 			return
 		}
 		s.log.Info("player restarts", p.logArgs()...)
@@ -41,12 +42,16 @@ func (s *Server) Restart(sess Session) {
 
 // Logout saves the player, removes it from the world and closes the
 // connection a second after LeaveWorld (Mobius Logout). Without a player the
-// connection closes at once (Service).
+// connection closes at once; in combat it is refused (refuseLogout)
+// (Service).
 func (s *Server) Logout(sess Session) {
 	s.runFor(sess, func() {
 		p := s.playerOf(sess)
 		if p == nil {
 			sess.CloseAfter(nil, 0)
+			return
+		}
+		if p.state == stateInGame && s.refuseLogout(p) {
 			return
 		}
 		s.log.Info("player logs out", p.logArgs()...)
@@ -56,12 +61,16 @@ func (s *Server) Logout(sess Session) {
 }
 
 // Disconnected saves and removes the player of a lost connection (Mobius
-// Disconnection.onDisconnection; the 15 s delay in combat comes with combat)
-// (Service).
+// Disconnection.onDisconnection); a player in combat stays 15 s more
+// without its session (lingerInCombat) (Service).
 func (s *Server) Disconnected(sess Session) {
 	s.runFor(sess, func() {
 		p := s.playerOf(sess)
 		if p == nil {
+			return
+		}
+		if p.state == stateInGame && s.lingerInCombat(p) {
+			s.log.Info("player disconnected in combat, staying 15 s", p.logArgs()...)
 			return
 		}
 		s.log.Info("player disconnected", p.logArgs()...)
@@ -136,8 +145,11 @@ func (s *Server) leave(p *Player, save bool, done func(error)) {
 	p.Move = nil
 
 	var snap storage.Character
+	var changes storage.ItemChanges
 	if save && inGame {
-		snap = p.Snapshot()
+		// The saves others asked for earlier go first (decision I2).
+		s.flushSaveRequests()
+		snap, changes = p.Snapshot(), p.takeItemChanges()
 	}
 	// The client is detached before the player leaves the world (Mobius
 	// Disconnection): its viewers get DeleteObject, the leaving client
@@ -163,7 +175,7 @@ func (s *Server) leave(p *Player, save bool, done func(error)) {
 
 	switch {
 	case save && inGame:
-		s.saver.enqueue(snap, done)
+		s.saver.enqueue(snap, changes, done)
 	case done != nil:
 		done(nil)
 	}

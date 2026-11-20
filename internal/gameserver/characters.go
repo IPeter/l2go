@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"sync"
 	"unicode"
@@ -265,6 +266,12 @@ func (s *Server) newCharacter(ctx context.Context, account string, req clientpac
 			ObjectID: ids[1+i],
 			ItemID:   int32(e.ItemID), //nolint:gosec // item IDs fit in int32
 			Count:    e.Count,
+			Mana:     storage.NoMana,
+		}
+		// A shadow item starts with its full mana (Mobius
+		// ItemManager.createItem).
+		if t, ok := s.data.Item(e.ItemID); ok && t.Duration > 0 {
+			items[i].Mana = int32(min(t.Duration, math.MaxInt32)) //nolint:gosec // clamped
 		}
 	}
 	doll := newPaperdoll(items)

@@ -85,6 +85,8 @@ func newEnv(t *testing.T, configure func(gs *config.GameServer), setup ...func(s
 		Data:           d,
 		Characters:     store,
 		IDs:            ids,
+		Passives:       testPassives(t),
+		Categories:     testCategories(t),
 		Clock:          clock,
 		CheckLoopOwner: true,
 	})
@@ -150,12 +152,18 @@ func (e *testEnv) createCharacter(account, name string, classID int, access stor
 	}
 	items := make([]storage.Item, len(start))
 	for i, it := range start {
-		items[i] = storage.Item{ObjectID: ids[1+i], ItemID: int32(it.ItemID), Count: it.Count, Slot: storage.PaperdollNone}
+		items[i] = storage.Item{ObjectID: ids[1+i], ItemID: int32(it.ItemID), Count: it.Count, Slot: storage.PaperdollNone, Mana: storage.NoMana}
 		if it.Equipped {
 			items[i].Slot = e.slotOf(it.ItemID)
 		}
 	}
 	loc := tmpl.CreationPoints[0]
+	// Full HP, MP and CP, so that nothing regenerates (and no StatusUpdate
+	// comes every 3 s) unless a test hurts the character.
+	v, err := e.srv.NewCharacterVitals(classID, 1, items)
+	if err != nil {
+		e.t.Fatalf("NewCharacterVitals: %v", err)
+	}
 	c := storage.Character{
 		ObjectID:    ids[0],
 		Account:     account,
@@ -164,11 +172,12 @@ func (e *testEnv) createCharacter(account, name string, classID int, access stor
 		ClassID:     int32(classID),
 		BaseClassID: int32(classID),
 		Level:       1,
-		CurHP:       tmpl.Level1.HP,
-		MaxHP:       tmpl.Level1.HP,
-		CurMP:       tmpl.Level1.MP,
-		MaxMP:       tmpl.Level1.MP,
-		MaxCP:       tmpl.Level1.CP,
+		CurHP:       v.MaxHP,
+		MaxHP:       v.MaxHP,
+		CurMP:       v.MaxMP,
+		MaxMP:       v.MaxMP,
+		CurCP:       v.MaxCP,
+		MaxCP:       v.MaxCP,
 		X:           int32(loc.X),
 		Y:           int32(loc.Y),
 		Z:           int32(loc.Z),
@@ -373,11 +382,13 @@ func (s *fakeSession) waitFor(t *testing.T, what string, cond func(s *fakeSessio
 type recordingStore struct {
 	*memstore.Characters
 
-	mu      sync.Mutex
-	saves   []storage.Character
-	hold    chan struct{}          // while not nil, saves wait until it is closed
-	started chan int32             // the object ID of every save that starts
-	saved   chan storage.Character // every finished save
+	mu        sync.Mutex
+	saves     []storage.Character    // each character as stored after a save
+	changes   []storage.ItemChanges  // the item changes of each save
+	failSaves int                    // the next saves that fail
+	hold      chan struct{}          // while not nil, saves wait until it is closed
+	started   chan int32             // the object ID of every save that starts
+	saved     chan storage.Character // every finished save
 }
 
 func newRecordingStore() *recordingStore {
@@ -388,13 +399,19 @@ func newRecordingStore() *recordingStore {
 	}
 }
 
-func (s *recordingStore) Update(ctx context.Context, c *storage.Character) error {
+// Save is the game's save (storage.CharacterSaver). It records the
+// character as stored afterwards, items included, and the item changes.
+func (s *recordingStore) Save(ctx context.Context, c *storage.Character, changes storage.ItemChanges) error {
 	select {
 	case s.started <- c.ObjectID:
 	default:
 	}
 	s.mu.Lock()
 	hold := s.hold
+	fail := s.failSaves > 0
+	if fail {
+		s.failSaves--
+	}
 	s.mu.Unlock()
 	if hold != nil {
 		select {
@@ -403,13 +420,19 @@ func (s *recordingStore) Update(ctx context.Context, c *storage.Character) error
 			return ctx.Err()
 		}
 	}
-	if err := s.Characters.Update(ctx, c); err != nil {
+	if fail {
+		return errInjectedSave
+	}
+	if err := s.Characters.Save(ctx, c, changes); err != nil {
 		return err
 	}
-	snap := *c
-	snap.Items = slices.Clone(c.Items)
+	snap, err := s.Characters.Get(ctx, c.ObjectID)
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
 	s.saves = append(s.saves, snap)
+	s.changes = append(s.changes, changes)
 	s.mu.Unlock()
 	select {
 	case s.saved <- snap:

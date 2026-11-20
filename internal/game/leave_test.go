@@ -301,7 +301,7 @@ func TestSaverWritesInOrderAndKeepsTheNewest(t *testing.T) {
 		dones[i] = make(chan error, 1)
 		v := c
 		v.X = x
-		s.enqueue(v, func(err error) { dones[i] <- err })
+		s.enqueue(v, storage.ItemChanges{}, func(err error) { dones[i] <- err })
 	}
 	snap(1, 0)
 	// Wait until the first snapshot is being written (held by the store).
@@ -347,7 +347,7 @@ func TestSaverWritesInOrderAndKeepsTheNewest(t *testing.T) {
 		t.Fatal("run did not return after close")
 	}
 	late := make(chan error, 1)
-	s.enqueue(c, func(err error) { late <- err })
+	s.enqueue(c, storage.ItemChanges{}, func(err error) { late <- err })
 	if err := <-late; err == nil {
 		t.Error("a save after close reported success")
 	}

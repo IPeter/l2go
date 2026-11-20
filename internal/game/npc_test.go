@@ -46,7 +46,8 @@ func npcTestTemplate(id int, typ, name string, level int) data.NpcTemplate {
 			Defence: data.NpcDefence{Physical: 40, Magical: 30},
 			Speed:   data.NpcSpeed{Walk: 50, Run: 120, SwimWalk: 50, SwimRun: 120, FlyWalk: 50, FlyRun: 120},
 		},
-		Status:    data.NpcStatus{Attackable: true, Targetable: true, Talkable: true, ShowName: true, RandomWalk: true, CanMove: true},
+		// No random walk: the monster AI would move them now and then.
+		Status:    data.NpcStatus{Attackable: true, Targetable: true, Talkable: true, ShowName: true, CanMove: true},
 		Collision: data.NpcCollision{Radius: 8, Height: 25},
 		AI:        data.NpcAI{Type: "FIGHTER", MinSkillChance: 7, MaxSkillChance: 15},
 	}

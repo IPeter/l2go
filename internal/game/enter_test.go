@@ -152,10 +152,10 @@ func TestEnterWorldSequence(t *testing.T) {
 		t.Errorf("UserInfo for %d %q at %v", ui.ObjectID, ui.Name, ui.Position())
 	}
 	// The numbers of a level 1 Human Fighter with its starting gear, as the
-	// stat engine's hand-checked tests and Mobius have them. The stored HP
-	// and MP are the template's (80, 30), within the maximum.
+	// stat engine's hand-checked tests and Mobius have them. The test
+	// character is stored with full HP and MP.
 	want := userInfoNumbers{
-		MaxHP: 126, MaxMP: 38, MaxCP: 50, HP: 80, MP: 30,
+		MaxHP: 126, MaxMP: 38, MaxCP: 50, HP: 126, MP: 38,
 		MaxLoad: 109020, InventoryLimit: 80,
 		PAtk: 6, PAtkSpd: 417, PDef: 75, Evasion: 34, Accuracy: 34, Critical: 88,
 		MAtk: 2, CastSpd: 213, MDef: 47, RunSpd: 115, WalkSpd: 80, SwimRunSpd: 50, SwimWalkSpd: 50,

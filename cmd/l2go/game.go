@@ -18,6 +18,7 @@ import (
 	"github.com/IPeter/l2go/internal/geo"
 	"github.com/IPeter/l2go/internal/link"
 	"github.com/IPeter/l2go/internal/scripting"
+	"github.com/IPeter/l2go/internal/storage"
 	"github.com/IPeter/l2go/internal/storage/mongostore"
 )
 
@@ -47,6 +48,21 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	}
 	logger.Info("world data loaded", "dir", gs.DataDir, "npcs", len(worldData.Npcs),
 		"spawns", len(worldData.Spawns), "zones", len(worldData.Zones))
+	// The weight penalty (skill 4270) and the class categories of item
+	// conditions.
+	passives, err := data.LoadPassives(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	categories, err := data.LoadCategories(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	// Buy lists, multisell lists and merchant price configs.
+	economy, err := data.LoadEconomy(gs.DataDir, data.NewEconomyRefs(gameData, worldData))
+	if err != nil {
+		return err
+	}
 
 	// Geodata (ground heights, walls) from the L2J tiles in geodata.dir. An
 	// empty setting, or a folder without tiles, runs without geodata, as
@@ -87,6 +103,14 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	}()
 	logger.Info("connected to the database", "name", db.Name)
 
+	// New items take their object IDs from a pool on the world loop, which
+	// refills itself in the background (decision I3).
+	idPool := storage.NewIDPool(store.IDs(), storage.IDPoolOptions{Logger: gsLogger})
+	if err := idPool.Fill(ctx); err != nil {
+		return err
+	}
+	defer idPool.Close()
+
 	world, err := game.New(game.Options{
 		Config:       cfg,
 		ServerID:     gs.ID,
@@ -94,6 +118,10 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		World:        worldData,
 		Characters:   store.Characters(),
 		IDs:          store.IDs(),
+		IDPool:       idPool,
+		Passives:     passives,
+		Categories:   categories,
+		Economy:      economy,
 		Scripts:      engine,
 		ScriptOutput: out,
 		Geo:          geoEngine,

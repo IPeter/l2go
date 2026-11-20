@@ -4,15 +4,13 @@ import (
 	"errors"
 
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
-	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/world"
 )
 
 // The dialog feature: NPC dialogs (dialog_npc.go), the HTML pages
 // (html.go), bypasses and links (bypass.go), the Lua NPC hooks
-// (dialog_script.go), teleporters (teleporter.go), the item operations
-// they need (inventory_ops.go), zones (zone.go) and map regions
-// (mapregion.go).
+// (dialog_script.go), teleporters (teleporter.go), zones (zone.go) and map
+// regions (mapregion.go).
 func init() { registerFeature("dialog", setupDialog) }
 
 // dialogFeature is the dialog, bypass, teleporter, zone and map region
@@ -34,11 +32,6 @@ type dialogPlayer struct {
 	lastQuestNpc world.ObjectID
 
 	zones zoneTrack
-
-	// The inventory update waiting to be sent (Mobius sendInventoryUpdate
-	// merges the updates of 100 ms into one packet).
-	invItems []serverpackets.InventoryItem
-	invTimer world.TimerID
 }
 
 func setupDialog(s *Server) error {
@@ -71,15 +64,11 @@ func (s *Server) dialogState(p *Player) *dialogPlayer {
 	return st
 }
 
-// dialogLeave drops the state of a player that leaves the game; an
-// inventory update still waiting is not sent.
+// dialogLeave drops the state of a player that leaves the game.
 func (s *Server) dialogLeave(p *Player) {
 	st := s.dialog.players[p.ID()]
 	if st == nil || st.p != p {
 		return
-	}
-	if st.invTimer != 0 {
-		s.loop.Cancel(st.invTimer)
 	}
 	delete(s.dialog.players, p.ID())
 }

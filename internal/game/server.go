@@ -16,6 +16,7 @@ import (
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/geo"
+	"github.com/IPeter/l2go/internal/rnd"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/stats"
 	"github.com/IPeter/l2go/internal/storage"
@@ -122,12 +123,15 @@ type Server struct {
 	settings  Settings
 	data      *data.Data
 	worldData *data.World
+	economy   *data.Economy // nil without shop data
 	chars     storage.CharacterStore
 	ids       storage.IDAllocator
 	scripts   *scripting.Engine
 	output    *ScriptOutput
 	geo       geo.Engine
 	rules     *stats.Rules
+	combat    *stats.CombatRules
+	rnd       rnd.Source                   // the game's random source, loop-only
 	classes   map[int]*stats.ClassTemplate // stats templates by class ID
 	loop      *world.Loop
 	world     *world.World
@@ -156,6 +160,17 @@ type Server struct {
 	movement movementFeature
 	npc      npcFeature
 	dialog   dialogFeature
+	status   statusFeature
+	items    itemsFeature
+	attack   attackFeature
+	ai       aiFeature
+	death    deathFeature
+	kill     npcDeathFeature
+	shop     shopFeature
+
+	// multisell and warehouse are in multisell.go and warehouse.go.
+	multisell multisellFeature
+	warehouse warehouseFeature
 }
 
 var _ Service = (*Server)(nil)
@@ -169,6 +184,10 @@ func New(opts Options) (*Server, error) {
 		return nil, errors.New("game: no game data")
 	case opts.Characters == nil:
 		return nil, errors.New("game: no character store")
+	}
+	saverStore, ok := opts.Characters.(storage.CharacterSaver)
+	if !ok {
+		return nil, errors.New("game: the character store cannot save item changes (storage.CharacterSaver)")
 	}
 	gs, ok := opts.Config.GameServerByID(opts.ServerID)
 	if !ok {
@@ -187,6 +206,10 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	combat, err := stats.NewCombatRules(combatConfig(gs), stats.HitConditionBonus(opts.Data.HitConditionBonus))
+	if err != nil {
+		return nil, fmt.Errorf("game: combat rules: %w", err)
+	}
 
 	loop := world.NewLoop(world.LoopOptions{
 		Clock:        opts.Clock,
@@ -202,22 +225,31 @@ func New(opts Options) (*Server, error) {
 	if output == nil {
 		output = NewScriptOutput()
 	}
+	source := opts.Rand
+	if source == nil {
+		seed := rnd.RandomSeed()
+		logger.Info("game random source", "seed", seed)
+		source = rnd.New(seed)
+	}
 	s := &Server{
 		log:          logger,
 		gs:           gs,
 		settings:     settings,
 		data:         opts.Data,
 		worldData:    opts.World,
+		economy:      opts.Economy,
 		chars:        opts.Characters,
 		ids:          opts.IDs,
 		scripts:      opts.Scripts,
 		output:       output,
 		geo:          geoEngine,
 		rules:        rules,
+		combat:       combat,
+		rnd:          source,
 		classes:      classes,
 		loop:         loop,
 		world:        world.New(loop),
-		saver:        newSaver(opts.Characters, logger),
+		saver:        newSaver(saverStore, logger),
 		bySession:    make(map[Session]*Player),
 		byAccount:    make(map[string]*Player),
 		byName:       make(map[string]*Player),
@@ -225,9 +257,11 @@ func New(opts Options) (*Server, error) {
 		gmCommands:   make(map[string]gmCommand),
 		userCommands: make(map[int32]UserCommand),
 	}
+	s.items.pool, s.items.passives, s.items.categories = opts.IDPool, opts.Passives, opts.Categories
 	bg := context.Background()
 	s.bg.Store(&bg)
 	s.world.SetUpdateFlush(s.flushUpdate)
+	s.world.SetActivation(activationOf(gs.World))
 	if err := s.registerCore(); err != nil {
 		return nil, err
 	}
@@ -336,12 +370,24 @@ func (s *Server) Data() *data.Data { return s.data }
 // regions), or nil when none was loaded. Safe on any goroutine.
 func (s *Server) WorldData() *data.World { return s.worldData }
 
+// Economy returns the shop data (buy lists, multisell lists, merchant price
+// configs), or nil when none was loaded. Safe on any goroutine.
+func (s *Server) Economy() *data.Economy { return s.economy }
+
 // Geo returns the geodata engine. Safe on any goroutine.
 func (s *Server) Geo() geo.Engine { return s.geo }
 
 // Rules returns the stat rules every stat set of the server shares. Safe on
 // any goroutine.
 func (s *Server) Rules() *stats.Rules { return s.rules }
+
+// Combat returns the combat rules: the combat formulas with the config of
+// this server (combatConfig). Safe on any goroutine.
+func (s *Server) Combat() *stats.CombatRules { return s.combat }
+
+// Rand returns the game's random source (Options.Rand). Loop-only: combat,
+// AI and drops draw from it on the loop, in Mobius's order.
+func (s *Server) Rand() rnd.Source { return s.rnd }
 
 // Settings returns the game rules of the server. Safe on any goroutine.
 func (s *Server) Settings() Settings { return s.settings }

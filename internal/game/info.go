@@ -117,7 +117,11 @@ func (s *Server) SendDelta(d world.Delta) {
 				vp.Send(body)
 			}
 		}
+		if n, ok := o.(*Npc); ok {
+			s.npcSeen(n) // ai.go: a monster a player starts to see wakes up
+		}
 	}
+	s.wakeSeenNpcs()
 }
 
 // forgetRelation drops what a viewer was told about a player's relation, so
@@ -261,7 +265,7 @@ func (p *Player) userInfo() []byte {
 		MaxMP:                 v.MaxMP,
 		CurMP:                 p.CurMP,
 		SP:                    p.char.SP,
-		CurLoad:               p.inv.Weight(),
+		CurLoad:               p.inv.Load(),
 		MaxLoad:               v.WeightLimit,
 		WeaponEquipped:        p.inv.Paperdoll(storage.PaperdollRHand) != nil,
 		Paperdoll:             p.inv.PacketPaperdoll(),
@@ -350,6 +354,8 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 		Title:                 title,
 		Sitting:               p.Sitting,
 		Running:               p.Running(),
+		InCombat:              p.srv.InCombat(p),
+		Dead:                  p.dead,
 		Invisible:             !gmSeesInvisible && p.Invisible(),
 		AbnormalEffects:       abnormal,
 		RecomLeft:             recLeft,

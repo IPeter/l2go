@@ -240,11 +240,13 @@ func (s *Server) spawnSlot(sp *npcSpawn) *Npc {
 		return n
 	}
 	pos := s.spawnPoint(sp, n)
+	// The point is the spawn's before the NPC appears: its AI reads it as
+	// home at once (Mobius initializeNpc sets the location first).
+	sp.lastPoint = pos
 	if err := s.placeNpc(n, pos, sp.aiData()); err != nil {
 		s.log.Warn("game: cannot spawn an NPC", "npc", sp.tmpl.ID, "name", sp.tmpl.Name, "pos", pos, "err", err)
 		return nil
 	}
-	sp.lastPoint = pos
 	return n
 }
 
@@ -291,9 +293,10 @@ func (s *Server) scheduleRespawn(sp *npcSpawn) {
 	if !sp.respawn || sp.deleted() || sp.timer != 0 {
 		return
 	}
+	// Mobius Rnd.get(min, max) in milliseconds, when the delays differ.
 	d := sp.respawnMin
-	if spread := sp.respawnMax - sp.respawnMin; spread > 0 {
-		d += time.Duration(s.npc.rnd.Int64N(int64(spread/time.Millisecond)+1)) * time.Millisecond
+	if sp.respawnMax > sp.respawnMin {
+		d = time.Duration(s.npc.rnd.Between(int(sp.respawnMin/time.Millisecond), int(sp.respawnMax/time.Millisecond))) * time.Millisecond
 	}
 	sp.timer = s.loop.After(d, func() {
 		sp.timer = 0
@@ -322,7 +325,7 @@ func (s *Server) cancelRespawn(sp *npcSpawn) {
 func (s *Server) respawnSlotNow(sp *npcSpawn) *Npc {
 	s.cancelRespawn(sp)
 	if n := sp.npc; n != nil && n.InWorld() {
-		s.RemoveObject(n)
+		s.removeNpc(n)
 	}
 	return s.spawnSlot(sp)
 }
@@ -358,7 +361,7 @@ func (s *Server) deleteSpawn(sp *npcSpawn) {
 	s.cancelRespawn(sp)
 	if n := sp.npc; n != nil {
 		if n.InWorld() {
-			s.RemoveObject(n)
+			s.removeNpc(n)
 		}
 		s.releaseNpcID(n)
 	}
@@ -411,7 +414,7 @@ func (s *Server) switchDayNight(night bool) {
 		sp.respawn = false // Mobius stopRespawn
 		s.cancelRespawn(sp)
 		if n := sp.npc; n != nil && n.InWorld() {
-			s.RemoveObject(n)
+			s.removeNpc(n)
 			removed++
 		}
 	}

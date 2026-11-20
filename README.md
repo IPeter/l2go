@@ -170,7 +170,7 @@ The "Default" column is what a key gets when it is left out of the file. Keys wi
 | `allowedProtocols` | `[746]` | Client protocol versions the server accepts. Others get `KeyPacket` with result 0 and are disconnected. |
 | `dataDir` | `"data"` | Game data folder (see `data/README.md`), relative to the working directory. The NPC dialog pages are in its `html` subfolder. |
 | `maxCharactersPerAccount` | | Characters per account; `0` means no limit. The example configs use `7`, like L2J Mobius. |
-| `options.maxPlayers` | | Player limit shown in the server list; `0` means no limit. A full server only takes accounts above player level. |
+| `options.maxPlayers` | | Player limit shown in the server list; `0` means no limit. A full server only takes accounts above player level. The example configs use `2000`, like L2J Mobius. |
 | `options.testing` | | `true` hides the server from players: only accounts above player level see and join it. |
 | `scripts.dir` | `"scripts"` | Lua scripts folder, relative to the working directory. |
 | `scripts.devReload` | | `true` reloads the scripts when a file changes. |
@@ -229,6 +229,7 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `multipleItemDrop` | `true` | A count of a non-stackable item drops as that many items. |
 | `maxAdena` | `2000000000` | Most adena a player can hold. |
 | `warehouseSlotsNoDwarf`, `warehouseSlotsDwarf` | `100`, `120` | Private warehouse size (Mobius `MaximumWarehouseSlotsForNoDwarf`/`ForDwarf`). |
+| `autoLootSlotLimit` | `false` | A full inventory also refuses items that would stack onto one the player holds. |
 
 `economy`:
 

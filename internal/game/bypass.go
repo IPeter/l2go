@@ -18,15 +18,14 @@ var nonHTMLBypasses = []string{
 }
 
 // notYetCommands are the bypass commands (lower case) of the Mobius bypass
-// handlers whose features come in later milestones: shops, multisell,
-// warehouses and freight, skill trainers, augmenting, newbie buffs, the
-// lottery, festivals, observation, the rift and the rest (decision N6).
-// They answer with the "not available yet" page; so does any other NPC
-// command the server does not know yet, since the link cache already
-// proved that a page offered it.
+// handlers whose features come in later milestones: trying clothes on,
+// multisell, warehouses and freight, skill trainers, augmenting, newbie
+// buffs, the lottery, festivals, observation, the rift and the rest
+// (decision N6). They answer with the "not available yet" page; so does any
+// other NPC command the server does not know yet, since the link cache
+// already proved that a page offered it. The shops are in shop.go.
 var notYetCommands = map[string]bool{
-	"buy": true, "sell": true, "wear": true, "buyshadowitem": true,
-	"multisell": true, "exc_multisell": true,
+	"wear": true, "multisell": true, "exc_multisell": true,
 	"depositp": true, "withdrawp": true, "withdrawsortedp": true,
 	"depositc": true, "withdrawc": true, "withdrawsortedc": true,
 	"package_deposit": true, "package_withdraw": true,
@@ -212,6 +211,14 @@ func (s *Server) runBypassHandler(p *Player, n *Npc, command string) {
 		s.bypassScript(p, n, command)
 	case word == "player_help":
 		s.bypassPlayerHelp(p, command)
+	case n != nil && (word == "multisell" || word == "exc_multisell"):
+		s.bypassMultisell(p, n, word, command)
+	case n != nil && word == "depositp":
+		s.bypassDepositP(p)
+	case n != nil && word == "withdrawp":
+		s.bypassWithdrawP(p)
+	case shopCommands[word]:
+		s.shopBypass(p, n, word, command) // shop.go
 	case n != nil:
 		if !notYetCommands[word] {
 			s.log.Debug("game: unknown NPC bypass, answered as not available yet", append(p.logArgs(), "npc", n.Template.ID, "bypass", command)...)

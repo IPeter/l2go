@@ -35,7 +35,7 @@
       },
 
       "options": {
-        "maxPlayers": 10000,
+        "maxPlayers": 2000,
         "testing": false
       },
 
@@ -91,7 +91,8 @@
         "multipleItemDrop": true,
         "maxAdena": 2000000000,
         "warehouseSlotsNoDwarf": 100,
-        "warehouseSlotsDwarf": 120
+        "warehouseSlotsDwarf": 120,
+        "autoLootSlotLimit": false
       },
 
       "economy": {

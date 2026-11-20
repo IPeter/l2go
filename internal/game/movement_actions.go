@@ -94,9 +94,11 @@ func (s *Server) useSit(p *Player) {
 // animation of sitting down or standing up plays.
 func (s *Server) sitDown(p *Player) {
 	m := s.motionOf(p)
-	if m.sitBusy || p.Sitting || !p.InWorld() {
+	if m.sitBusy || p.Sitting || !p.InWorld() || s.AttackingNow(p) {
+		// Mobius isAttackDisabled: no sitting down during a swing.
 		return
 	}
+	s.playerIntendRest(p)
 	if p.Move != nil {
 		s.stopWalk(p, m, nil)
 	}

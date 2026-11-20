@@ -9,6 +9,7 @@ import (
 
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
+	"github.com/IPeter/l2go/internal/inventory"
 	"github.com/IPeter/l2go/internal/storage"
 	"github.com/IPeter/l2go/internal/testclient"
 )
@@ -151,7 +152,7 @@ func TestTeleportWithoutEnoughAdena(t *testing.T) {
 		t.Error("teleported without the fee")
 	}
 	var adena int64
-	e.onLoop(func() { adena = p.Inventory().itemByItemID(adenaID).Count })
+	e.onLoop(func() { adena = p.Inventory().Adena() })
 	if adena != 100 {
 		t.Errorf("adena %d after a refused teleport, want 100", adena)
 	}
@@ -173,10 +174,10 @@ func TestTeleportFeeTakesTheLastAdena(t *testing.T) {
 	if len(ius) != 1 || len(ius[0].Items) != 1 || ius[0].Items[0].Change != testclient.ItemRemoved || ius[0].Items[0].ItemID != adenaID {
 		t.Errorf("InventoryUpdate %+v, want the adena removed", ius)
 	}
-	var left *Item
-	e.onLoop(func() { left = p.Inventory().itemByItemID(adenaID) })
+	var left *inventory.Item
+	e.onLoop(func() { left = p.Inventory().AdenaItem() })
 	if left != nil {
-		t.Errorf("adena left in the inventory: %+v", left.Item)
+		t.Errorf("adena left in the inventory: %+v", left.Storage())
 	}
 }
 
@@ -228,7 +229,7 @@ func TestTeleporterRefusals(t *testing.T) {
 		}
 	}
 	var adena int64
-	e.onLoop(func() { adena = p.Inventory().itemByItemID(adenaID).Count })
+	e.onLoop(func() { adena = p.Inventory().Adena() })
 	if adena != 50000 {
 		t.Errorf("adena %d after refused teleports, want 50000", adena)
 	}
@@ -240,9 +241,9 @@ func TestDestroyItemByItemID(t *testing.T) {
 	sess, p := e.enterChar(testChar{account: "hero", name: "Hero", pos: tiStart, items: []storage.Item{{ItemID: gatePass, Count: 3, Slot: storage.PaperdollNone}}})
 	var ok1, ok2, ok3 bool
 	e.onLoop(func() {
-		ok1 = e.srv.destroyItemByItemID(p, gatePass, 5, true) // too many
-		ok2 = e.srv.destroyItemByItemID(p, gatePass, 2, true)
-		ok3 = e.srv.destroyItemByItemID(p, 9999, 1, true) // none
+		ok1 = e.srv.DestroyItemByItemID(p, gatePass, 5, true) // too many
+		ok2 = e.srv.DestroyItemByItemID(p, gatePass, 2, true)
+		ok3 = e.srv.DestroyItemByItemID(p, 9999, 1, true) // none
 	})
 	if ok1 || !ok2 || ok3 {
 		t.Errorf("destroy results %v %v %v, want false true false", ok1, ok2, ok3)

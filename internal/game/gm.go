@@ -168,6 +168,7 @@ func (s *Server) healCreature(o world.Object) bool {
 	case *Player:
 		v := c.stats.View()
 		c.CurHP, c.CurMP, c.CurCP = float64(v.MaxHP), float64(v.MaxMP), float64(v.MaxCP)
+		c.StopRegen() // all full, as the setters would leave it
 		c.sendUserInfo()
 		c.Send(vitalsStatusUpdate(c))
 		s.BroadcastHP(c)

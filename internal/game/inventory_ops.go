@@ -2,19 +2,20 @@ package game
 
 import (
 	"math"
-	"slices"
-	"time"
+	"math/rand/v2"
 
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
-	"github.com/IPeter/l2go/internal/stats"
+	"github.com/IPeter/l2go/internal/inventory"
+	"github.com/IPeter/l2go/internal/world"
 )
 
-// adenaID is the item ID of adena (Mobius Inventory.ADENA_ID).
-const adenaID = 57
+// The item operations other features call (Mobius Player.addAdena,
+// reduceAdena, addItem, destroyItem, destroyItemByItemId). Each sends what
+// Mobius sends and asks for a save at the end of the tick. All are
+// loop-only.
 
-// inventoryUpdateDelay is how long Mobius collects inventory changes before
-// it sends them in one InventoryUpdate (Player.sendInventoryUpdate).
-const inventoryUpdateDelay = 100 * time.Millisecond
+// adenaID is the item ID of adena (Mobius Inventory.ADENA_ID), untyped.
+const adenaID = 57
 
 // System messages of the item operations.
 const (
@@ -24,64 +25,45 @@ const (
 	sysMsgAdenaDisappeared serverpackets.SystemMessageID = 672 // "$s1 adena disappeared."
 )
 
-// The minimal item operations of Milestone 4: taking a fee. Items change
-// fully in Milestone 5.
-
-// itemByItemID returns the first item of the template id (Mobius
-// getItemByItemId), or nil.
-func (inv *Inventory) itemByItemID(id int32) *Item {
-	for _, it := range inv.items {
-		if it.ItemID == id {
-			return it
+// AddAdena gives p count adena (Mobius Player.addAdena): the count is cut
+// to what fits under MaxAdena; with sendMessage p is told what it earned
+// (or that it earned nothing) and when it reached the limit. A new adena
+// stack sends ItemList, a grown one an InventoryUpdate. It returns how
+// much was added.
+func (s *Server) AddAdena(p *Player, count int64, sendMessage bool) int64 {
+	asked := count
+	count = min(count, s.items.cfg.MaxAdena-p.inv.Adena())
+	if sendMessage {
+		if count <= 0 && asked > 0 {
+			p.SendSystemMessage(sysMsgFailedEarnAdena, serverpackets.NumberParam(itemCount32(asked)))
+		} else {
+			p.SendSystemMessage(sysMsgEarnedS1Adena, serverpackets.NumberParam(itemCount32(count)))
 		}
 	}
-	return nil
+	if count > 0 {
+		if _, err := p.inv.Create(adenaID, count); err != nil {
+			s.log.Error("game: cannot add adena", append(p.logArgs(), "count", count, "err", err)...)
+			return 0
+		}
+		// PlayerInventory.addItem sends the InventoryUpdate and the load;
+		// a new stack also gets the whole list.
+		s.itemsChanged(p, true, nil)
+		if count == p.inv.Adena() {
+			s.SendItemList(p, false)
+		}
+	}
+	if sendMessage && p.inv.Adena() == s.items.cfg.MaxAdena {
+		p.SendSystemMessage(sysMsgAdenaLimit)
+	}
+	return max(count, 0)
 }
 
-// countByItemID returns how many of template id the inventory holds: the
-// stack of a stackable item, or the number of items otherwise (Mobius
-// getInventoryItemCount).
-func (inv *Inventory) countByItemID(id int32) int64 {
-	var n int64
-	for _, it := range inv.items {
-		if it.ItemID != id {
-			continue
-		}
-		if it.Template != nil && it.Template.Stackable {
-			return it.Count
-		}
-		n++
-	}
-	return n
-}
-
-// removeItem takes it out of the inventory, and off the paperdoll if worn.
-// It reports the slot the item was worn in, or -1.
-func (inv *Inventory) removeItem(it *Item) int {
-	if i := slices.Index(inv.items, it); i >= 0 {
-		inv.items = slices.Delete(inv.items, i, i+1)
-	}
-	for slot, worn := range inv.paperdoll {
-		if worn == it {
-			inv.paperdoll[slot] = nil
-			return slot
-		}
-	}
-	return -1
-}
-
-// reduceAdena takes count adena from p (Mobius Player.reduceAdena): with too
-// little adena it fails, telling p when sendMessage is set; otherwise the
-// stack shrinks or goes, an InventoryUpdate follows and p is told how much
-// disappeared. Taking 0 adena succeeds and changes nothing. The character
-// is saved in the background. Loop-only.
-func (s *Server) reduceAdena(p *Player, count int64, sendMessage bool) bool {
-	adena := p.inv.itemByItemID(adenaID)
-	var have int64
-	if adena != nil {
-		have = adena.Count
-	}
-	if count > have {
+// ReduceAdena takes count adena from p (Mobius Player.reduceAdena): with
+// too little adena it fails, telling p when sendMessage is set; otherwise
+// the stack shrinks or goes, an InventoryUpdate follows and p is told how
+// much disappeared. Taking 0 adena succeeds and changes nothing.
+func (s *Server) ReduceAdena(p *Player, count int64, sendMessage bool) bool {
+	if count > p.inv.Adena() {
 		if sendMessage {
 			p.SendSystemMessage(sysMsgNotEnoughAdena)
 		}
@@ -90,94 +72,161 @@ func (s *Server) reduceAdena(p *Player, count int64, sendMessage bool) bool {
 	if count <= 0 {
 		return true
 	}
-	change := s.takeFromStack(p, adena, count)
-	s.queueInventoryUpdate(p, change)
+	if _, err := p.inv.DestroyByItemID(adenaID, count); err != nil {
+		return false
+	}
+	s.itemsChanged(p, false, nil)
 	if sendMessage {
 		p.SendSystemMessage(sysMsgAdenaDisappeared, serverpackets.NumberParam(itemCount32(count)))
 	}
-	s.Save(p, nil)
 	return true
 }
 
-// destroyItemByItemID takes count items of template itemID from p (Mobius
-// Player.destroyItemByItemId; a negative count takes all): adena goes
-// through reduceAdena; without the item, or with too few, it fails with
-// "Incorrect item count." when sendMessage is set. On success p gets an
-// InventoryUpdate, a StatusUpdate of its load and, with sendMessage, the
-// "disappeared" message. The character is saved in the background.
-// Loop-only.
-func (s *Server) destroyItemByItemID(p *Player, itemID int32, count int64, sendMessage bool) bool {
-	if itemID == adenaID {
-		return s.reduceAdena(p, count, sendMessage)
+// AddItem gives p count items of the template (Mobius Player.addItem(process,
+// itemId, count, enchantLevel, reference, sendMessage)): with sendMessage p
+// is told what it obtained ("earned" with earned set, as for quest
+// rewards); the items stack or come as new items, enchant (-1 for the
+// template's) is set on the item returned, and InventoryUpdate and
+// StatusUpdate with the load follow. A full inventory drops the new item
+// at p's feet when AutoLootSlotLimit is on, as Mobius does. Items that take
+// effect at once (herbs) need the skill engine and are not added. Adena
+// goes through the same path; use AddAdena for its limit messages.
+func (s *Server) AddItem(p *Player, itemID int32, count int64, enchant int32, sendMessage, earned bool) (*inventory.Item, error) {
+	if count <= 0 {
+		return nil, inventory.ErrInvalidCount
 	}
-	it := p.inv.itemByItemID(itemID)
-	have := p.inv.countByItemID(itemID)
-	take := count
-	if take < 0 {
-		take = have
+	t, ok := s.data.ItemTemplate(int(itemID))
+	if !ok {
+		return nil, inventory.ErrUnknownItem
 	}
-	if it == nil || take <= 0 || have < take {
+	if t.ExImmediateEffect && t.Etc != nil {
+		return nil, nil
+	}
+	if sendMessage {
+		name := s.itemNameParam(itemID)
+		switch {
+		case count > 1 && earned:
+			p.SendSystemMessage(sysMsgEarnedS2S1, name, serverpackets.NumberParam(itemCount32(count)))
+		case count > 1:
+			p.SendSystemMessage(sysMsgObtainedS2S1, name, serverpackets.NumberParam(itemCount32(count)))
+		case earned:
+			p.SendSystemMessage(sysMsgEarnedS1, name)
+		default:
+			p.SendSystemMessage(sysMsgObtainedS1, name)
+		}
+	}
+	it, err := p.inv.Create(itemID, count)
+	if err != nil {
+		return nil, err
+	}
+	if enchant > -1 {
+		it.SetEnchant(enchant)
+	}
+	s.itemsChanged(p, true, nil)
+	if !p.IsGM() && !p.inv.ValidateCapacity(0) && t.Droppable && (!it.Stackable() || it.LastChange() != inventory.Modified) {
+		s.dropAtFeet(p, it)
+	}
+	return it, nil
+}
+
+// dropAtFeet drops a whole item of p's inventory next to p (Mobius
+// Player.dropItem(process, item, reference, sendMessage)).
+func (s *Server) dropAtFeet(p *Player, it *inventory.Item) {
+	dropped, err := p.inv.DropItem(it)
+	if err != nil {
+		return
+	}
+	pos := p.Position()
+	at := world.Position{X: pos.X + rand.Int32N(50) - 25, Y: pos.Y + rand.Int32N(50) - 25, Z: pos.Z + 20} //nolint:gosec // game randomness
+	if _, err := s.DropOnGround(dropped, at, GroundDrop{Dropper: p, PlayerDrop: true}); err != nil {
+		s.log.Error("game: a dropped item cannot go into the world", append(p.logArgs(), "itemObjectId", dropped.ObjectID(), "err", err)...)
+	}
+	s.itemsChanged(p, true, nil)
+	p.SendSystemMessage(sysMsgDroppedS1, s.itemNameParam(dropped.ItemID()))
+}
+
+// sysMsgDroppedS1 is "You have dropped $s1.".
+const sysMsgDroppedS1 serverpackets.SystemMessageID = 298
+
+// DestroyItem destroys count of the item it of p's inventory (Mobius
+// Player.destroyItem): the InventoryUpdate, ItemList when the last of a
+// worn item went, StatusUpdate with the load and, with sendMessage, "...
+// has disappeared.". Too many fails with "Incorrect item count.".
+func (s *Server) DestroyItem(p *Player, it *inventory.Item, count int64, sendMessage bool) bool {
+	wasEquipped := it != nil && it.Equipped()
+	if _, err := p.inv.Destroy(it, count); err != nil {
 		if sendMessage {
 			p.SendSystemMessage(sysMsgIncorrectCount)
 		}
 		return false
 	}
-
-	var changes []serverpackets.InventoryItem
-	if it.Template != nil && it.Template.Stackable {
-		changes = append(changes, s.takeFromStack(p, it, take))
-	} else {
-		// One item per count.
-		for left := take; left > 0; left-- {
-			next := p.inv.itemByItemID(itemID)
-			if next == nil {
-				break
-			}
-			changes = append(changes, s.takeFromStack(p, next, next.Count))
-		}
+	s.forgetMana(it)
+	s.itemsChanged(p, true, nil)
+	if wasEquipped && it.Count() == 0 {
+		s.SendItemList(p, false)
+		p.BroadcastUserInfo()
 	}
-	s.queueInventoryUpdate(p, changes...)
-	p.Send(serverpackets.NewStatusUpdatePacket(serverpackets.StatusUpdate{
-		ObjectID: p.ObjectID(),
-		Values:   []serverpackets.StatusValue{{Attr: serverpackets.StatusCurLoad, Value: p.inv.Weight()}},
-	}))
 	if sendMessage {
-		name := s.itemNameParam(itemID)
-		if take > 1 {
-			p.SendSystemMessage(sysMsgS2S1Disappeared, name, serverpackets.NumberParam(itemCount32(take)))
-		} else {
-			p.SendSystemMessage(sysMsgS1Disappeared, name)
-		}
+		s.sendDisappeared(p, it.ItemID(), count)
 	}
-	s.Save(p, nil)
 	return true
 }
 
-// takeFromStack takes count of the item it (count <= it.Count): the stack
-// shrinks, or the item goes when nothing is left (and comes off the
-// paperdoll, changing the stats). It returns the change for the
-// InventoryUpdate.
-func (s *Server) takeFromStack(p *Player, it *Item, count int64) serverpackets.InventoryItem {
-	if it.Count > count {
-		it.Count -= count
-		return s.inventoryChange(it, serverpackets.ItemModified)
+// DestroyItemByItemID takes count items of template itemID from p (Mobius
+// Player.destroyItemByItemId; a negative count takes all): adena goes
+// through ReduceAdena; without the item, or with too few, it fails with
+// "Incorrect item count." when sendMessage is set. On success p gets an
+// InventoryUpdate, a StatusUpdate of its load and, with sendMessage, the
+// "disappeared" message.
+func (s *Server) DestroyItemByItemID(p *Player, itemID int32, count int64, sendMessage bool) bool {
+	if itemID == adenaID {
+		return s.ReduceAdena(p, count, sendMessage)
 	}
-	it.Count = 0
-	if slot := p.inv.removeItem(it); slot >= 0 {
-		p.stats.Unequip(stats.Slot(slot)) //nolint:gosec // a paperdoll index, below storage.PaperdollTotalSlots
-		p.BroadcastUserInfo()
+	it := p.inv.ByItemID(itemID)
+	if it == nil {
+		if sendMessage {
+			p.SendSystemMessage(sysMsgIncorrectCount)
+		}
+		return false
 	}
-	return s.inventoryChange(it, serverpackets.ItemRemoved)
+	have := it.Count()
+	if !it.Stackable() {
+		have = p.inv.Count(itemID, -1, true)
+	}
+	take := count
+	if take < 0 {
+		take = have
+	}
+	if take <= 0 || have < take {
+		if sendMessage {
+			p.SendSystemMessage(sysMsgIncorrectCount)
+		}
+		return false
+	}
+	last, err := p.inv.DestroyByItemID(itemID, take)
+	if err != nil {
+		if sendMessage {
+			p.SendSystemMessage(sysMsgIncorrectCount)
+		}
+		return false
+	}
+	s.forgetMana(last)
+	s.itemsChanged(p, true, nil)
+	p.RefreshStats()
+	if sendMessage {
+		s.sendDisappeared(p, itemID, take)
+	}
+	return true
 }
 
-// inventoryChange is one entry of an InventoryUpdate.
-func (s *Server) inventoryChange(it *Item, change serverpackets.ItemChange) serverpackets.InventoryItem {
-	info := serverpackets.ItemInfo{ObjectID: it.ObjectID, ItemID: it.ItemID, Count: itemCount32(it.Count), Mana: -1}
-	if it.Template != nil {
-		info = ItemInfo(it)
-		info.Equipped = info.Equipped && change != serverpackets.ItemRemoved
+// sendDisappeared tells p that count items of the template disappeared.
+func (s *Server) sendDisappeared(p *Player, itemID int32, count int64) {
+	name := s.itemNameParam(itemID)
+	if count > 1 {
+		p.SendSystemMessage(sysMsgS2S1Disappeared, name, serverpackets.NumberParam(itemCount32(count)))
+	} else {
+		p.SendSystemMessage(sysMsgS1Disappeared, name)
 	}
-	return serverpackets.InventoryItem{Change: change, Item: info}
 }
 
 // itemNameParam is the item name parameter of a system message (Mobius
@@ -188,35 +237,6 @@ func (s *Server) itemNameParam(id int32) serverpackets.SystemMessageParam {
 		return serverpackets.TextParam(t.Name)
 	}
 	return serverpackets.ItemNameParam(id)
-}
-
-// queueInventoryUpdate sends changes to p in an InventoryUpdate 100 ms after
-// the last change, merged with the changes queued meanwhile (a later change
-// of an item replaces an earlier one), as Mobius sendInventoryUpdate does.
-func (s *Server) queueInventoryUpdate(p *Player, changes ...serverpackets.InventoryItem) {
-	if len(changes) == 0 {
-		return
-	}
-	st := s.dialogState(p)
-	for _, c := range changes {
-		i := slices.IndexFunc(st.invItems, func(q serverpackets.InventoryItem) bool { return q.Item.ObjectID == c.Item.ObjectID })
-		if i >= 0 {
-			st.invItems[i] = c
-		} else {
-			st.invItems = append(st.invItems, c)
-		}
-	}
-	if st.invTimer != 0 {
-		s.loop.Cancel(st.invTimer)
-	}
-	st.invTimer = s.loop.After(inventoryUpdateDelay, func() {
-		st.invTimer = 0
-		items := st.invItems
-		st.invItems = nil
-		if p.InGame() && len(items) > 0 {
-			p.Send(serverpackets.NewInventoryUpdatePacket(serverpackets.InventoryUpdate{Items: items}))
-		}
-	})
 }
 
 // itemCount32 cuts a count to the int range, as the packets carry counts.

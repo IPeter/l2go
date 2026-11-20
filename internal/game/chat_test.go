@@ -330,7 +330,7 @@ func TestChatItemLinks(t *testing.T) {
 	e := newEnv(t, nil)
 	sa, sb, _, pa, _, _ := chatTrio(t, e, storage.AccessLevelPlayer)
 	var own int32
-	e.onLoop(func() { own = pa.Inventory().Items()[0].ObjectID })
+	e.onLoop(func() { own = pa.Inventory().Items()[0].ObjectID() })
 	link := func(id int32) string {
 		return "look \bType=1 \tID=" + strconv.Itoa(int(id)) + " \tColor=0 \tTitle=\x1bSword\x1b\b here"
 	}

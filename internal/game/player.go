@@ -79,10 +79,11 @@ type Player struct {
 
 	srv     *Server
 	session Session
-	char    storage.Character // as loaded; Items live in inv
+	char    storage.Character // as loaded; Items live in inv and items
 	class   *data.ClassTemplate
 	stats   *stats.Player
 	inv     Inventory
+	items   playerItems // the warehouse and the item feature's state (items.go)
 	state   playerState
 	leaving bool // leave is running
 
@@ -91,6 +92,11 @@ type Player struct {
 	autosave  world.TimerID
 	timers    []world.TimerID // pending timers of the enter-world sequence
 	teleport  *teleportState
+
+	// The status (status_player.go).
+	dead         bool
+	regen        regenState
+	statusQueued bool // a StatusUpdate is due at the end of the tick
 }
 
 var (
@@ -129,16 +135,8 @@ func (s *Server) newPlayer(sess Session, c storage.Character) (*Player, error) {
 	}
 	p.char = c
 	p.char.Items = nil
-	p.inv = s.newInventory(c, p.logArgs())
-
-	for slot, it := range p.inv.paperdoll {
-		if it == nil || it.Template == nil {
-			continue
-		}
-		if err := st.Equip(stats.Slot(slot), stats.ItemOwner(it.ObjectID), statsItem(it.Template, int(it.Enchant))); err != nil {
-			s.log.Warn("game: equipped item has no usable stats", append(p.logArgs(), "item", it.ItemID, "slot", slot, "err", err)...)
-		}
-	}
+	s.loadItems(p, c.Items)
+	s.applyDeathPenalty(p) // Mobius restoreDeathPenaltyBuffLevel
 	v := st.View()
 	p.lastView = v
 	// PlayerStatus.setCurrentHp and friends keep the values within the
@@ -350,5 +348,5 @@ func (p *Player) enchantEffect() uint8 {
 	if w == nil {
 		return 0
 	}
-	return uint8(min(max(w.Enchant, 0), maxEnchantEffect)) //nolint:gosec // clamped to 0-127
+	return uint8(min(max(w.Enchant(), 0), maxEnchantEffect)) //nolint:gosec // clamped to 0-127
 }

@@ -44,6 +44,11 @@ func (s *Server) handleMoveToLocation(p *Player, body []byte) {
 		s.log.Debug("game: bad MoveToLocation", append(p.logArgs(), "err", err)...)
 		return
 	}
+	if p.Overloaded() {
+		p.SendSystemMessage(sysMsgTooEncumbered)
+		p.SendActionFailed()
+		return
+	}
 	if !p.InWorld() {
 		// Teleporting (Mobius isMovementDisabled).
 		p.SendActionFailed()
@@ -87,7 +92,13 @@ func (s *Server) handleMoveToLocation(p *Player, body []byte) {
 		s.onActionRequest(p)
 		return
 	}
-	if s.startWalk(p, m, world.Position{X: req.TargetX, Y: req.TargetY, Z: req.TargetZ}, 0) {
+	dest := world.Position{X: req.TargetX, Y: req.TargetY, Z: req.TargetZ}
+	if !s.playerIntendMove(p, dest) {
+		// Mobius PlayerAI: a click during a swing waits for its end.
+		s.onActionRequest(p)
+		return
+	}
+	if s.startWalk(p, m, dest, 0) {
 		s.broadcastWalk(p, m, false)
 	}
 	s.onActionRequest(p)

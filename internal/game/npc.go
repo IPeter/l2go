@@ -3,7 +3,6 @@ package game
 import (
 	"errors"
 	"fmt"
-	"math/rand/v2"
 	"time"
 
 	"github.com/IPeter/l2go/internal/data"
@@ -24,7 +23,7 @@ func init() { registerFeature("npc", setupNpcs) }
 // features set up earlier may have registered interaction hooks there.
 func setupNpcs(s *Server) error {
 	f := &s.npc
-	f.rnd = rand.New(rand.NewPCG(uint64(s.Clock().Now().UnixNano()), 0x6e7063)) //nolint:gosec // gameplay randomness
+	f.rnd = &npcRand{s.rnd}
 	f.ensureMaps()
 	if err := errors.Join(s.setupTargeting(), s.setupSocial(), s.setupNpcGM()); err != nil {
 		return err
@@ -59,9 +58,9 @@ type Npc struct {
 	// RHand and LHand are the item IDs of the weapons the NPC shows, and
 	// Enchant their glow; they start as the template's equipment.
 	RHand, LHand, Enchant int32
-	// Move is the NPC's walk in progress, or nil while it stands (NPCs
-	// stand still until the AI exists). A new viewer gets a MoveToLocation
-	// with NpcInfo while it is set.
+	// Move is the NPC's walk in progress, or nil while it stands
+	// (npc_move.go). A new viewer gets a MoveToLocation with NpcInfo while
+	// it is set.
 	Move *MoveState
 	// Dead is set while the NPC is dead (from Milestone 6).
 	Dead bool
@@ -81,8 +80,13 @@ type Npc struct {
 	cacheOK bool
 
 	hpBar           npcHPBarCheck
-	randomAnimation bool      // Mobius isRandomAnimationEnabled
-	lastSocial      time.Time // when the NPC last played a random animation
+	regen           regenState // status_npc.go
+	ai              npcAI      // the monster AI, hate and movement (ai.go)
+	randomAnimation bool       // Mobius isRandomAnimationEnabled
+	lastSocial      time.Time  // when the NPC last played a random animation
+	// priceConfig is a merchant's tax region, set when it spawns (Mobius
+	// Merchant.onSpawn, merchant_price.go); nil for other NPCs.
+	priceConfig *data.PriceConfig
 }
 
 var (
@@ -101,8 +105,9 @@ type NpcInteraction func(p *Player, n *Npc)
 type npcFeature struct {
 	interact []NpcInteraction
 
-	// rnd draws spawn points, headings, respawn delays and animations.
-	rnd *rand.Rand
+	// rnd draws spawn points, headings, respawn delays and animations from
+	// the server's random source (Server.Rand).
+	rnd *npcRand
 	// classes holds what the NPC code knows about each template, worked out
 	// once per NPC ID and shared by all its NPCs.
 	classes map[int]*npcClass
@@ -212,21 +217,11 @@ func (n *Npc) MaxMP() int32 {
 	return n.cache.maxMP
 }
 
-// SetCurrentHP sets the current HP, kept within 0 and the maximum, and
-// sends the new HP bar to the players targeting the NPC when it changed by
-// a pixel of the bar (Mobius setCurrentHp and broadcastStatusUpdate).
-// Loop-only.
-func (n *Npc) SetCurrentHP(hp float64) {
-	maxHP := float64(n.MaxHP())
-	hp = min(max(hp, 0), maxHP)
-	if hp == n.CurHP {
-		return
-	}
-	n.CurHP = hp
-	if n.srv != nil && len(n.srv.npc.watchers[n.ID()]) > 0 && n.hpBar.need(hp, maxHP) {
-		n.srv.sendHPBar(n)
-	}
-}
+// SetCurrentHP sets the current HP, kept within 0 and the maximum, starts
+// or stops regeneration, and sends the new HP bar to the players targeting
+// the NPC when it changed by a pixel of the bar (Mobius setCurrentHp and
+// broadcastStatusUpdate). A dead NPC keeps its HP. Loop-only.
+func (n *Npc) SetCurrentHP(hp float64) { n.setCurrentHP(hp, true) }
 
 // BroadcastInfo sends the NpcInfo again to the players that see the NPC at
 // the end of the tick (Mobius broadcastInfo), after a change they must see.
@@ -316,6 +311,7 @@ func (n *Npc) infoPacket(attackable bool) []byte {
 		RHand:                 n.RHand,
 		LHand:                 n.LHand,
 		Running:               motion.Running,
+		InCombat:              n.srv != nil && n.srv.InCombat(n),
 		Dead:                  n.Dead,
 		Summoned:              n.Summoned,
 		Name:                  n.serverName(),
@@ -480,7 +476,12 @@ func (s *Server) placeNpc(n *Npc, pos world.Position, aiData map[string]int) err
 	if err := n.SetPosition(pos); err != nil {
 		return err
 	}
-	return s.AddObject(n)
+	if err := s.AddObject(n); err != nil {
+		return err
+	}
+	s.npcSpawned(n, aiData, &pos) // ai.go: Mobius Attackable.onSpawn
+	s.merchantSpawned(n)          // merchant_price.go: Mobius Merchant.onSpawn
+	return nil
 }
 
 // SpawnNpc puts a new NPC of template npcID into the world at pos, managed
@@ -509,7 +510,7 @@ func (s *Server) SpawnNpc(npcID int, pos world.Position) (*Npc, error) {
 func (s *Server) DespawnNpc(n *Npc) {
 	wasIn := n.InWorld()
 	if wasIn {
-		s.RemoveObject(n)
+		s.removeNpc(n)
 	}
 	switch sp := n.spawn; {
 	case sp != nil:

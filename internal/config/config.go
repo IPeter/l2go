@@ -352,6 +352,9 @@ type Items struct {
 	// MaximumWarehouseSlotsForDwarf).
 	WarehouseSlotsNoDwarf int `json:"warehouseSlotsNoDwarf"`
 	WarehouseSlotsDwarf   int `json:"warehouseSlotsDwarf"`
+	// AutoLootSlotLimit refuses items that would stack onto one the player
+	// holds when the inventory is full too (Mobius AutoLootSlotLimit).
+	AutoLootSlotLimit bool `json:"autoLootSlotLimit"`
 }
 
 // DefaultItems returns the Mobius defaults (General.ini and Player.ini).
@@ -778,7 +781,7 @@ func Default() Config {
 				Host: "127.0.0.1",
 				Port: 27017,
 			},
-			Options:                 Options{MaxPlayers: 10000},
+			Options:                 Options{MaxPlayers: 2000}, // Mobius MaximumOnlineUsers in Server.ini
 			Scripts:                 Scripts{Dir: DefaultScriptsDir, EventTimeout: DefaultEventTimeout},
 			AllowedProtocols:        append([]int32(nil), DefaultAllowedProtocols...),
 			DataDir:                 DefaultDataDir,

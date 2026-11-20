@@ -12,6 +12,7 @@ import (
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/geo"
+	"github.com/IPeter/l2go/internal/rnd"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/storage"
 	"github.com/IPeter/l2go/internal/world"
@@ -112,11 +113,25 @@ type Options struct {
 	// features use it; nil means none of that data is loaded.
 	World *data.World
 
-	// Characters stores the characters. Saving a player in the world needs
-	// its Update method.
+	// Characters stores the characters. It must also be a
+	// storage.CharacterSaver: players are saved with the changes to their
+	// items.
 	Characters storage.CharacterStore
 	IDs        storage.IDAllocator
-	Scripts    *scripting.Engine
+	// IDPool gives new items their object IDs on the loop (decision I3).
+	// Fill it before Run. Nil makes New create one on IDs and fill it.
+	IDPool *storage.IDPool
+	// Passives are the passive skill data (data.LoadPassives); the weight
+	// penalty uses skill 4270 from it. Nil means a weight penalty changes
+	// no stats.
+	Passives *data.Passives
+	// Categories are the class categories (data.LoadCategories) that item
+	// conditions test; nil means a player is in none.
+	Categories *data.Categories
+	// Economy is the shop data (data.LoadEconomy): buy lists, multisell
+	// lists and merchant price configs. Nil means no NPC sells anything.
+	Economy *data.Economy
+	Scripts *scripting.Engine
 	// ScriptOutput is the adapter the scripting engine got as
 	// scripting.Options.Output (make it with NewScriptOutput before the
 	// engine). New connects it to the server, so that npc:say reaches the
@@ -126,6 +141,12 @@ type Options struct {
 
 	// Geo answers the geodata questions; nil means geo.None (no geodata).
 	Geo geo.Engine
+
+	// Rand is the game's random source on the loop (decision F7): combat
+	// rolls draw from it in Mobius's order. Nil means a PCG source with a
+	// random seed, which New logs. Tests pass rnd.NewScripted or rnd.New
+	// with a fixed seed.
+	Rand rnd.Source
 
 	// Clock drives the world loop; nil means the real clock.
 	Clock  world.Clock

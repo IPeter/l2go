@@ -21,6 +21,12 @@ type npcClass struct {
 	monster bool
 	// friendly is set for a FriendlyMob, which players with karma attack.
 	friendly bool
+	// attackable is set for an Attackable or a subclass (Mobius
+	// isAttackable): it starts regenerating when its region activates.
+	attackable bool
+	// raid is set for a RaidBoss or a GrandBoss (Mobius isRaid): it
+	// regenerates with the raid multipliers.
+	raid bool
 	// randomAnim is set when the NPC plays a random animation when talked to
 	// (Mobius hasRandomAnimation: the template's randomAnimation, and an AI
 	// that is not CORPSE; MaxNpcAnimation is above 0 by default).
@@ -57,6 +63,8 @@ func (s *Server) npcClassOf(t *data.NpcTemplate) *npcClass {
 		c.trap = w.NpcTypeIs(t.Type, "Trap")
 		c.monster = w.NpcTypeIs(t.Type, "Monster")
 		c.friendly = w.NpcTypeIs(t.Type, "FriendlyMob")
+		c.attackable = w.NpcTypeIs(t.Type, "Attackable")
+		c.raid = w.NpcTypeIs(t.Type, "RaidBoss") || w.NpcTypeIs(t.Type, "GrandBoss")
 	}
 	if s.npc.classes == nil {
 		s.npc.classes = make(map[int]*npcClass)
@@ -81,6 +89,8 @@ func npcStatsTemplate(t *data.NpcTemplate) *stats.NpcTemplate {
 		},
 		HP:            st.Vitals.HP,
 		MP:            st.Vitals.MP,
+		HPRegen:       st.Vitals.HPRegen,
+		MPRegen:       st.Vitals.MPRegen,
 		PAtk:          st.Attack.Physical,
 		MAtk:          st.Attack.Magical,
 		PDef:          st.Defence.Physical,

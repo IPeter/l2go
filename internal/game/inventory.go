@@ -3,130 +3,107 @@ package game
 import (
 	"math"
 
-	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
+	"github.com/IPeter/l2go/internal/inventory"
 	"github.com/IPeter/l2go/internal/storage"
 )
 
-// Item is an item a player owns: the stored item and its template.
-type Item struct {
-	storage.Item
-	// Template is the item's template, or nil when the data has none for
-	// ItemID. Such an item is kept and saved, but not shown or worn (Mobius
-	// skips items it has no template for).
-	Template *data.Item
-}
-
-// Inventory is a player's items: all of them in storage order, and the worn
-// ones by paperdoll slot (Mobius PcInventory). It is read-only until items
-// can change in Milestone 5.
+// Inventory is a player's inventory (internal/inventory, Mobius
+// PlayerInventory): the carried items, the paperdoll with the Mobius equip
+// rules, weight and limits. It adds the packet views to it. Change it only
+// through the Server's item methods (GiveItem, DestroyItem, ...) or call
+// Server.ItemsChanged afterwards, so that the client, the weight penalty
+// and the save follow.
 type Inventory struct {
-	items     []*Item
-	paperdoll [storage.PaperdollTotalSlots]*Item
-}
-
-// newInventory builds the inventory of a loaded character. Items without a
-// template are logged and kept.
-func (s *Server) newInventory(c storage.Character, logArgs []any) Inventory {
-	var inv Inventory
-	inv.items = make([]*Item, 0, len(c.Items))
-	for _, si := range c.Items {
-		it := &Item{Item: si}
-		if t, ok := s.data.ItemTemplate(int(si.ItemID)); ok {
-			it.Template = t
-		} else {
-			s.log.Warn("game: item without a template, not shown", append(logArgs, "item", si.ItemID, "itemObjectId", si.ObjectID)...)
-		}
-		inv.items = append(inv.items, it)
-		if si.Slot.Equipped() && it.Template != nil {
-			if prev := inv.paperdoll[si.Slot]; prev != nil {
-				s.log.Warn("game: two items in one paperdoll slot, keeping the last", append(logArgs, "slot", si.Slot, "item", prev.ItemID, "other", si.ItemID)...)
-			}
-			inv.paperdoll[si.Slot] = it
-		}
-	}
-	return inv
-}
-
-// Items returns the items in storage order. The slice must not be changed.
-func (inv *Inventory) Items() []*Item { return inv.items }
-
-// Paperdoll returns the item worn in slot, or nil.
-func (inv *Inventory) Paperdoll(slot storage.PaperdollSlot) *Item {
-	if !slot.Equipped() {
-		return nil
-	}
-	return inv.paperdoll[slot]
-}
-
-// Weight returns the weight of all items (Mobius Inventory.getTotalWeight),
-// capped to the int range.
-func (inv *Inventory) Weight() int32 {
-	var w int64
-	for _, it := range inv.items {
-		if it.Template != nil {
-			w += int64(it.Template.Weight) * it.Count
-		}
-	}
-	return int32(min(max(w, 0), math.MaxInt32)) //nolint:gosec // clamped to the int32 range
+	*inventory.Inventory
 }
 
 // PacketPaperdoll returns the worn items as UserInfo and CharInfo show them:
 // object IDs and display IDs by slot.
-func (inv *Inventory) PacketPaperdoll() serverpackets.Paperdoll {
+func (inv Inventory) PacketPaperdoll() serverpackets.Paperdoll {
 	var d serverpackets.Paperdoll
-	for slot, it := range inv.paperdoll {
-		if it != nil {
-			d[slot] = serverpackets.EquippedItem{ObjectID: it.ObjectID, ItemID: int32(it.Template.DisplayID)} //nolint:gosec // item IDs fit in int32
+	if inv.Inventory == nil {
+		return d
+	}
+	for slot := range storage.PaperdollTotalSlots {
+		if it := inv.Paperdoll(storage.PaperdollSlot(slot)); it != nil {
+			d[slot] = serverpackets.EquippedItem{ObjectID: it.ObjectID(), ItemID: int32(it.Template().DisplayID)} //nolint:gosec // item IDs fit in int32
 		}
 	}
 	return d
 }
 
-// ItemInfos returns the items as the inventory packets list them, leaving
-// out those without a template.
-func (inv *Inventory) ItemInfos() []serverpackets.ItemInfo {
-	infos := make([]serverpackets.ItemInfo, 0, len(inv.items))
-	for _, it := range inv.items {
-		if it.Template != nil {
-			infos = append(infos, ItemInfo(it))
-		}
+// ItemInfos returns the items as ItemList lists them, in inventory order.
+func (inv Inventory) ItemInfos() []serverpackets.ItemInfo {
+	if inv.Inventory == nil {
+		return nil
+	}
+	return itemInfos(inv.Items())
+}
+
+// Load returns the weight of the carried items as the packets show it
+// (Mobius getCurrentLoad).
+func (inv Inventory) Load() int32 {
+	if inv.Inventory == nil {
+		return 0
+	}
+	return int32(min(inv.Weight(), math.MaxInt32)) //nolint:gosec // clamped to the int32 range
+}
+
+// itemInfos returns items as the item packets list them.
+func itemInfos(items []*inventory.Item) []serverpackets.ItemInfo {
+	infos := make([]serverpackets.ItemInfo, 0, len(items))
+	for _, it := range items {
+		infos = append(infos, ItemInfo(it))
 	}
 	return infos
 }
 
-// ItemInfo returns one item as the inventory packets write it (Mobius
-// ItemInfo): the template's list types and body part mask, the display ID,
-// the count cut to an int, and the mana of a shadow item (-1 for others).
-// it.Template must not be nil.
-func ItemInfo(it *Item) serverpackets.ItemInfo {
-	t := it.Template
-	mana := int32(-1)
-	if t.Duration > 0 {
-		mana = int32(min(t.Duration, math.MaxInt32)) //nolint:gosec // clamped to the int32 range
-	}
+// ItemInfo returns one item as the item packets write it (Mobius ItemInfo
+// and AbstractItemPacket.writeItem): the template's list types and body
+// part mask, the display ID, the count cut to an int, the enchant level and
+// the mana left (-1 for items without mana).
+func ItemInfo(it *inventory.Item) serverpackets.ItemInfo {
+	t := it.Template()
+	s := it.Storage()
 	//nolint:gosec // list types are 0-5, IDs and masks fit in int32, the rest is clamped
 	return serverpackets.ItemInfo{
-		Type1:    int16(t.Type1),
-		ObjectID: it.ObjectID,
-		ItemID:   int32(t.DisplayID),
-		Count:    int32(min(max(it.Count, 0), math.MaxInt32)),
-		Type2:    int16(t.Type2),
-		Equipped: it.Slot.Equipped(),
-		BodyPart: int32(t.BodyPartMask),
-		Enchant:  int16(min(max(it.Enchant, math.MinInt16), math.MaxInt16)),
-		Mana:     mana,
+		Type1:       int16(t.Type1),
+		ObjectID:    it.ObjectID(),
+		ItemID:      int32(t.DisplayID),
+		Count:       itemCount32(it.Count()),
+		Type2:       int16(t.Type2),
+		CustomType1: int16(s.CustomType1),
+		Equipped:    it.Equipped(),
+		BodyPart:    int32(t.BodyPartMask),
+		Enchant:     int16(min(max(it.Enchant(), math.MinInt16), math.MaxInt16)),
+		CustomType2: int16(s.CustomType2),
+		Mana:        it.Mana(),
 	}
 }
 
-// storageItems returns the items as they are stored.
-func (inv *Inventory) storageItems() []storage.Item {
-	if len(inv.items) == 0 {
-		return nil
+// storageItems returns every item p owns as it is stored: the carried
+// ones, those in the warehouse and those the data has no template for.
+func (p *Player) storageItems() []storage.Item {
+	var out []storage.Item
+	if p.inv.Inventory != nil {
+		for _, it := range p.inv.Items() {
+			out = append(out, it.Storage())
+		}
 	}
-	out := make([]storage.Item, len(inv.items))
-	for i, it := range inv.items {
-		out[i] = it.Item
+	if p.items.warehouse != nil {
+		for _, it := range p.items.warehouse.Items() {
+			out = append(out, it.Storage())
+		}
 	}
-	return out
+	return append(out, p.items.unknown...)
+}
+
+// takeItemChanges returns the changes to p's items since the last call,
+// for a save.
+func (p *Player) takeItemChanges() storage.ItemChanges {
+	if p.items.tracker == nil {
+		return storage.ItemChanges{}
+	}
+	return p.items.tracker.Take()
 }

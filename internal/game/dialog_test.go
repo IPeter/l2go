@@ -35,7 +35,7 @@ var dialogPages = map[string]string{
 	"default/SupportMagic.htm":         `<html><body>Support at %objectId%<br><a action="bypass -h npc_%objectId%_Chat 0">Back</a></body></html>`,
 	"default/BlessingOfProtection.htm": `<html><body>Blessing at %objectId%</body></html>`,
 	"default/secret.htm":               `<html><body>Secret</body></html>`,
-	"merchant/30001.htm":               `<html><body>%npcname%<br><a action="bypass -h npc_%objectId%_Buy 1">Buy</a><br><a action="bypass -h npc_%objectId%_Sell">Sell</a></body></html>`,
+	"merchant/30001.htm":               `<html><body>%npcname%<br><a action="bypass -h npc_%objectId%_Buy 1">Buy</a><br><a action="bypass -h npc_%objectId%_Sell">Sell</a><br><a action="bypass -h npc_%objectId%_Wear 1">Wear</a></body></html>`,
 	"petmanager/30731.htm":             `<html><body>%npcname% %objectId%</body></html>`,
 	"npcdefault.htm":                   `<html><body>I have nothing to say to you.</body></html>`,
 	"noquest.htm":                      `<html><body>No quest here (%objectId%).</body></html>`,
@@ -250,7 +250,7 @@ func TestNotYetPages(t *testing.T) {
 	notYet := `<html><body>Lector:<br>I am sorry, this service is not available yet.<br><br>` +
 		`<a action="bypass -h npc_` + lid + `_Chat 0">Back</a></body></html>`
 
-	for _, cmd := range []string{"Buy 1", "Sell"} {
+	for _, cmd := range []string{"Wear 1"} { // the shops are in shop_test.go
 		e.talk(sess, p, lector)
 		ps := e.bypass(sess, "npc_"+lid+"_"+cmd)
 		checkNames(t, cmd, ps, "NpcHtmlMessage", "ActionFailed")

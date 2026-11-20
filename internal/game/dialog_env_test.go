@@ -122,6 +122,8 @@ func newDialogEnv(t *testing.T, opts dialogEnvOptions) *testEnv {
 		IDs:            ids,
 		Scripts:        engine,
 		ScriptOutput:   out,
+		Passives:       testPassives(t),
+		Categories:     testCategories(t),
 		Clock:          clock,
 		CheckLoopOwner: true,
 	})
@@ -183,7 +185,7 @@ func (e *testEnv) enterChar(c testChar) (*fakeSession, *Player) {
 	ch.Karma = c.karma
 	extra := c.items
 	if c.adena > 0 {
-		extra = append(extra, storage.Item{ItemID: adenaID, Count: c.adena, Slot: storage.PaperdollNone})
+		extra = append(extra, storage.Item{ItemID: adenaID, Count: c.adena, Slot: storage.PaperdollNone, Mana: storage.NoMana})
 	}
 	if len(extra) > 0 {
 		ids, err := e.ids.NextIDs(e.ctx, len(extra))

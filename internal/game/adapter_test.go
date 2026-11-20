@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/IPeter/l2go/internal/data"
+	"github.com/IPeter/l2go/internal/inventory"
 	"github.com/IPeter/l2go/internal/stats"
 	"github.com/IPeter/l2go/internal/storage"
 )
@@ -89,10 +90,9 @@ func TestStatsClassTemplates(t *testing.T) {
 func TestItemInfo(t *testing.T) {
 	d := testGameData(t)
 	sword, _ := d.ItemTemplate(itemSquireSword)
-	got := ItemInfo(&Item{
-		Item:     storage.Item{ObjectID: 0x10000010, ItemID: itemSquireSword, Count: 1, Enchant: 3, Slot: storage.PaperdollRHand},
-		Template: sword,
-	})
+	inv := inventory.NewInventory(testLimits{}, inventory.Options{Templates: d})
+	inv.Load([]storage.Item{{ObjectID: 0x10000010, ItemID: itemSquireSword, Count: 1, Enchant: 3, Slot: storage.PaperdollRHand, Mana: storage.NoMana}}, inventory.Wearer{})
+	got := ItemInfo(inv.ByObjectID(0x10000010))
 	if got.Type1 != 0 || got.Type2 != 0 || !got.Equipped || got.Enchant != 3 || got.Mana != -1 ||
 		got.ObjectID != 0x10000010 || got.ItemID != int32(sword.DisplayID) || got.BodyPart != int32(sword.BodyPartMask) {
 		t.Errorf("ItemInfo of an equipped Squire's Sword +3 = %+v", got)
@@ -104,7 +104,7 @@ func TestItemInfo(t *testing.T) {
 		if it.Duration <= 0 {
 			continue
 		}
-		info := ItemInfo(&Item{Item: storage.Item{ItemID: int32(it.ID), Count: 1, Slot: storage.PaperdollNone}, Template: it})
+		info := ItemInfo(inventory.NewItem(1, it, 1))
 		if info.Mana != int32(it.Duration) || info.Equipped {
 			t.Errorf("ItemInfo of shadow item %d = %+v, want mana %d", it.ID, info, it.Duration)
 		}
@@ -123,13 +123,13 @@ func TestInventory(t *testing.T) {
 	p := e.enter(newSession("hero"), 0)
 	e.onLoop(func() {
 		inv := p.Inventory()
-		if n := len(inv.Items()); n != len(c.Items) {
-			t.Errorf("inventory has %d items, want %d", n, len(c.Items))
+		if n := len(inv.Items()); n != len(c.Items)-1 {
+			t.Errorf("inventory has %d items, want %d", n, len(c.Items)-1)
 		}
 		if n := len(inv.ItemInfos()); n != len(c.Items)-1 {
 			t.Errorf("ItemList shows %d items, want %d", n, len(c.Items)-1)
 		}
-		if w := inv.Paperdoll(storage.PaperdollRHand); w == nil || w.ItemID != itemSquireSword {
+		if w := inv.Paperdoll(storage.PaperdollRHand); w == nil || w.ItemID() != itemSquireSword {
 			t.Errorf("right hand holds %v, want the Squire's Sword", w)
 		}
 		if inv.Paperdoll(storage.PaperdollNone) != nil || inv.Paperdoll(storage.PaperdollHead) != nil {
@@ -137,11 +137,9 @@ func TestInventory(t *testing.T) {
 		}
 		var weight int32
 		for _, it := range inv.Items() {
-			if it.Template != nil {
-				weight += int32(it.Template.Weight) * int32(it.Count)
-			}
+			weight += int32(it.Template().Weight) * int32(it.Count())
 		}
-		if got := inv.Weight(); got != weight || got <= 0 {
+		if got := inv.Load(); got != weight || got <= 0 {
 			t.Errorf("weight %d, want %d", got, weight)
 		}
 		if snap := p.Snapshot(); len(snap.Items) != len(c.Items) {
