@@ -11,7 +11,9 @@
 //     (consecutive NpcInfo, CharInfo, DeleteObject, ... packets) are first
 //     sorted by their content, because their order comes from the
 //     server's iteration order, not from the protocol. For the same
-//     reason the items of ItemList are sorted by item ID.
+//     reason the items of ItemList, InventoryUpdate, SellList and the
+//     warehouse windows are sorted by item ID. Items on the ground
+//     (DropItem, SpawnItem, GetItem) are #item too.
 //   - Random and time values become placeholders: the session ID
 //     (<session-id>), the login and play keys (<login-ok1> ... <play-ok2>),
 //     the Blowfish key, the RSA modulus, the XOR key and the game time.
@@ -22,7 +24,21 @@
 //   - A new character starts at a random creation point, so the
 //     coordinates of the scenario's own characters are relative to where
 //     each first stood (start, start+500). The start points themselves are
-//     kept as anchors and compared with a tolerance.
+//     kept as anchors and compared with a tolerance. So are the target
+//     coordinates of MoveToPawn and Attack when the target is one of them,
+//     and the coordinates of an item one of them dropped (relative to the
+//     dropper).
+//   - Random positions become placeholders: a monster's coordinates and
+//     heading (<monster>; it spawns at a random point and wanders), and
+//     where its loot falls (<drop>).
+//   - Random values become placeholders (rules.go): a monster's loot
+//     (item, count; <drop>), current HP, MP and CP below the maximum
+//     (<cur>), the damage of hit messages (<damage>). The player's adena
+//     becomes relative to its first ItemList (adena0+900), since the
+//     starting amount is configuration.
+//   - The swings of a fight (fight.go: Attack, StatusUpdate, hit and miss
+//     messages, the chase) are random in number; each run of them becomes
+//     one Fight entry naming the attackers and targets.
 //   - Object IDs inside strings (dialog links) and inside packets the
 //     client does not parse are replaced by their canonical names too.
 //
@@ -38,8 +54,9 @@ import (
 	"os"
 )
 
-// Version is the format version of saved recordings.
-const Version = 1
+// Version is the format version of saved recordings. Version 2 added the
+// Milestone 5–7 rules (monsters, loot, adena, HP, fights).
+const Version = 2
 
 // Recording is the normalized packet streams of one scenario run against
 // one server.

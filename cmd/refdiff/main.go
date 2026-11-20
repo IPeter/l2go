@@ -9,7 +9,17 @@
 //	refdiff [flags] <scenario>
 //	refdiff -save file [-side reference|l2go] [flags] <scenario>
 //	refdiff -golden file [flags] [scenario]
+//	refdiff -sample [-swings n] [flags] <scenario>
 //	refdiff -list
+//
+// Each scenario brings its own ignore patterns for what is noise on any
+// server (wandering NPCs, the positions of a fight); -ignore adds to them
+// and -default-ignores=false drops them. Scenarios marked GM in -list set
+// their characters up with GM commands and need GM rights for the
+// generated characters on both servers.
+//
+// The sample mode runs a swinging scenario on both servers and compares
+// the statistics of the swings instead of the packets (package sample).
 //
 // The exit code is 0 when the streams match, 1 when they differ or a
 // scenario failed, and 2 for usage and file errors.
@@ -24,12 +34,14 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/IPeter/l2go/cmd/refdiff/recording"
+	"github.com/IPeter/l2go/cmd/refdiff/sample"
 	"github.com/IPeter/l2go/cmd/refdiff/scenario"
 )
 
@@ -50,6 +62,7 @@ const usageText = `Usage:
   refdiff [flags] <scenario>                 compare L2Go with the reference server
   refdiff -save file [flags] <scenario>      record one side into a golden file
   refdiff -golden file [flags] [scenario]    compare L2Go with a golden file
+  refdiff -sample [-swings n] <scenario>     compare swing statistics (sample-* scenarios)
   refdiff -list                              list the scenarios
 
 Flags:
@@ -68,6 +81,12 @@ type options struct {
 	side        string
 	golden      string
 	logLevel    slog.Level
+
+	// defaultIgnores keeps the scenario's own ignore patterns; sample and
+	// swings are the sample mode.
+	defaultIgnores bool
+	sample         bool
+	swings         int
 }
 
 // parseArgs parses the arguments after the program name. A help request
@@ -102,6 +121,9 @@ func parseArgs(args []string, output io.Writer) (options, error) {
 		}
 		return nil
 	})
+	fs.BoolVar(&opts.defaultIgnores, "default-ignores", true, "apply the scenario's own ignore patterns (refdiff -list -full shows them)")
+	fs.BoolVar(&opts.sample, "sample", false, "compare the statistics of the swings instead of the packets")
+	fs.IntVar(&opts.swings, "swings", scenario.DefaultSwings, "swings per side in -sample mode")
 	fs.BoolVar(&opts.json, "json", false, "print the comparison as JSON")
 	fs.BoolVar(&opts.full, "full", false, "print every packet, not only the differences and their context")
 	fs.StringVar(&opts.save, "save", "", "record the scenario on one side (-side) and save the normalized recording to this file")
@@ -131,6 +153,12 @@ func parseArgs(args []string, output io.Writer) (options, error) {
 	}
 	if opts.save != "" && opts.golden != "" {
 		return options{}, errors.New("-save and -golden do not go together")
+	}
+	if opts.sample && (opts.save != "" || opts.golden != "") {
+		return options{}, errors.New("-sample does not go with -save or -golden")
+	}
+	if opts.swings <= 0 {
+		return options{}, errors.New("-swings must be positive")
 	}
 	if opts.side != sideReference && opts.side != sideL2Go {
 		return options{}, fmt.Errorf("invalid -side %q, want %s or %s", opts.side, sideReference, sideL2Go)
@@ -181,9 +209,7 @@ func main() {
 // run does what opts say and returns the exit code.
 func run(ctx context.Context, opts options, stdout, stderr io.Writer, logger *slog.Logger) int {
 	if opts.list {
-		for _, sc := range scenario.All() {
-			fmt.Fprintf(stdout, "%-20s %s\n", sc.Name, sc.Description)
-		}
+		listScenarios(stdout, opts.full)
 		return exitSame
 	}
 	fail := func(format string, args ...any) int {
@@ -209,7 +235,11 @@ func run(ctx context.Context, opts options, stdout, stderr io.Writer, logger *sl
 	if !ok {
 		return fail("unknown scenario %q (refdiff -list shows them)", opts.scenario)
 	}
-	sopts := scenario.Options{StepTimeout: opts.stepTimeout, Logger: logger}
+	sopts := scenario.Options{StepTimeout: opts.stepTimeout, Logger: logger, Swings: opts.swings}
+
+	if opts.sample {
+		return runSample(ctx, opts, sc, sopts, stdout, stderr)
+	}
 
 	if opts.save != "" {
 		t := opts.ref
@@ -242,7 +272,7 @@ func run(ctx context.Context, opts options, stdout, stderr io.Writer, logger *sl
 		wg.Wait()
 	}
 
-	res := recording.Diff(left, right, recording.Options{Ignore: opts.ignore})
+	res := recording.Diff(left, right, recording.Options{Ignore: ignorePatterns(sc, opts)})
 	var err error
 	if opts.json {
 		err = recording.WriteJSON(stdout, res)
@@ -256,4 +286,72 @@ func run(ctx context.Context, opts options, stdout, stderr io.Writer, logger *sl
 		return exitDiff
 	}
 	return exitSame
+}
+
+// ignorePatterns returns the scenario's own ignore patterns (unless
+// -default-ignores=false) followed by the -ignore ones.
+func ignorePatterns(sc scenario.Scenario, opts options) []string {
+	if !opts.defaultIgnores {
+		return slices.Clone(opts.ignore)
+	}
+	return slices.Concat(sc.Ignore, opts.ignore)
+}
+
+// listScenarios prints the scenarios; full adds their ignore patterns.
+func listScenarios(w io.Writer, full bool) {
+	for _, sc := range scenario.All() {
+		var tags []string
+		if sc.GM {
+			tags = append(tags, "GM")
+		}
+		if sc.Sample {
+			tags = append(tags, "-sample")
+		}
+		desc := sc.Description
+		if len(tags) > 0 {
+			desc = "[" + strings.Join(tags, ", ") + "] " + desc
+		}
+		fmt.Fprintf(w, "%-22s %s\n", sc.Name, desc)
+		if full && len(sc.Ignore) > 0 {
+			fmt.Fprintf(w, "%-22s ignores %s\n", "", strings.Join(sc.Ignore, ","))
+		}
+	}
+}
+
+// runSample runs sc on both servers and compares the swings of its first
+// role.
+func runSample(ctx context.Context, opts options, sc scenario.Scenario, sopts scenario.Options, stdout, stderr io.Writer) int {
+	if !sc.Sample {
+		fmt.Fprintf(stderr, "refdiff: %s is not a swinging scenario; -sample still compares its attacks\n", sc.Name)
+	}
+	var left, right *scenario.Capture
+	var wg sync.WaitGroup
+	wg.Go(func() { left = scenario.Run(ctx, sc, opts.l2go, sopts) })
+	wg.Go(func() { right = scenario.Run(ctx, sc, opts.ref, sopts) })
+	wg.Wait()
+
+	code := exitSame
+	role := sc.Roles[0]
+	var stats [2]sample.Stats
+	for i, c := range []*scenario.Capture{left, right} {
+		if c.Err != nil {
+			fmt.Fprintf(stderr, "refdiff: the scenario failed on %s: %v\n", c.Target.Label, c.Err)
+			code = exitDiff
+		}
+		st, err := sample.Collect(c, role)
+		if err != nil {
+			fmt.Fprintf(stderr, "refdiff: %v\n", err)
+			code = exitDiff
+		}
+		stats[i] = st
+	}
+	rep := sample.Compare(stats[0], stats[1], opts.swings)
+	if err := sample.WriteText(stdout, sc.Name, rep); err != nil {
+		fmt.Fprintf(stderr, "refdiff: write the report: %v\n", err)
+		return exitUsage
+	}
+	if !rep.OK() {
+		code = exitDiff
+	}
+	return code
 }

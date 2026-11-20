@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/IPeter/l2go/cmd/refdiff/recording"
 	"github.com/IPeter/l2go/cmd/refdiff/scenario"
@@ -27,6 +28,42 @@ func TestParseArgsDefaults(t *testing.T) {
 	}
 	if opts.scenario != "login-create-enter" || opts.side != "reference" || opts.json || opts.full || opts.stepTimeout <= 0 {
 		t.Errorf("options = %+v", opts)
+	}
+	if !opts.defaultIgnores || opts.sample || opts.swings != scenario.DefaultSwings {
+		t.Errorf("default ignores %v, sample %v, swings %d", opts.defaultIgnores, opts.sample, opts.swings)
+	}
+}
+
+func TestParseArgsSample(t *testing.T) {
+	opts, err := parseArgs([]string{"-sample", "-swings", "50", "-default-ignores=false", "sample-sword"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.sample || opts.swings != 50 || opts.defaultIgnores || opts.scenario != "sample-sword" {
+		t.Errorf("options = %+v", opts)
+	}
+}
+
+func TestIgnorePatterns(t *testing.T) {
+	sc, ok := scenario.Find("npc-talk")
+	if !ok {
+		t.Fatal("no npc-talk scenario")
+	}
+	opts := options{ignore: []string{"UserInfo.MaxLoad"}, defaultIgnores: true}
+	got := ignorePatterns(sc, opts)
+	if want := append(slices.Clone(sc.Ignore), "UserInfo.MaxLoad"); !slices.Equal(got, want) {
+		t.Errorf("ignorePatterns = %q, want %q", got, want)
+	}
+	if !slices.Contains(got, "NpcInfo.Heading") || !slices.Contains(got, "SocialAction") {
+		t.Errorf("npc-talk does not ignore the NPC noise: %q", got)
+	}
+	got[0] = "changed"
+	if sc2, _ := scenario.Find("npc-talk"); sc2.Ignore[0] == "changed" {
+		t.Error("ignorePatterns shares the scenario's slice")
+	}
+	opts.defaultIgnores = false
+	if got := ignorePatterns(sc, opts); !slices.Equal(got, []string{"UserInfo.MaxLoad"}) {
+		t.Errorf("without default ignores = %q", got)
 	}
 }
 
@@ -65,6 +102,9 @@ func TestParseArgsErrors(t *testing.T) {
 		{"-password", "", "chat"},
 		{"-step-timeout", "0s", "chat"},
 		{"-log-level", "loud", "chat"},
+		{"-sample", "-golden", "x.json", "sample-sword"},
+		{"-sample", "-save", "x.json", "sample-sword"},
+		{"-swings", "0", "sample-sword"},
 	}
 	for _, args := range tests {
 		if _, err := parseArgs(args, io.Discard); err == nil {
@@ -90,6 +130,35 @@ func TestRunList(t *testing.T) {
 		if !strings.Contains(out.String(), sc.Name) {
 			t.Errorf("-list lacks %s:\n%s", sc.Name, out.String())
 		}
+	}
+	for _, want := range []string{"[GM] GM setup", "[-sample] for -sample"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("-list lacks %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "ignores ") {
+		t.Errorf("-list shows the ignores without -full:\n%s", out.String())
+	}
+	out.Reset()
+	run(t.Context(), options{list: true, full: true}, &out, io.Discard, slog.New(slog.DiscardHandler))
+	if !strings.Contains(out.String(), "ignores NpcInfo.X,NpcInfo.Y") {
+		t.Errorf("-list -full lacks the ignores:\n%s", out.String())
+	}
+}
+
+func TestRunSampleWithoutServers(t *testing.T) {
+	// Nothing listens on port 1: both sides fail at the login, and the
+	// sample report says so instead of passing.
+	down := scenario.Target{LoginAddr: "127.0.0.1:1", ServerID: 1, Password: "x"}
+	l2go, ref := down, down
+	l2go.Label, ref.Label = "l2go", "reference"
+	opts := options{scenario: "sample-sword", sample: true, swings: 5, stepTimeout: time.Second, l2go: l2go, ref: ref}
+	var stdout, stderr bytes.Buffer
+	if code := run(t.Context(), opts, &stdout, &stderr, slog.New(slog.DiscardHandler)); code != exitDiff {
+		t.Errorf("exit code %d, want %d", code, exitDiff)
+	}
+	if !strings.Contains(stdout.String(), "the samples differ") || !strings.Contains(stderr.String(), "failed on l2go") {
+		t.Errorf("stdout %q, stderr %q", stdout.String(), stderr.String())
 	}
 }
 

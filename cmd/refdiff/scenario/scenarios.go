@@ -8,6 +8,24 @@ import (
 	"github.com/IPeter/l2go/internal/testclient"
 )
 
+// Default ignores (Scenario.Ignore).
+var (
+	// npcNoise is what NPCs do on their own: the AI moves, turns and
+	// animates them on each server's clock, so where an NPC stands when a
+	// player first sees it, and its idle animations, differ from run to run
+	// (the M3/M4 reference runs).
+	npcNoise = []string{"NpcInfo.X", "NpcInfo.Y", "NpcInfo.Z", "NpcInfo.Heading", "SocialAction"}
+	// fightNoise is what differs between two fights of the same kind: the
+	// positions (they follow where the monster stood and walked), the
+	// server's position corrections, and the length of the fight. Social
+	// actions stay compared: the level-up animation is one.
+	fightNoise = []string{
+		"*.X", "*.Y", "*.Z", "*.DestX", "*.DestY", "*.DestZ",
+		"*.TargetX", "*.TargetY", "*.TargetZ", "*.Heading",
+		"ValidateLocation", "Fight.Swings", "Fight.Packets",
+	}
+)
+
 // scenarios lists every scenario, in the order -list shows them.
 var scenarios = []Scenario{
 	{
@@ -15,30 +33,114 @@ var scenarios = []Scenario{
 		Description: "log in, get the server list, create a Human Fighter, enter the world, idle 2 s, log out",
 		Roles:       []string{"alice"},
 		Run:         loginCreateEnter,
+		Ignore:      npcNoise,
 	},
 	{
 		Name:        "enter-two-players",
 		Description: "two new characters enter at the same spot and see each other; one walks 500 units; both log out",
 		Roles:       []string{"alice", "bob"},
 		Run:         enterTwoPlayers,
+		Ignore:      npcNoise,
 	},
 	{
 		Name:        "chat",
 		Description: "two players next to each other: general chat, shout, and a whisper each way",
 		Roles:       []string{"alice", "bob"},
 		Run:         chat,
+		Ignore:      npcNoise,
 	},
 	{
 		Name:        "restart",
 		Description: "enter the world, restart to the character screen, enter again, log out",
 		Roles:       []string{"alice"},
 		Run:         restart,
+		Ignore:      npcNoise,
 	},
 	{
 		Name:        "npc-talk",
 		Description: "enter in Talking Island, target an NPC in reach (the lowest template), talk to it, follow the first link of its page",
 		Roles:       []string{"alice"},
 		Run:         npcTalk,
+		Ignore:      npcNoise,
+	},
+	// Milestone 5: items and economy.
+	{
+		Name:        "items-equip",
+		Description: "take off the starting sword, equip the dagger, the sword again (the dagger comes off), take off and put on the pants",
+		Roles:       []string{"alice"},
+		Run:         itemsEquip,
+		Ignore:      npcNoise,
+	},
+	{
+		Name:        "items-bow",
+		Description: "GM setup: a bow and 100 wooden arrows; equip the bow (the arrows go on), take it off (they come off)",
+		Roles:       []string{"alice"},
+		Run:         itemsBow,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "items-drop-pickup",
+		Description: "GM setup: 1,000 adena for alice, both on fixed spots; alice drops 100 adena, bob picks them up",
+		Roles:       []string{"alice", "bob"},
+		Run:         itemsDropPickup,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "shop-buy-sell",
+		Description: "GM setup: 10,000 adena, next to Katerina (Talking Island grocer); open the buy list, buy arrows and potions, sell some back",
+		Roles:       []string{"alice"},
+		Run:         shopBuySell,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "multisell-galladucci",
+		Description: "GM setup: C and D crystals, next to Galladucci in Giran; open multisell 300974001, exchange the first entry",
+		Roles:       []string{"alice"},
+		Run:         multisellGalladucci,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "warehouse-private",
+		Description: "GM setup: adena and arrows, next to Wilford (Talking Island); deposit both with the fee, withdraw them",
+		Roles:       []string{"alice"},
+		Run:         warehousePrivate,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	// Milestone 6: combat.
+	{
+		Name:        "kill-monster",
+		Description: "walk to the Bearded Keltirs near the start, kill one, see exp, drops and the corpse vanish, log out after the combat stance",
+		Roles:       []string{"alice"},
+		Run:         killMonster,
+		Ignore:      fightNoise,
+	},
+	{
+		Name:        "pvp-death-restart",
+		Description: "bob force-attacks alice at the start point until she dies (PvP flag, karma); alice restarts in the village",
+		Roles:       []string{"alice", "bob"},
+		Run:         pvpDeathRestart,
+		Ignore:      fightNoise,
+	},
+	{
+		Name:        "sample-sword",
+		Description: "for -sample: a Human Fighter with the starting sword swings at Bearded Keltirs until -swings attacks are recorded",
+		Roles:       []string{"alice"},
+		Run:         sampleSwings(false),
+		Ignore:      fightNoise,
+		Sample:      true,
+	},
+	{
+		Name:        "sample-unarmed",
+		Description: "for -sample: the same unarmed (Mobius swings fists twice per attack)",
+		Roles:       []string{"alice"},
+		Run:         sampleSwings(true),
+		Ignore:      fightNoise,
+		Sample:      true,
 	},
 }
 

@@ -95,6 +95,8 @@ func idKind(packet, path, field string) string {
 		return "vehicle"
 	case "OnlineObjectID":
 		return "player"
+	case "PlayerID":
+		return "player"
 	case "ObjectID":
 		switch {
 		case strings.HasPrefix(path, "Items["):
@@ -107,6 +109,8 @@ func idKind(packet, path, field string) string {
 			return "player"
 		case "NpcInfo", "ServerObjectInfo":
 			return "npc"
+		case "DropItem", "SpawnItem", "GetItem", "EquipUpdate":
+			return "item"
 		}
 	}
 	return "obj"
@@ -212,15 +216,30 @@ type normalizer struct {
 	serverID string
 	anchors  map[int32]testclient.Position
 	ids      idMap
+	// monsters holds the raw IDs of the NPCs some player could attack
+	// (NpcInfo's attackable flag), droppers the raw dropper of every item
+	// a DropItem showed falling.
+	monsters map[int32]bool
+	droppers map[int32]int32
+	// adenaStart is the adena of each role in its first ItemList.
+	// startAdena is the adena of the role of the stream being normalized,
+	// hasAdena whether it is known.
+	adenaStart map[string]int64
+	startAdena int64
+	hasAdena   bool
 }
 
 func newNormalizer(c *scenario.Capture) *normalizer {
 	n := &normalizer{
-		secrets:  make(map[int32]string),
-		serverID: strconv.Itoa(int(c.Target.ServerID)),
-		anchors:  make(map[int32]testclient.Position),
-		ids:      newIDMap(),
+		secrets:    make(map[int32]string),
+		serverID:   strconv.Itoa(int(c.Target.ServerID)),
+		anchors:    make(map[int32]testclient.Position),
+		ids:        newIDMap(),
+		monsters:   make(map[int32]bool),
+		droppers:   make(map[int32]int32),
+		adenaStart: make(map[string]int64),
 	}
+	n.scan(c)
 	for _, p := range c.Players {
 		if p.Account != "" {
 			n.names = append(n.names, replacement{p.Account, "<account:" + p.Role + ">"})
@@ -240,15 +259,56 @@ func newNormalizer(c *scenario.Capture) *normalizer {
 		n.secret(k.PlayOK1, "<play-ok1>")
 		n.secret(k.PlayOK2, "<play-ok2>")
 	}
+	return n
+}
+
+// scan collects what the rules need from the whole capture before any
+// packet is normalized: the start points (anchors), the monsters, who
+// dropped which item, and each role's adena at the start.
+func (n *normalizer) scan(c *scenario.Capture) {
 	for _, st := range c.Streams {
+		role, isGame := streamRole(st.Name)
 		for _, p := range st.Packets {
-			cs, ok := p.Value.(testclient.CharSelected)
-			if !ok {
-				continue
+			switch v := p.Value.(type) {
+			case testclient.CharSelected:
+				if _, seen := n.anchors[v.ObjectID]; !seen {
+					n.anchors[v.ObjectID] = testclient.Position{X: v.X, Y: v.Y, Z: v.Z}
+				}
+			case testclient.NpcInfo:
+				if v.Attackable {
+					n.monsters[v.ObjectID] = true
+				}
+			case testclient.ServerObjectInfo:
+				if v.Attackable {
+					n.monsters[v.ObjectID] = true
+				}
+			case testclient.DropItem:
+				n.droppers[v.ObjectID] = v.DropperID
+			case testclient.ItemList:
+				if _, seen := n.adenaStart[role]; isGame && !seen {
+					n.adenaStart[role] = adenaIn(v.Items)
+				}
 			}
-			if _, seen := n.anchors[cs.ObjectID]; !seen {
-				n.anchors[cs.ObjectID] = testclient.Position{X: cs.X, Y: cs.Y, Z: cs.Z}
-			}
+		}
+	}
+}
+
+// streamRole returns the role of a game stream ("game alice 2" gives
+// alice).
+func streamRole(name string) (string, bool) {
+	f := strings.Fields(name)
+	if len(f) < 2 || f[0] != "game" {
+		return "", false
+	}
+	return f[1], true
+}
+
+// adenaIn returns the adena among items.
+func adenaIn(items []testclient.Item) int64 {
+	var n int64
+	for _, it := range items {
+		if it.ItemID == itemAdena {
+			n += int64(it.Count)
 		}
 	}
 	return n
@@ -273,6 +333,8 @@ func Normalize(c *scenario.Capture) Recording {
 	}
 	streams := make([][]*item, len(c.Streams))
 	for si, st := range c.Streams {
+		role, _ := streamRole(st.Name)
+		n.startAdena, n.hasAdena = n.adenaStart[role]
 		items := make([]*item, len(st.Packets))
 		for i, p := range st.Packets {
 			items[i] = n.item(p)
@@ -285,6 +347,7 @@ func Normalize(c *scenario.Capture) Recording {
 		for i, it := range streams[si] {
 			out.Entries[i] = n.entry(it)
 		}
+		out.Entries = collapseFights(out.Entries)
 		rec.Streams = append(rec.Streams, out)
 	}
 	rec.Anchors = n.anchorList()
@@ -328,16 +391,42 @@ func (n *normalizer) item(p scenario.Packet) *item {
 	return it
 }
 
-// unordered sorts the lists whose order is the server's iteration order:
-// the items of ItemList (Mobius keeps the inventory in a hash set) by item
-// ID, keeping the order of equal ones.
+// unordered sorts the lists whose order is the server's iteration order,
+// keeping the order of equal entries: Mobius keeps the inventory and the
+// warehouse in hash sets, so the items of ItemList, SellList and the
+// warehouse windows are sorted by item ID, and the changes of
+// InventoryUpdate (which Mobius gathers in a map) by item ID and change.
 func unordered(v any) any {
-	if l, ok := v.(testclient.ItemList); ok {
+	byItemID := func(a, b testclient.Item) int { return cmp.Compare(a.ItemID, b.ItemID) }
+	switch l := v.(type) {
+	case testclient.ItemList:
 		l.Items = slices.Clone(l.Items)
-		slices.SortStableFunc(l.Items, func(a, b testclient.Item) int { return cmp.Compare(a.ItemID, b.ItemID) })
+		slices.SortStableFunc(l.Items, byItemID)
+		return l
+	case testclient.InventoryUpdate:
+		l.Items = slices.Clone(l.Items)
+		slices.SortStableFunc(l.Items, func(a, b testclient.ItemChange) int {
+			return cmp.Or(byItemID(a.Item, b.Item), cmp.Compare(a.Change, b.Change))
+		})
+		return l
+	case testclient.SellList:
+		l.Items = slices.Clone(l.Items)
+		slices.SortStableFunc(l.Items, func(a, b testclient.SellListItem) int { return cmp.Compare(a.ItemID, b.ItemID) })
+		return l
+	case testclient.WareHouseDepositList:
+		l.WarehouseList = sortedWarehouse(l.WarehouseList)
+		return l
+	case testclient.WareHouseWithdrawalList:
+		l.WarehouseList = sortedWarehouse(l.WarehouseList)
 		return l
 	}
 	return v
+}
+
+func sortedWarehouse(l testclient.WarehouseList) testclient.WarehouseList {
+	l.Items = slices.Clone(l.Items)
+	slices.SortStableFunc(l.Items, func(a, b testclient.WarehouseListItem) int { return cmp.Compare(a.ItemID, b.ItemID) })
+	return l
 }
 
 // firstWord returns the first word of an unparsed body (after the
@@ -387,7 +476,8 @@ func (n *normalizer) leaves(name string, v any) []leaf {
 	if name == "ShortcutInit" {
 		markShortcutItems(ls)
 	}
-	n.relativeCoords(ls)
+	n.relativeCoords(name, ls)
+	n.randomValues(name, ls)
 	return ls
 }
 
@@ -413,34 +503,88 @@ func markShortcutItems(ls []leaf) {
 	}
 }
 
-// relativeCoords rewrites the top-level coordinates of a packet about one
-// of the scenario's characters relative to its anchor: X, Y and Z (where
-// the object is) and DestX, DestY and DestZ (where it walks to).
-// Coordinates of other objects, such as MoveToPawn's target, stay.
-func (n *normalizer) relativeCoords(ls []leaf) {
-	var (
-		a     testclient.Position
-		found bool
-	)
+// Placeholders of the coordinate rules.
+const (
+	phMonster = "<monster>"
+	phDrop    = "<drop>"
+)
+
+// relativeCoords rewrites the top-level coordinates of a packet by whose
+// they are:
+//   - X, Y and Z (where the object is) and DestX, DestY and DestZ (where it
+//     walks to) of one of the scenario's characters become relative to its
+//     anchor; those of an item a character dropped, relative to the
+//     dropper's anchor. The object is the packet's ObjectID, else its
+//     AttackerID.
+//   - TargetX, TargetY and TargetZ (MoveToPawn, Attack) follow the same
+//     rule for the target (TargetID, or the first hit's target).
+//   - A monster's coordinates and heading become <monster>: it stands at
+//     a random point of its territory and wanders. Those of an item a
+//     monster dropped become <drop>: loot falls at random offsets.
+//
+// Other coordinates, such as where a town NPC stands, stay.
+func (n *normalizer) relativeCoords(name string, ls []leaf) {
+	var subject, target int32
 	for _, l := range ls {
-		if l.path == "ObjectID" && l.kind != "" {
-			a, found = n.anchors[l.id]
-			break
+		switch {
+		case l.kind == "":
+		case l.path == "ObjectID" && subject == 0:
+			subject = l.id
+		case l.path == "AttackerID" && subject == 0:
+			subject = l.id
+		case l.path == "TargetID" || l.path == "Hits[0].TargetID":
+			if target == 0 {
+				target = l.id
+			}
 		}
 	}
-	if !found {
+	if subject != 0 {
+		n.rewriteCoords(ls, subject, "", true)
+	}
+	if target != 0 {
+		n.rewriteCoords(ls, target, "Target", false)
+	}
+}
+
+// rewriteCoords applies the coordinate rule of object id to the fields
+// prefix+X, prefix+Y and prefix+Z (and, when own is set, to DestX, DestY,
+// DestZ and a monster's Heading).
+func (n *normalizer) rewriteCoords(ls []leaf, id int32, prefix string, own bool) {
+	anchor, ok := n.anchors[id]
+	placeholder := ""
+	if !ok {
+		if dropper, dropped := n.droppers[id]; dropped {
+			anchor, ok = n.anchors[dropper]
+			if !ok {
+				placeholder = phDrop
+			}
+		} else if n.monsters[id] {
+			placeholder = phMonster
+		}
+	}
+	if !ok && placeholder == "" {
 		return
 	}
 	for i := range ls {
 		var base int32
-		switch ls[i].path {
-		case "X", "DestX":
-			base = a.X
-		case "Y", "DestY":
-			base = a.Y
-		case "Z", "DestZ":
-			base = a.Z
+		switch p := ls[i].path; p {
+		case prefix + "X", prefix + "Y", prefix + "Z":
+			base = axis(anchor, p[len(prefix):])
+		case "DestX", "DestY", "DestZ":
+			if !own {
+				continue
+			}
+			base = axis(anchor, strings.TrimPrefix(p, "Dest"))
+		case "Heading":
+			if own && placeholder == phMonster {
+				ls[i].val = placeholder
+			}
+			continue
 		default:
+			continue
+		}
+		if placeholder != "" {
+			ls[i].val = placeholder
 			continue
 		}
 		v, err := strconv.ParseInt(ls[i].val, 10, 64)
@@ -449,6 +593,17 @@ func (n *normalizer) relativeCoords(ls []leaf) {
 		}
 		ls[i].val = relative(v - int64(base))
 	}
+}
+
+// axis returns the coordinate of p named "X", "Y" or "Z".
+func axis(p testclient.Position, name string) int32 {
+	switch name {
+	case "X":
+		return p.X
+	case "Y":
+		return p.Y
+	}
+	return p.Z
 }
 
 // relative formats an offset from a start point.

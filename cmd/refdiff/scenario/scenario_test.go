@@ -21,9 +21,34 @@ func TestScenariosAreRegistered(t *testing.T) {
 			t.Errorf("scenario %q is incomplete: %+v", sc.Name, sc)
 		}
 	}
-	want := []string{"login-create-enter", "enter-two-players", "chat", "restart", "npc-talk"}
+	want := []string{
+		"login-create-enter", "enter-two-players", "chat", "restart", "npc-talk",
+		"items-equip", "items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private",
+		"kill-monster", "pvp-death-restart", "sample-sword", "sample-unarmed",
+	}
 	if !slices.Equal(names, want) {
 		t.Errorf("scenarios = %v, want %v", names, want)
+	}
+	gm := []string{"items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private"}
+	for _, sc := range All() {
+		if sc.GM != slices.Contains(gm, sc.Name) {
+			t.Errorf("scenario %s: GM = %v", sc.Name, sc.GM)
+		}
+		if sc.Sample != strings.HasPrefix(sc.Name, "sample-") {
+			t.Errorf("scenario %s: Sample = %v", sc.Name, sc.Sample)
+		}
+		if len(sc.Ignore) == 0 {
+			t.Errorf("scenario %s has no default ignores", sc.Name)
+		}
+		// The NPC noise is ignored everywhere; a fight scenario keeps
+		// SocialAction, the level-up animation.
+		fight := slices.Contains(sc.Ignore, "Fight.Swings")
+		if !fight && !slices.Contains(sc.Ignore, "NpcInfo.Heading") {
+			t.Errorf("scenario %s does not ignore the NPC noise: %q", sc.Name, sc.Ignore)
+		}
+		if fight && slices.Contains(sc.Ignore, "SocialAction") {
+			t.Errorf("fight scenario %s ignores SocialAction", sc.Name)
+		}
 	}
 	if sc, ok := Find("chat"); !ok || sc.Name != "chat" || len(sc.Roles) != 2 {
 		t.Errorf("Find(chat) = %+v, %v", sc, ok)
@@ -103,6 +128,133 @@ func TestStepsStopAtTheFirstError(t *testing.T) {
 	}
 	if !slices.Equal(ran, []string{"one", "two"}) {
 		t.Errorf("ran %v", ran)
+	}
+}
+
+func TestSetupStreamsAreLeftOut(t *testing.T) {
+	s := newSession(Target{Label: "l2go"}, Options{})
+	s.setup = true
+	setupLogin, setupGame := s.newStream("login", "alice"), s.newStream("game", "alice")
+	s.setup = false
+	login, game := s.newStream("login", "alice"), s.newStream("game", "alice")
+	if setupLogin.name != "setup login alice" || setupGame.name != "setup game alice" {
+		t.Errorf("setup stream names %q, %q", setupLogin.name, setupGame.name)
+	}
+	// The scenario proper keeps the names it has without a setup.
+	if login.name != "login alice" || game.name != "game alice" {
+		t.Errorf("stream names after the setup %q, %q", login.name, game.name)
+	}
+	c := s.capture("x", nil)
+	var names []string
+	for _, st := range c.Streams {
+		names = append(names, st.Name)
+	}
+	if want := []string{"login alice", "game alice"}; !slices.Equal(names, want) {
+		t.Errorf("captured streams %q, want %q", names, want)
+	}
+}
+
+func TestPrepareFailsLikeASetup(t *testing.T) {
+	// Nothing listens on port 1: the setup's login fails, and the error
+	// says it was the setup.
+	s := newSession(Target{Label: "l2go", LoginAddr: "127.0.0.1:1", Password: "x"}, Options{StepTimeout: time.Second})
+	err := s.Prepare(t.Context(), s.Player("alice"))
+	if err == nil || !strings.HasPrefix(err.Error(), "setup: ") {
+		t.Errorf("Prepare = %v, want a setup error", err)
+	}
+	if s.setup {
+		t.Error("the session stays in setup after Prepare")
+	}
+	if c := s.capture("x", err); len(c.Streams) != 0 {
+		t.Errorf("the setup's login stream was captured: %+v", c.Streams)
+	}
+}
+
+func TestLongStep(t *testing.T) {
+	s := newSession(Target{}, Options{StepTimeout: 20 * time.Millisecond})
+	slow := Step{"slow", func(ctx context.Context) error { return sleep(ctx, 100*time.Millisecond) }}
+	if err := s.Do(t.Context(), slow); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("a slow step = %v, want the step timeout", err)
+	}
+	if err := s.Do(t.Context(), Long(time.Second, slow)); err != nil {
+		t.Errorf("a long slow step = %v", err)
+	}
+	if err := s.Do(t.Context(), Long(50*time.Millisecond, slow)); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("a long step over its own limit = %v, want a timeout", err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := s.Do(ctx, Long(time.Second, slow)); !errors.Is(err, context.Canceled) {
+		t.Errorf("a long step of a cancelled run = %v, want context.Canceled", err)
+	}
+}
+
+func TestSessionSwings(t *testing.T) {
+	if n := newSession(Target{}, Options{}).Swings(); n != DefaultSwings {
+		t.Errorf("default swings %d, want %d", n, DefaultSwings)
+	}
+	if n := newSession(Target{}, Options{Swings: 7}).Swings(); n != 7 {
+		t.Errorf("swings %d, want 7", n)
+	}
+}
+
+func TestFromRecordKeepsTheTime(t *testing.T) {
+	now := time.Now()
+	p := fromRecord(testclient.Record{Time: now, Dir: testclient.FromServer, Name: "Attack", Packet: testclient.Attack{AttackerID: 5}})
+	if !p.Time.Equal(now) || p.Name != "Attack" || p.Value.(testclient.Attack).AttackerID != 5 {
+		t.Errorf("packet = %+v", p)
+	}
+}
+
+func TestFindLink(t *testing.T) {
+	html := `<a action="bypass -h npc_268435460_Buy 3000400">Buy</a>` +
+		`<a action="bypass -h npc_268435460_Sell">Sell</a>` +
+		`<a action="link merchant/30004-1.htm">More</a>` +
+		`<a action="bypass -h npc_268435460_multisell 300974001">Weapons</a>`
+	tests := []struct {
+		part string
+		want Link
+		ok   bool
+	}{
+		{"_Buy", Link{Bypass: true, Target: "npc_268435460_Buy 3000400"}, true},
+		{"_sell", Link{Bypass: true, Target: "npc_268435460_Sell"}, true},
+		{"30004-1", Link{Target: "merchant/30004-1.htm"}, true},
+		{"multisell", Link{Bypass: true, Target: "npc_268435460_multisell 300974001"}, true},
+		{"_DepositP", Link{}, false},
+	}
+	for _, tt := range tests {
+		if got, ok := FindLink(html, tt.part); ok != tt.ok || got != tt.want {
+			t.Errorf("FindLink(%q) = %+v, %v; want %+v, %v", tt.part, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+func TestPickMonster(t *testing.T) {
+	me := testclient.Position{}
+	mob := func(id, npcID, x int32) testclient.Object {
+		return testclient.Object{ObjectID: id, Kind: testclient.KindNpc, NpcID: npcID, Attackable: true,
+			Motion: testclient.Motion{Pos: testclient.Position{X: x}}}
+	}
+	dead := mob(1, npcBeardedKeltir, 10)
+	dead.Dead = true
+	guard := mob(2, npcBeardedKeltir, 20)
+	guard.Attackable = false
+	objs := []testclient.Object{
+		dead, guard,
+		mob(3, 20432, 30), // an Elpy, nearer than any keltir
+		mob(5, npcBeardedKeltir, 400),
+		mob(4, npcBeardedKeltir, -400),
+		mob(6, npcBeardedKeltir, 900),
+	}
+	o, d, ok := PickMonster(me, objs, npcBeardedKeltir)
+	if !ok || o.ObjectID != 4 || d != 400 {
+		t.Errorf("PickMonster(keltir) = %d at %v, %v; want object 4 (the nearest living keltir, lower ID on a tie)", o.ObjectID, d, ok)
+	}
+	if o, _, ok := PickMonster(me, objs, 0); !ok || o.ObjectID != 3 {
+		t.Errorf("PickMonster(any) = %d, %v; want the Elpy", o.ObjectID, ok)
+	}
+	if _, _, ok := PickMonster(me, objs[:2], 0); ok {
+		t.Error("a dead monster or a guard was picked")
 	}
 }
 
