@@ -51,6 +51,13 @@ Skill data (`data.LoadSkills`, which resolves all 15,311 skill levels and
 | `skilltrees/skilltrees.json` | The 95 skill trees, each tree's header on a line followed by its skills one per line: the 89 class trees with the parent class each extends, and the fishing, pledge (clan), noble, hero and game master trees; per skill the level needed, SP, auto-get and learned-by flags, required items, races and social class |
 | `armorsets/armorsets.json` | The 51 armor sets, one per line: chest and the other parts, the skills of the full set, with a shield and at +6, and the stat bonuses |
 
+Passive skills (`data.LoadPassives`) and categories (`data.LoadCategories`):
+
+| File | Content |
+|---|---|
+| `skills/passives.json` | 59 passive skills, one per line: those NPC templates name that have effects, plus Weight Penalty (4270) and Death Penalty (5076); per level, the stat functions of the Buff effects and the DefenceTrait and AttackTrait values as the XML writes them; effects left out are named per skill (none in the current datapack) |
+| `categories/categories.json` | The 160 categories (`FIGHTER_GROUP`, `MAGE_GROUP`, ...), one per line, with their class (or NPC) IDs |
+
 The JSON schema is defined by the types in `internal/data`. The starting
 class templates character creation uses are built from `classes.json`.
 
@@ -87,6 +94,7 @@ datapack (`L2J_Mobius_CT_0_Interlude`):
 - `dist/game/data/stats/skills/*.xml` (not `custom/`, which Mobius loads only
   with `CustomSkillsLoad`), `dist/game/data/stats/players/skillTrees/**/*.xml`
   and `dist/game/data/stats/armorsets/*.xml`
+- `dist/game/data/CategoryData.xml`
 - The skill enums (abnormal, target and operate types, effect scopes,
   traits, abnormal visual effects, social classes, instance and category
   types), from their Java sources in `java/org/l2jmobius/gameserver/`; the
@@ -118,8 +126,8 @@ the Mobius sources; `go generate ./internal/data` does the same) and then
 `go run ./cmd/datagen` (every file of `data/`, `html/` included). To read
 another checkout: `make data MOBIUS=/path/to/L2J_Mobius_CT_0_Interlude`.
 
-`go run ./cmd/datagen -list` prints the domains (`economy`, `html`, `items`,
-`players`, `skills`, `world`); naming some (for example `go run ./cmd/datagen html` or
+`go run ./cmd/datagen -list` prints the domains (`categories`, `economy`,
+`html`, `items`, `passives`, `players`, `skills`, `world`); naming some (for example `go run ./cmd/datagen html` or
 `go run ./cmd/datagen players items`) regenerates only those. The output is
 sorted and does not depend on the time or file order, so running it again on
 the same datapack gives identical files. Commit the JSON files; `html/` stays
