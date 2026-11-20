@@ -136,6 +136,46 @@ func TestLegacyItems(t *testing.T) {
 	}
 }
 
+func TestQuestDocRoundTrip(t *testing.T) {
+	d := questDoc{Char: 7, Quest: "Q00401_PathOfTheWarrior", Vars: map[string]string{
+		"<state>": "Started", "cond": "5", "__compltdStateFlags": "-2147483619", "memoStateEx1": "",
+	}}
+	raw, err := bson.Marshal(d)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var m bson.M
+	if err := bson.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	for _, key := range []string{"char", "quest", "vars", "updated"} {
+		if _, ok := m[key]; !ok {
+			t.Errorf("quest document %v has no %s", m, key)
+		}
+	}
+	var back questDoc
+	if err := bson.Unmarshal(raw, &back); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if back.Char != d.Char || back.Quest != d.Quest || len(back.Vars) != 4 || back.Vars["memoStateEx1"] != "" || back.Vars["<state>"] != "Started" {
+		t.Errorf("read back %+v, want %+v", back, d)
+	}
+
+	// A character without variables leaves the field out.
+	c := storage.Character{ObjectID: 1, Name: "x"}
+	raw, err = bson.Marshal(toCharacterDoc(&c))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	m = nil
+	if err := bson.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if _, ok := m["vars"]; ok {
+		t.Errorf("character without variables has a vars field: %v", m)
+	}
+}
+
 func TestTransactionsError(t *testing.T) {
 	tests := []struct {
 		name  string

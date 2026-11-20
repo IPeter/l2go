@@ -77,8 +77,24 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 			{ObjectID: objectID + 4, ItemID: itemBoneArrow, Count: 700, Loc: storage.LocWarehouse, Mana: storage.NoMana, CustomType1: 2, CustomType2: 3},
 			{ObjectID: objectID + 5, ItemID: itemShadowWeapon, Count: 1, Slot: storage.PaperdollNone, Loc: storage.LocInventory, Mana: 45},
 		},
+		Vars: map[string]string{"NEWBIE_SHOTS_RECEIVED": "1", "secondClassChange35": "true"},
+		// Out of name order: the stores return them sorted.
+		Quests: []storage.Quest{
+			{Name: questWarrior, Vars: map[string]string{"<state>": "Started", "cond": "4", "__compltdStateFlags": "-2147483635"}},
+			{Name: questLetters, Vars: map[string]string{"<state>": "Completed"}},
+			// Variables set while CREATED are saved without <state>.
+			{Name: questTutorial, Vars: map[string]string{"ex": "1"}},
+		},
 	}
 }
+
+// Quest names of the sample characters.
+const (
+	questLetters  = "Q00001_LettersOfLove"
+	questRoien    = "Q00101_SwordOfSolidarity"
+	questTutorial = "Q00255_Tutorial"
+	questWarrior  = "Q00401_PathOfTheWarrior"
+)
 
 // changedCharacter returns c with every field that Update saves set to a new
 // value, as after a session in the world. Of its items, the sword came off,
@@ -121,7 +137,35 @@ func changedCharacter(c storage.Character) storage.Character {
 		{ObjectID: c.ObjectID + 7, ItemID: itemBoneArrow, Count: 300, Loc: storage.LocWarehouse, Mana: storage.NoMana},
 		{ObjectID: c.ObjectID + 5, ItemID: itemShadowWeapon, Count: 1, Slot: storage.PaperdollNone, Mana: 44},
 	}
+	// One variable went, one changed, one is new.
+	c.Vars = map[string]string{"NEWBIE_SHOTS_RECEIVED": "2", "PathOfTheWarrior": "done"}
+	// The warrior quest moved on, the letters were done again and the
+	// tutorial is gone; a new quest started.
+	c.Quests = []storage.Quest{
+		{Name: questWarrior, Vars: map[string]string{"<state>": "Completed"}},
+		{Name: questRoien, Vars: map[string]string{"<state>": "Started", "cond": "1"}},
+		{Name: questLetters, Vars: map[string]string{"<state>": "Completed", "restartTime": "1795000000000"}},
+	}
 	return c
+}
+
+// StoredQuests returns quests as a store gives them back: in name order,
+// the last one of a name that is listed twice, Vars nil when empty, and nil
+// when there are none.
+func StoredQuests(quests []storage.Quest) []storage.Quest {
+	byName := make(map[string]storage.Quest, len(quests))
+	for _, q := range quests {
+		if len(q.Vars) == 0 {
+			q.Vars = nil
+		}
+		byName[q.Name] = q
+	}
+	if len(byName) == 0 {
+		return nil
+	}
+	return slices.SortedFunc(maps.Values(byName), func(a, b storage.Quest) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 }
 
 // StoredItems returns items as a store gives them back: normalized
@@ -152,6 +196,9 @@ func diffCharacter(got, want storage.Character) string {
 	if items := StoredItems(want.Items); !slices.Equal(got.Items, items) {
 		diffs = append(diffs, fmt.Sprintf("Items = %+v, want %+v", got.Items, items))
 	}
+	if quests := StoredQuests(want.Quests); !reflect.DeepEqual(got.Quests, quests) {
+		diffs = append(diffs, fmt.Sprintf("Quests = %+v, want %+v", got.Quests, quests))
+	}
 	return strings.Join(diffs, "; ")
 }
 
@@ -170,8 +217,14 @@ func diffFields(got, want storage.Character) string {
 			diffs = append(diffs, fmt.Sprintf("%s = %v, want %v", f.name, f.got, f.want))
 		}
 	}
-	got.DeleteTime, got.CreatedAt, got.LastAccess, got.Items = time.Time{}, time.Time{}, time.Time{}, nil
-	want.DeleteTime, want.CreatedAt, want.LastAccess, want.Items = time.Time{}, time.Time{}, time.Time{}, nil
+	got.DeleteTime, got.CreatedAt, got.LastAccess, got.Items, got.Quests = time.Time{}, time.Time{}, time.Time{}, nil, nil
+	want.DeleteTime, want.CreatedAt, want.LastAccess, want.Items, want.Quests = time.Time{}, time.Time{}, time.Time{}, nil, nil
+	if got.Vars != nil && len(got.Vars) == 0 {
+		diffs = append(diffs, "Vars is empty, want nil")
+	}
+	if len(want.Vars) == 0 {
+		want.Vars = nil // stored as none
+	}
 	if !reflect.DeepEqual(got, want) {
 		diffs = append(diffs, fmt.Sprintf("other fields = %+v, want %+v", got, want))
 	}
@@ -707,6 +760,53 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 		checkStored(t, s, again)
 	})
 
+	t.Run("DeleteRemovesQuests", func(t *testing.T) {
+		s := newStore(t)
+		mustCreate(t, s, sampleCharacter(100, "alice", "Fili", baseTime), sampleCharacter(200, "alice", "Kili", baseTime))
+		if err := s.Delete(t.Context(), 100); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		// A new character with the same object ID starts without quests or
+		// variables, and the other character keeps its own.
+		again := sampleCharacter(100, "bob", "Fili", baseTime)
+		again.Quests, again.Vars = nil, nil
+		mustCreate(t, s, again)
+		checkStored(t, s, again)
+		checkStored(t, s, sampleCharacter(200, "alice", "Kili", baseTime))
+	})
+
+	t.Run("NoQuestsOrVars", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Bombur", baseTime)
+		c.Vars, c.Quests = map[string]string{}, []storage.Quest{}
+		mustCreate(t, s, c)
+		got := mustGet(t, s, 100)
+		if got.Vars != nil || got.Quests != nil {
+			t.Errorf("Vars %v, Quests %v; want nil for none", got.Vars, got.Quests)
+		}
+		// Update clears them the same way.
+		c = sampleCharacter(100, "alice", "Bombur", baseTime)
+		if err := s.Update(t.Context(), &c); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		c.Vars, c.Quests = nil, nil
+		if err := s.Update(t.Context(), &c); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		got = mustGet(t, s, 100)
+		if got.Vars != nil || got.Quests != nil {
+			t.Errorf("after Update: Vars %v, Quests %v; want nil", got.Vars, got.Quests)
+		}
+	})
+
+	t.Run("CreateWithDuplicateQuests", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Dain", baseTime)
+		c.Quests = append(c.Quests, storage.Quest{Name: questWarrior, Vars: map[string]string{"<state>": "Started", "cond": "6"}})
+		mustCreate(t, s, c)
+		checkStored(t, s, c) // the last one counts
+	})
+
 	t.Run("DeleteNotFound", func(t *testing.T) {
 		s := newStore(t)
 		if err := s.Delete(t.Context(), 12345); !errors.Is(err, storage.ErrNotFound) {
@@ -772,13 +872,19 @@ func TestCharacterStore(t *testing.T, newStore func(t *testing.T) storage.Charac
 			t.Fatalf("Create: %v", err)
 		}
 		c.Items[0].Count = 99
+		c.Vars["NEWBIE_SHOTS_RECEIVED"] = "99"
+		c.Quests[0].Vars["cond"] = "99"
 		got := mustGet(t, s, 100)
 		got.Items[1].Count = 98
+		got.Vars["NEWBIE_SHOTS_RECEIVED"] = "98"
+		got.Quests[0].Vars["cond"] = "98"
 		list, err := s.ListByAccount(t.Context(), "alice")
 		if err != nil {
 			t.Fatalf("ListByAccount: %v", err)
 		}
 		list[0].Items[2].Count = 97
+		list[0].Vars["secondClassChange35"] = "97"
+		list[0].Quests[1].Vars["<state>"] = "97"
 		if d := diffCharacter(mustGet(t, s, 100), want); d != "" {
 			t.Errorf("stored character changed through a caller's slice: %s", d)
 		}

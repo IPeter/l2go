@@ -73,6 +73,57 @@ func TestFailedWrites(t *testing.T) {
 	})
 }
 
+func TestGlobalVariables(t *testing.T) {
+	storagetest.TestGlobalVariableStore(t, func(t *testing.T) (storage.GlobalVariableStore, func(error)) {
+		s, _ := openTestStore(t)
+		return s.GlobalVariables(), s.fault.arm
+	})
+}
+
+// TestQuestDocuments checks the stored layout of decision Q4: one document
+// per character and quest with the L2J rows in vars, the unique
+// {char, quest} index, and the character variables in the character.
+func TestQuestDocuments(t *testing.T) {
+	s, _ := openTestStore(t)
+	c := storage.Character{ObjectID: 10, Account: "alice", Name: "Layout",
+		Vars: map[string]string{"NEWBIE_SHOTS_RECEIVED": "1"},
+		Quests: []storage.Quest{
+			{Name: "Q00401_PathOfTheWarrior", Vars: map[string]string{"<state>": "Started", "cond": "5"}},
+		},
+	}
+	if err := s.Characters().Create(t.Context(), &c); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	var got struct {
+		Char    int32             `bson:"char"`
+		Quest   string            `bson:"quest"`
+		Vars    map[string]string `bson:"vars"`
+		Updated time.Time         `bson:"updated"`
+	}
+	if err := s.db.Collection(questsCollection).FindOne(t.Context(), bson.D{{Key: "char", Value: int32(10)}}).Decode(&got); err != nil {
+		t.Fatalf("find quest: %v", err)
+	}
+	if got.Char != 10 || got.Quest != "Q00401_PathOfTheWarrior" || !maps.Equal(got.Vars, c.Quests[0].Vars) || got.Updated.IsZero() {
+		t.Errorf("quest document = %+v", got)
+	}
+	var raw struct {
+		Vars map[string]string `bson:"vars"`
+	}
+	if err := s.db.Collection(charactersCollection).FindOne(t.Context(), bson.D{{Key: "_id", Value: int32(10)}}).Decode(&raw); err != nil {
+		t.Fatalf("find character: %v", err)
+	}
+	if !maps.Equal(raw.Vars, c.Vars) {
+		t.Errorf("character vars = %v, want %v", raw.Vars, c.Vars)
+	}
+	// The unique index refuses a second document of the same quest.
+	_, err := s.db.Collection(questsCollection).InsertOne(t.Context(), bson.D{
+		{Key: "char", Value: int32(10)}, {Key: "quest", Value: "Q00401_PathOfTheWarrior"},
+	})
+	if err == nil {
+		t.Error("a second document of the same character and quest was inserted, want a duplicate key error")
+	}
+}
+
 func TestDeploymentRunsTransactions(t *testing.T) {
 	s, _ := openTestStore(t)
 	if err := s.checkTransactions(t.Context()); err != nil {

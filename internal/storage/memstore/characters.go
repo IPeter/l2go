@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -13,9 +14,9 @@ import (
 )
 
 // Characters is an in-memory storage.CharacterStore and
-// storage.CharacterSaver. Like the MongoDB store it keeps the items apart
-// from the characters, each with its owner, so items move between
-// characters the same way. Every write checks first and then changes
+// storage.CharacterSaver. Like the MongoDB store it keeps the items and the
+// quests apart from the characters, each with its owner, so items move
+// between characters the same way. Every write checks first and then changes
 // everything at once, which makes it as atomic as a transaction. The zero
 // value is ready to use and it is safe for concurrent use.
 type Characters struct {
@@ -24,6 +25,7 @@ type Characters struct {
 	byName  map[string]int32            // storage.NameKey(name) → object ID
 	items   map[int32]ownedItem         // item object ID → item
 	byOwner map[int32]map[int32]struct{}
+	quests  map[int32]map[string]map[string]string // character → quest name → vars
 
 	// failNext, if set, fails the next Create, Update, Save or Delete that
 	// gets past its checks, before it changes anything. Tests in this
@@ -54,6 +56,7 @@ func (s *Characters) init() {
 		s.byName = make(map[string]int32)
 		s.items = make(map[int32]ownedItem)
 		s.byOwner = make(map[int32]map[int32]struct{})
+		s.quests = make(map[int32]map[string]map[string]string)
 	}
 }
 
@@ -93,7 +96,8 @@ func (s *Characters) Create(ctx context.Context, c *storage.Character) error {
 		c.CreatedAt = normalizeTime(time.Now())
 	}
 	stored := *c
-	stored.Items = nil
+	stored.Items, stored.Quests = nil, nil
+	stored.Vars = cloneVars(c.Vars)
 	stored.CreatedAt = normalizeTime(stored.CreatedAt)
 	stored.DeleteTime = normalizeTime(stored.DeleteTime)
 	stored.LastAccess = normalizeTime(stored.LastAccess)
@@ -101,6 +105,10 @@ func (s *Characters) Create(ctx context.Context, c *storage.Character) error {
 	s.byName[key] = c.ObjectID
 	for _, it := range c.Items {
 		s.putItem(c.ObjectID, it)
+	}
+	delete(s.quests, c.ObjectID)
+	for _, q := range c.Quests {
+		s.putQuest(c.ObjectID, q)
 	}
 	return nil
 }
@@ -115,8 +123,7 @@ func (s *Characters) ListByAccount(ctx context.Context, account string) ([]stora
 	var list []storage.Character
 	for _, c := range s.byID {
 		if c.Account == account {
-			c.Items = s.ownedItems(c.ObjectID)
-			list = append(list, c)
+			list = append(list, s.load(c))
 		}
 	}
 	slices.SortFunc(list, func(a, b storage.Character) int {
@@ -163,8 +170,16 @@ func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character
 	if !ok {
 		return storage.Character{}, storage.ErrNotFound
 	}
-	c.Items = s.ownedItems(objectID)
-	return c, nil
+	return s.load(c), nil
+}
+
+// load returns a copy of the stored character c with its items, variables
+// and quests. The caller holds s.mu.
+func (s *Characters) load(c storage.Character) storage.Character {
+	c.Items = s.ownedItems(c.ObjectID)
+	c.Vars = cloneVars(c.Vars)
+	c.Quests = s.ownedQuests(c.ObjectID)
+	return c
 }
 
 // Update implements storage.CharacterStore.
@@ -188,6 +203,10 @@ func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
 	}
 	for _, it := range c.Items {
 		s.putItem(c.ObjectID, it)
+	}
+	delete(s.quests, c.ObjectID)
+	for _, q := range c.Quests {
+		s.putQuest(c.ObjectID, q)
 	}
 	return nil
 }
@@ -213,6 +232,15 @@ func (s *Characters) Save(ctx context.Context, c *storage.Character, changes sto
 	for _, it := range changes.Upserts {
 		s.putItem(c.ObjectID, it)
 	}
+	for _, name := range changes.Quests.Deleted {
+		delete(s.quests[c.ObjectID], name)
+	}
+	for _, q := range changes.Quests.Upserts {
+		s.putQuest(c.ObjectID, q)
+	}
+	if len(s.quests[c.ObjectID]) == 0 {
+		delete(s.quests, c.ObjectID)
+	}
 	return nil
 }
 
@@ -227,7 +255,8 @@ func (s *Characters) updateFields(c *storage.Character) error {
 		return err
 	}
 	stored := *c
-	stored.Items = nil
+	stored.Items, stored.Quests = nil, nil
+	stored.Vars = cloneVars(c.Vars)
 	stored.Account, stored.Name, stored.Race, stored.CreatedAt = old.Account, old.Name, old.Race, old.CreatedAt
 	stored.DeleteTime = normalizeTime(stored.DeleteTime)
 	stored.LastAccess = normalizeTime(stored.LastAccess)
@@ -252,6 +281,7 @@ func (s *Characters) Delete(ctx context.Context, objectID int32) error {
 	for id := range s.byOwner[objectID] {
 		s.deleteItem(id)
 	}
+	delete(s.quests, objectID)
 	delete(s.byID, objectID)
 	delete(s.byName, storage.NameKey(c.Name))
 	return nil
@@ -315,6 +345,40 @@ func (s *Characters) ownedItems(owner int32) []storage.Item {
 	}
 	slices.SortFunc(items, func(a, b storage.Item) int { return cmp.Compare(a.ObjectID, b.ObjectID) })
 	return items
+}
+
+// putQuest stores a copy of q as one of owner's quests, replacing the one
+// with the same name. The caller holds s.mu.
+func (s *Characters) putQuest(owner int32, q storage.Quest) {
+	s.init()
+	byName := s.quests[owner]
+	if byName == nil {
+		byName = make(map[string]map[string]string)
+		s.quests[owner] = byName
+	}
+	byName[q.Name] = cloneVars(q.Vars)
+}
+
+// ownedQuests returns copies of the owner's quests in name order, or nil if
+// it has none, as from MongoDB. The caller holds s.mu.
+func (s *Characters) ownedQuests(owner int32) []storage.Quest {
+	byName := s.quests[owner]
+	if len(byName) == 0 {
+		return nil
+	}
+	quests := make([]storage.Quest, 0, len(byName))
+	for _, name := range slices.Sorted(maps.Keys(byName)) {
+		quests = append(quests, storage.Quest{Name: name, Vars: cloneVars(byName[name])})
+	}
+	return quests
+}
+
+// cloneVars returns a copy of vars, or nil if it is empty, as from MongoDB.
+func cloneVars(vars map[string]string) map[string]string {
+	if len(vars) == 0 {
+		return nil
+	}
+	return maps.Clone(vars)
 }
 
 // normalizeTime returns t as MongoDB would store it: millisecond precision,

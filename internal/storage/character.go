@@ -165,6 +165,84 @@ type Character struct {
 	// normalized (Item.Normalized) and in object ID order, which is the
 	// order they were created in.
 	Items []Item
+
+	// Vars are the character's variables (Mobius PlayerVariables, the
+	// character_variables table, decision Q15): string values by name. The
+	// stores keep them in the character document and return nil when there
+	// are none.
+	Vars map[string]string
+
+	// Quests are the character's quest documents (decision Q4), one per
+	// quest. The stores keep them apart from the character, write them in
+	// the same transaction as the character and its items, and return them
+	// in name order, nil when there are none.
+	Quests []Quest
+}
+
+// Quest is the stored state of one quest of a character: the rows of the
+// L2J character_quests table for (charId, name), "<state>" included, as a
+// map from var to value. The quest package gives these rows their meaning.
+type Quest struct {
+	Name string            // the quest's script name, e.g. "Q00401_PathOfTheWarrior"
+	Vars map[string]string // var → value; the stores return nil for none
+}
+
+// QuestChanges are the changes to a character's quests since its last
+// save: the full documents of the quests that changed and the names of the
+// quests that no longer have one.
+type QuestChanges struct {
+	// Upserts replace the stored documents of these quests, or add them.
+	// Of a name listed twice, the last one counts.
+	Upserts []Quest
+	// Deleted are quests whose documents are deleted. An upsert of the
+	// same name wins.
+	Deleted []string
+}
+
+// Empty reports whether ch changes no quest.
+func (ch QuestChanges) Empty() bool {
+	return len(ch.Upserts) == 0 && len(ch.Deleted) == 0
+}
+
+// Merge returns the changes of ch followed by those of newer as one set of
+// changes with the meaning of CharacterSaver.Save: per quest, the newer
+// change wins. Neither argument is changed; the documents are shared.
+func (ch QuestChanges) Merge(newer QuestChanges) QuestChanges {
+	if newer.Empty() {
+		return ch
+	}
+	if ch.Empty() {
+		return newer
+	}
+	replaced := make(map[string]bool, len(newer.Upserts)+len(newer.Deleted))
+	for _, q := range newer.Upserts {
+		replaced[q.Name] = true
+	}
+	for _, name := range newer.Deleted {
+		replaced[name] = true
+	}
+	var out QuestChanges
+	for _, q := range ch.Upserts {
+		if !replaced[q.Name] {
+			out.Upserts = append(out.Upserts, q)
+		}
+	}
+	for _, name := range ch.Deleted {
+		if !replaced[name] {
+			out.Deleted = append(out.Deleted, name)
+		}
+	}
+	upserted := make(map[string]bool, len(newer.Upserts))
+	for _, q := range newer.Upserts {
+		upserted[q.Name] = true
+	}
+	out.Upserts = append(out.Upserts, newer.Upserts...)
+	for _, name := range newer.Deleted {
+		if !upserted[name] {
+			out.Deleted = append(out.Deleted, name)
+		}
+	}
+	return out
 }
 
 // NameKey returns the form of a character name used to compare names. Names
@@ -176,40 +254,43 @@ func NameKey(name string) string {
 // CharacterStore stores player characters. Names are unique and compared
 // case-insensitively (see NameKey). Account names are compared exactly.
 //
-// Create, Update and Delete write the character and its items in one
-// transaction: either all of it is stored or none of it.
+// Create, Update and Delete write the character, its items and its quests in
+// one transaction: either all of it is stored or none of it.
 type CharacterStore interface {
-	// Create stores c with its items. The caller assigns the object IDs of c
-	// and its items from an IDAllocator. If c.CreatedAt is zero, Create sets
-	// it to the current time. Create returns ErrExists if the name is taken,
-	// ignoring case, if the object ID is taken, or if an item's object ID is
-	// taken or listed twice.
+	// Create stores c with its items, variables and quests. The caller
+	// assigns the object IDs of c and its items from an IDAllocator. If
+	// c.CreatedAt is zero, Create sets it to the current time. Create
+	// returns ErrExists if the name is taken, ignoring case, if the object
+	// ID is taken, or if an item's object ID is taken or listed twice. Of a
+	// quest listed twice, the last one counts.
 	Create(ctx context.Context, c *Character) error
 	// ListByAccount returns the account's characters, oldest first, each
-	// with all its items.
+	// with all its items, variables and quests.
 	ListByAccount(ctx context.Context, account string) ([]Character, error)
 	// CountByAccount returns how many characters the account has.
 	CountByAccount(ctx context.Context, account string) (int, error)
 	// NameExists reports whether a character has this name, ignoring case.
 	NameExists(ctx context.Context, name string) (bool, error)
-	// Get returns the character with this object ID, with all its items, or
-	// ErrNotFound.
+	// Get returns the character with this object ID, with all its items,
+	// variables and quests, or ErrNotFound. This is the load at character
+	// select.
 	Get(ctx context.Context, objectID int32) (Character, error)
 
 	// Update saves the state of the character with c.ObjectID: position and
 	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
 	// and kill counts, death penalty level and exp before death, clan, delete
-	// time, last access and access level. The
+	// time, last access, access level and variables. The
 	// identity fields (account, name, race and creation time) are kept as
 	// stored. c.Items replaces the character's items: those it owned that
 	// c.Items does not list are deleted, and the listed ones are stored with
 	// c as their owner, also when another character owned them before. Of
-	// an object ID listed twice, the last one counts. Update returns
-	// ErrNotFound if there is no such character.
+	// an object ID listed twice, the last one counts. c.Quests replaces the
+	// character's quests the same way. Update returns ErrNotFound if there
+	// is no such character.
 	Update(ctx context.Context, c *Character) error
-	// Delete removes the character and all its items, wherever they are
-	// kept. Its name becomes free. It returns ErrNotFound if there is no
-	// such character.
+	// Delete removes the character, all its items, wherever they are kept,
+	// and its quests. Its name becomes free. It returns ErrNotFound if there
+	// is no such character.
 	Delete(ctx context.Context, objectID int32) error
 	// SetDeleteTime sets when the character will be deleted. The zero time
 	// clears it (the character is restored). It returns ErrNotFound if
@@ -232,19 +313,51 @@ type ItemChanges struct {
 	// They are deleted only while the character still owns them, so an
 	// item another character saved first stays with that character.
 	Left []int32
+
+	// Quests are the changes to the character's quests (decision Q4),
+	// written in the same transaction as the items so that quest state and
+	// quest items never diverge. Whoever merges ItemChanges merges these
+	// with QuestChanges.Merge.
+	Quests QuestChanges
 }
 
-// CharacterSaver saves a character with only the changes to its items, the
-// saving side of decision I2. Both stores implement it next to
-// CharacterStore.
+// CharacterSaver saves a character with only the changes to its items and
+// quests, the saving side of decisions I2 and Q4. Both stores implement it
+// next to CharacterStore.
 type CharacterSaver interface {
-	// Save stores what Update stores of c, except its items: c.Items is not
-	// used. Instead it applies changes to the character's items. Deletes
-	// come first, so an object ID in changes.Upserts wins over the same ID
-	// in Destroyed or Left, and of an object ID listed twice in Upserts the
-	// last one counts. Everything is one transaction. Save returns
-	// ErrNotFound if there is no such character.
+	// Save stores what Update stores of c, except its items and quests:
+	// c.Items and c.Quests are not used. Instead it applies changes to the
+	// character's items and changes.Quests to its quests. Deletes come
+	// first, so an object ID in changes.Upserts wins over the same ID in
+	// Destroyed or Left, and of an object ID listed twice in Upserts the
+	// last one counts; quests follow the same rules by name. Everything is
+	// one transaction. Save returns ErrNotFound if there is no such
+	// character.
 	Save(ctx context.Context, c *Character, changes ItemChanges) error
+}
+
+// VarChanges are changes to a set of string variables, such as the global
+// variables.
+type VarChanges struct {
+	Set     map[string]string // new and changed variables
+	Deleted []string          // removed variables; Set wins for the same name
+}
+
+// Empty reports whether ch changes nothing.
+func (ch VarChanges) Empty() bool {
+	return len(ch.Set) == 0 && len(ch.Deleted) == 0
+}
+
+// GlobalVariableStore stores the server's global variables (Mobius
+// GlobalVariablesManager, the global_variables table, decision Q15): string
+// values by name.
+type GlobalVariableStore interface {
+	// LoadGlobalVariables returns all global variables, nil if there are
+	// none.
+	LoadGlobalVariables(ctx context.Context) (map[string]string, error)
+	// SaveGlobalVariables applies changes in one write: deletes first, then
+	// the set variables.
+	SaveGlobalVariables(ctx context.Context, changes VarChanges) error
 }
 
 // Deleting reports whether the character is marked for deletion.

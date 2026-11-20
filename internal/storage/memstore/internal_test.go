@@ -18,6 +18,17 @@ func TestFailedWrites(t *testing.T) {
 	})
 }
 
+func TestGlobalVariables(t *testing.T) {
+	storagetest.TestGlobalVariableStore(t, func(*testing.T) (storage.GlobalVariableStore, func(error)) {
+		s := NewGlobalVariables()
+		return s, func(err error) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.failNext = err
+		}
+	})
+}
+
 // TestIDsEndBelowRuntimeRange checks that persistent IDs never reach the
 // runtime range of NPCs (decision W3).
 func TestIDsEndBelowRuntimeRange(t *testing.T) {

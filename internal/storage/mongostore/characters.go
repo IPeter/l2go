@@ -16,6 +16,7 @@ import (
 const (
 	charactersCollection = "characters"
 	itemsCollection      = "items"
+	questsCollection     = "character_quests"
 )
 
 // characterIndexes are the indexes of the characters collection.
@@ -53,26 +54,35 @@ func itemIndexes() []mongo.IndexModel {
 // Characters returns the character store backed by this database.
 func (s *Store) Characters() *Characters {
 	return &Characters{
-		store: s,
-		chars: s.db.Collection(charactersCollection),
-		items: s.db.Collection(itemsCollection),
+		store:  s,
+		chars:  s.db.Collection(charactersCollection),
+		items:  s.db.Collection(itemsCollection),
+		quests: s.db.Collection(questsCollection),
 	}
 }
 
-// Characters is a storage.CharacterStore and storage.CharacterSaver on two
-// collections: "characters" with one document per character, and "items"
-// with one document per item, the Mobius items table (decision I1):
+// Characters is a storage.CharacterStore and storage.CharacterSaver on three
+// collections: "characters" with one document per character (its variables
+// in a vars map), "items" with one document per item, the Mobius items table
+// (decision I1):
 //
 //	{_id: <object ID>, owner_id, item_id, count, enchant_level, loc,
 //	 loc_data, custom_type1, custom_type2, mana_left}
 //
-// Every write that touches both runs in one transaction. Reads that need
-// both run in a transaction too, so they see a character and its items as
-// one write left them.
+// and "character_quests" with one document per character and quest
+// (decision Q4), each L2J character_quests row of the quest one entry of
+// vars:
+//
+//	{char: <object ID>, quest: <name>, vars: {"<state>": "Started", "cond": "5"}, updated}
+//
+// Every write that touches more than one runs in one transaction. Reads
+// that need more than one run in a transaction too, so they see a character,
+// its items and its quests as one write left them.
 type Characters struct {
-	store *Store
-	chars *mongo.Collection
-	items *mongo.Collection
+	store  *Store
+	chars  *mongo.Collection
+	items  *mongo.Collection
+	quests *mongo.Collection
 }
 
 var (
@@ -117,6 +127,79 @@ type characterDoc struct {
 
 	DeathPenaltyLevel int32 `bson:"death_penalty_level"`
 	ExpBeforeDeath    int64 `bson:"exp_before_death"`
+
+	Vars map[string]string `bson:"vars,omitempty"` // character variables, absent if none
+}
+
+// questDoc is the stored form of storage.Quest. The _id is the server's.
+type questDoc struct {
+	Char    int32             `bson:"char"`
+	Quest   string            `bson:"quest"`
+	Vars    map[string]string `bson:"vars,omitempty"`
+	Updated time.Time         `bson:"updated"`
+}
+
+// questIndexes are the indexes of the character_quests collection: one
+// document per character and quest, which also finds a character's quests.
+func questIndexes() []mongo.IndexModel {
+	return []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "char", Value: 1}, {Key: "quest", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+	}
+}
+
+// questUpserts returns the writes that store quests as owner's: a replace by
+// character and name that inserts the document if it is missing.
+func questUpserts(owner int32, quests []storage.Quest) []mongo.WriteModel {
+	if len(quests) == 0 {
+		return nil
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	models := make([]mongo.WriteModel, len(quests))
+	for i, q := range quests {
+		vars := q.Vars
+		if len(vars) == 0 {
+			vars = nil
+		}
+		models[i] = mongo.NewReplaceOneModel().
+			SetFilter(bson.D{{Key: "char", Value: owner}, {Key: "quest", Value: q.Name}}).
+			SetReplacement(questDoc{Char: owner, Quest: q.Name, Vars: vars, Updated: now}).
+			SetUpsert(true)
+	}
+	return models
+}
+
+// writeQuests runs questUpserts inside a transaction.
+func (s *Characters) writeQuests(ctx context.Context, models []mongo.WriteModel) error {
+	if len(models) == 0 {
+		return nil
+	}
+	_, err := s.quests.BulkWrite(ctx, models)
+	return err
+}
+
+// findQuests returns the quests that match filter by character, each
+// character's in name order.
+func (s *Characters) findQuests(ctx context.Context, filter bson.D) (map[int32][]storage.Quest, error) {
+	cur, err := s.quests.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "char", Value: 1}, {Key: "quest", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	var docs []questDoc
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	byChar := make(map[int32][]storage.Quest)
+	for _, d := range docs {
+		vars := d.Vars
+		if len(vars) == 0 {
+			vars = nil
+		}
+		byChar[d.Char] = append(byChar[d.Char], storage.Quest{Name: d.Quest, Vars: vars})
+	}
+	return byChar, nil
 }
 
 // itemDoc is the stored form of storage.Item, with the column names of the
@@ -171,12 +254,23 @@ func toCharacterDoc(c *storage.Character) characterDoc {
 
 		DeathPenaltyLevel: c.DeathPenaltyLevel,
 		ExpBeforeDeath:    c.ExpBeforeDeath,
+
+		Vars: optionalVars(c.Vars),
 	}
 }
 
-// character returns the character with items, which are already in object
-// ID order. A character without items gets a nil Items slice.
-func (d *characterDoc) character(items []storage.Item) storage.Character {
+// optionalVars returns nil for no variables, so the field is left out.
+func optionalVars(vars map[string]string) map[string]string {
+	if len(vars) == 0 {
+		return nil
+	}
+	return vars
+}
+
+// character returns the character with items and quests, which are already
+// in object ID and name order. A character without items, variables or
+// quests gets nil for them.
+func (d *characterDoc) character(items []storage.Item, quests []storage.Quest) storage.Character {
 	return storage.Character{
 		ObjectID:    d.ObjectID,
 		Account:     d.Account,
@@ -213,6 +307,9 @@ func (d *characterDoc) character(items []storage.Item) storage.Character {
 
 		DeathPenaltyLevel: d.DeathPenaltyLevel,
 		ExpBeforeDeath:    d.ExpBeforeDeath,
+
+		Vars:   optionalVars(d.Vars),
+		Quests: quests,
 	}
 }
 
@@ -297,17 +394,19 @@ func (s *Characters) Create(ctx context.Context, c *storage.Character) error {
 	for i, it := range c.Items {
 		items[i] = toItemDoc(c.ObjectID, it)
 	}
+	quests := questUpserts(c.ObjectID, c.Quests)
 	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
 	err := s.store.write(ctx, func(ctx context.Context) error {
 		if _, err := s.chars.InsertOne(ctx, doc); err != nil {
 			return err
 		}
-		if len(items) == 0 {
-			return nil
+		if len(items) > 0 {
+			if _, err := s.items.InsertMany(ctx, items); err != nil {
+				return err
+			}
 		}
-		_, err := s.items.InsertMany(ctx, items)
-		return err
+		return s.writeQuests(ctx, quests)
 	})
 	if mongo.IsDuplicateKeyError(err) {
 		return storage.ErrExists
@@ -363,8 +462,13 @@ func (s *Characters) ListByAccount(ctx context.Context, account string) ([]stora
 		if err != nil {
 			return err
 		}
+		quests, err := s.findQuests(ctx, bson.D{{Key: "char", Value: bson.D{{Key: "$in", Value: ids}}}})
+		if err != nil {
+			return err
+		}
 		for i := range docs {
-			list = append(list, docs[i].character(items[docs[i].ObjectID]))
+			id := docs[i].ObjectID
+			list = append(list, docs[i].character(items[id], quests[id]))
 		}
 		return nil
 	})
@@ -412,7 +516,11 @@ func (s *Characters) Get(ctx context.Context, objectID int32) (storage.Character
 		if err != nil {
 			return err
 		}
-		c = doc.character(items[objectID])
+		quests, err := s.findQuests(ctx, bson.D{{Key: "char", Value: objectID}})
+		if err != nil {
+			return err
+		}
+		c = doc.character(items[objectID], quests[objectID])
 		return nil
 	})
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -458,6 +566,11 @@ func characterUpdate(c *storage.Character) bson.D {
 		{Key: "access_level", Value: doc.AccessLevel},
 	}
 	var unset bson.D
+	if doc.Vars != nil {
+		set = append(set, bson.E{Key: "vars", Value: doc.Vars})
+	} else {
+		unset = append(unset, bson.E{Key: "vars", Value: ""})
+	}
 	for _, f := range []struct {
 		key string
 		t   *time.Time
@@ -510,6 +623,11 @@ func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
 		keep[i] = it.ObjectID
 	}
 	upserts := itemUpserts(c.ObjectID, c.Items)
+	keepQuests := make([]string, len(c.Quests)) // never nil: $nin needs an array
+	for i, q := range c.Quests {
+		keepQuests[i] = q.Name
+	}
+	quests := questUpserts(c.ObjectID, c.Quests)
 	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
 	err := s.store.write(ctx, func(ctx context.Context) error {
@@ -523,17 +641,30 @@ func (s *Characters) Update(ctx context.Context, c *storage.Character) error {
 		if err != nil {
 			return err
 		}
-		return s.upsertItems(ctx, upserts)
+		if err := s.upsertItems(ctx, upserts); err != nil {
+			return err
+		}
+		_, err = s.quests.DeleteMany(ctx, bson.D{
+			{Key: "char", Value: c.ObjectID},
+			{Key: "quest", Value: bson.D{{Key: "$nin", Value: keepQuests}}},
+		})
+		if err != nil {
+			return err
+		}
+		return s.writeQuests(ctx, quests)
 	})
 	return writeError("update character", err)
 }
 
 // Save implements storage.CharacterSaver: in one transaction it stores the
 // character's fields, deletes the destroyed items, deletes the items that
-// left while the character still owns them, and upserts the changed ones.
+// left while the character still owns them, upserts the changed ones, and
+// then does the same for the quests.
 func (s *Characters) Save(ctx context.Context, c *storage.Character, changes storage.ItemChanges) error {
 	update := characterUpdate(c)
 	upserts := itemUpserts(c.ObjectID, changes.Upserts)
+	quests := questUpserts(c.ObjectID, changes.Quests.Upserts)
+	deletedQuests := changes.Quests.Deleted
 	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
 	err := s.store.write(ctx, func(ctx context.Context) error {
@@ -555,13 +686,25 @@ func (s *Characters) Save(ctx context.Context, c *storage.Character, changes sto
 				return err
 			}
 		}
-		return s.upsertItems(ctx, upserts)
+		if err := s.upsertItems(ctx, upserts); err != nil {
+			return err
+		}
+		if len(deletedQuests) > 0 {
+			_, err := s.quests.DeleteMany(ctx, bson.D{
+				{Key: "char", Value: c.ObjectID},
+				{Key: "quest", Value: bson.D{{Key: "$in", Value: deletedQuests}}},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return s.writeQuests(ctx, quests)
 	})
 	return writeError("save character", err)
 }
 
-// Delete implements storage.CharacterStore: the character and all its items
-// go in one transaction.
+// Delete implements storage.CharacterStore: the character, all its items and
+// its quests go in one transaction.
 func (s *Characters) Delete(ctx context.Context, objectID int32) error {
 	ctx, cancel := context.WithTimeout(ctx, s.store.timeout)
 	defer cancel()
@@ -573,7 +716,10 @@ func (s *Characters) Delete(ctx context.Context, objectID int32) error {
 		if res.DeletedCount == 0 {
 			return storage.ErrNotFound
 		}
-		_, err = s.items.DeleteMany(ctx, bson.D{{Key: "owner_id", Value: objectID}})
+		if _, err := s.items.DeleteMany(ctx, bson.D{{Key: "owner_id", Value: objectID}}); err != nil {
+			return err
+		}
+		_, err = s.quests.DeleteMany(ctx, bson.D{{Key: "char", Value: objectID}})
 		return err
 	})
 	return writeError("delete character", err)

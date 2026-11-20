@@ -36,8 +36,9 @@ func TestCharacterSaver(t *testing.T, newStore func(t *testing.T) SaverStore) {
 		if err := s.Save(t.Context(), &arg, storage.ItemChanges{}); err != nil {
 			t.Fatalf("Save: %v", err)
 		}
+		// The variables are character fields; c.Quests is not used either.
 		want := upd
-		want.Items = orig.Items
+		want.Items, want.Quests = orig.Items, orig.Quests
 		checkStored(t, s, want)
 		if ok, err := s.NameExists(t.Context(), "Smaug"); err != nil || ok {
 			t.Errorf("NameExists(Smaug) = %v, %v, want false", ok, err)
@@ -192,18 +193,98 @@ func TestCharacterSaver(t *testing.T, newStore func(t *testing.T) SaverStore) {
 		checkStored(t, s, c)
 	})
 
+	t.Run("Quests", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Thrain", baseTime)
+		other := sampleCharacter(200, "bob", "Thror", baseTime) // the same quest names
+		mustCreate(t, s, c, other)
+
+		warrior := storage.Quest{Name: questWarrior, Vars: map[string]string{"<state>": "Started", "cond": "5", "__compltdStateFlags": "-2147483619"}}
+		roien := storage.Quest{Name: questRoien, Vars: map[string]string{"<state>": "Started", "cond": "1"}}
+		changes := storage.ItemChanges{Quests: storage.QuestChanges{
+			Upserts: []storage.Quest{warrior, roien},
+			Deleted: []string{questLetters, "Q00999_NeverStored"},
+		}}
+		if err := s.Save(t.Context(), &c, changes); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		want := c
+		want.Quests = []storage.Quest{c.Quests[2], warrior, roien}
+		checkStored(t, s, want)
+		checkStored(t, s, other)
+	})
+
+	t.Run("QuestUpsertWinsOverDelete", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Fundin", baseTime)
+		mustCreate(t, s, c)
+		first := storage.Quest{Name: questLetters, Vars: map[string]string{"<state>": "Started", "cond": "1"}}
+		last := storage.Quest{Name: questLetters, Vars: map[string]string{"<state>": "Started", "cond": "2"}}
+		// The quest was aborted and taken again before the save.
+		changes := storage.ItemChanges{Quests: storage.QuestChanges{
+			Upserts: []storage.Quest{first, last},
+			Deleted: []string{questLetters},
+		}}
+		if err := s.Save(t.Context(), &c, changes); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		want := c
+		want.Quests = []storage.Quest{c.Quests[0], last, c.Quests[2]}
+		checkStored(t, s, want)
+	})
+
+	t.Run("QuestVarsReplaced", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Groin", baseTime)
+		mustCreate(t, s, c)
+		// An upsert is the whole document: variables it does not list go.
+		done := storage.Quest{Name: questWarrior, Vars: map[string]string{"<state>": "Completed"}}
+		empty := storage.Quest{Name: questTutorial, Vars: map[string]string{}}
+		if err := s.Save(t.Context(), &c, storage.ItemChanges{Quests: storage.QuestChanges{Upserts: []storage.Quest{done, empty}}}); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		want := c
+		want.Quests = []storage.Quest{c.Quests[1], empty, done}
+		checkStored(t, s, want)
+	})
+
+	t.Run("QuestsWithItems", func(t *testing.T) {
+		s := newStore(t)
+		c := sampleCharacter(100, "alice", "Nain", baseTime)
+		mustCreate(t, s, c)
+		// A quest step that takes one quest item and gives another.
+		letter := storage.Item{ObjectID: 106, ItemID: 1138, Count: 1, Slot: storage.PaperdollNone, Mana: storage.NoMana}
+		step := storage.Quest{Name: questWarrior, Vars: map[string]string{"<state>": "Started", "cond": "5"}}
+		changes := storage.ItemChanges{
+			Upserts:   []storage.Item{letter},
+			Destroyed: []int32{105},
+			Quests:    storage.QuestChanges{Upserts: []storage.Quest{step}},
+		}
+		if err := s.Save(t.Context(), &c, changes); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		want := c
+		want.Items = append(without(c.Items, 105), letter)
+		want.Quests = []storage.Quest{c.Quests[1], c.Quests[2], step}
+		checkStored(t, s, want)
+	})
+
 	t.Run("NotFound", func(t *testing.T) {
 		s := newStore(t)
 		ghost := sampleCharacter(100, "alice", "Ghost", baseTime)
-		err := s.Save(t.Context(), &ghost, storage.ItemChanges{Upserts: ghost.Items, Destroyed: []int32{1}})
+		err := s.Save(t.Context(), &ghost, storage.ItemChanges{Upserts: ghost.Items, Destroyed: []int32{1},
+			Quests: storage.QuestChanges{Upserts: ghost.Quests}})
 		if !errors.Is(err, storage.ErrNotFound) {
 			t.Fatalf("Save error = %v, want ErrNotFound", err)
 		}
 		if _, err := s.Get(t.Context(), 100); !errors.Is(err, storage.ErrNotFound) {
 			t.Errorf("Get after a failed Save: error = %v, want ErrNotFound", err)
 		}
-		// Its items were not stored either.
-		mustCreate(t, s, sampleCharacter(100, "alice", "Ghost", baseTime))
+		// Its items and quests were not stored either.
+		again := sampleCharacter(100, "alice", "Ghost", baseTime)
+		again.Quests = nil
+		mustCreate(t, s, again)
+		checkStored(t, s, again)
 	})
 }
 
@@ -271,6 +352,13 @@ func TestFailedWrites(t *testing.T, newStore func(t *testing.T) (s SaverStore, f
 			},
 			Destroyed: []int32{102, 204},
 			Left:      []int32{103},
+			Quests: storage.QuestChanges{
+				Upserts: []storage.Quest{
+					{Name: questWarrior, Vars: map[string]string{"<state>": "Completed"}},
+					{Name: questRoien, Vars: map[string]string{"<state>": "Started", "cond": "1"}},
+				},
+				Deleted: []string{questLetters},
+			},
 		}
 		failNext(errInjected)
 		if err := s.Save(t.Context(), &upd, changes); !errors.Is(err, errInjected) {
@@ -278,6 +366,14 @@ func TestFailedWrites(t *testing.T, newStore func(t *testing.T) (s SaverStore, f
 		}
 		checkStored(t, s, a)
 		checkStored(t, s, b)
+		// The retry writes everything.
+		if err := s.Save(t.Context(), &upd, changes); err != nil {
+			t.Fatalf("Save after the failure: %v", err)
+		}
+		want := upd
+		want.Quests = []storage.Quest{a.Quests[2], changes.Quests.Upserts[0], changes.Quests.Upserts[1]}
+		want.Items = append(without(a.Items, 102, 103), changes.Upserts...)
+		checkStored(t, s, want)
 	})
 
 	t.Run("Delete", func(t *testing.T) {

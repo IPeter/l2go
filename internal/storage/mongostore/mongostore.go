@@ -6,6 +6,10 @@
 //     indexed on account (see Characters).
 //   - items: one document per item with its owner, indexed on owner_id and
 //     loc (see Characters).
+//   - character_quests: one document per character and quest, unique on
+//     char and quest (see Characters).
+//   - global_variables: one document per global variable (see
+//     GlobalVariables).
 //   - counters: the object ID counter (see IDs).
 //
 // A character and its items are written in one transaction, so the
@@ -184,6 +188,10 @@ func (s *Store) ensureIndexes(ctx context.Context) error {
 	_, err = s.db.Collection(itemsCollection).Indexes().CreateMany(ctx, itemIndexes())
 	if err != nil {
 		return fmt.Errorf("mongostore: create items indexes: %w", err)
+	}
+	_, err = s.db.Collection(questsCollection).Indexes().CreateMany(ctx, questIndexes())
+	if err != nil {
+		return fmt.Errorf("mongostore: create character_quests indexes: %w", err)
 	}
 	return nil
 }
