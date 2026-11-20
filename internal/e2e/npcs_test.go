@@ -55,7 +55,10 @@ func (w *walk) targetHelper(t *testing.T) {
 }
 
 // talkToHelper: A clicks the targeted Newbie Helper again, and its dialog
-// opens: Mobius's default/30009.htm, with a Quest link (M4.2).
+// opens: Mobius's default/30009.htm, with a Quest link (M4.2). A is a new
+// character, so the tutorial runs: Q00999_T0Tutorial owns the helper's first
+// talk and, as in Mobius, shows the default page and then the helper's
+// tutorial page (30530-01.htm, the first mission).
 func (w *walk) talkToHelper(t *testing.T) {
 	w.needHTML(t)
 	ctx := w.stepCtx(t, 0)
@@ -67,20 +70,18 @@ func (w *walk) talkToHelper(t *testing.T) {
 	}
 	checkPage(t, page, helper.ObjectID, "Newbie Helper:", "Cedric's Training Hall")
 	requireLink(t, page, "Script")
+	tutorial := await[testclient.NpcHtmlMessage](t, ctx, c, nil)
+	checkPage(t, tutorial, helper.ObjectID, "Newbie Helper:", "Are you ready for a mission?")
 }
 
-// helperLinks: the Quest link shows Mobius's "no quests" page, as no quest
-// runs at the Newbie Helper. Then links the last page did not offer do
-// nothing: the Quest link of the page before, and a Chat link no page
-// offered (M4.3, decision N5).
+// helperLinks: links the last page did not offer do nothing: the Quest link
+// of the default page, which the tutorial page replaced, and a Chat link no
+// page offered (M4.3, decision N5).
 func (w *walk) helperLinks(t *testing.T) {
 	w.needHTML(t)
 	ctx := w.stepCtx(t, 0)
 	c := w.a.conn
 	helper := findNpc(t, ctx, c, npcNewbieHelper)
-	page := follow(t, ctx, c, "Script")
-	checkPage(t, page, helper.ObjectID, "You are either not on a quest that involves this NPC")
-
 	bypass(t, ctx, c, "Script", fmt.Sprintf("npc_%d_Chat 1", helper.ObjectID))
 	none[testclient.NpcHtmlMessage](t, ping(t, ctx, c), "links the last page did not offer", nil)
 }

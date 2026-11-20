@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -177,11 +178,19 @@ func teleport(t *testing.T, ctx context.Context, c *testclient.GameConn, pos tes
 }
 
 // questLink talks to the NPC npcID and follows its quest link ("Script"),
-// returning the page the quest answers with.
+// returning the page Q001 answers with. Where several quests talk at the
+// NPC (Roxxy also starts Q00006_StepIntoTheFuture), the link opens Mobius's
+// choose window, and Q001 is picked from it as the client does.
 func questLink(t *testing.T, ctx context.Context, c *testclient.GameConn, npcID int32) testclient.NpcHtmlMessage {
 	t.Helper()
 	bypassQuestLink(t, ctx, c, npcID)
-	return await[testclient.NpcHtmlMessage](t, ctx, c, nil)
+	page := await[testclient.NpcHtmlMessage](t, ctx, c, nil)
+	for _, l := range pageLinks(page.HTML) {
+		if strings.HasSuffix(l.bypass, "_Script "+q001) {
+			return follow(t, ctx, c, l.bypass)
+		}
+	}
+	return page
 }
 
 // bypassQuestLink talks to the NPC npcID and clicks its quest link.
