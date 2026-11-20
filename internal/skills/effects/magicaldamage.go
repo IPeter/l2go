@@ -10,8 +10,6 @@ import (
 // (Wind Strike): spiritshots, a magic critical roll, the shield, then the
 // damage. Damage may break the target's cast or attack; Shield Deflect
 // Magic sends it back to the caster. A suicide skill kills its caster.
-//
-// Fake death (FakeDeathDamageStand) comes with the FakeDeath effect.
 type magicalDamage struct{ skills.Base }
 
 func init() {
@@ -29,6 +27,7 @@ func (*magicalDamage) OnStart(info *skills.BuffInfo) {
 	if effector.IsAlikeDead() {
 		return
 	}
+	standUp(env, effected)
 	sps := sk.UseSpiritShot() && effector.ChargedShot(skills.Spiritshot)
 	bss := sk.UseSpiritShot() && effector.ChargedShot(skills.BlessedSpiritshot)
 	mcrit := skills.MCrit(env, float64(effector.MCriticalHit(effected, sk)))

@@ -50,6 +50,17 @@ func (s *Skill) Targets(env *Env, caster Creature, onlyFirst bool, target Creatu
 	return h(env, s, caster, onlyFirst, target)
 }
 
+// TargetsOfType is the handler of target type t run for the skill
+// (ITargetTypeHandler.getTargetList), as the trigger effects ask it; nil
+// for a type without a handler.
+func (s *Skill) TargetsOfType(env *Env, t data.TargetType, caster Creature, onlyFirst bool, target Creature) []Creature {
+	h, ok := targetHandlers[t]
+	if !ok {
+		return nil
+	}
+	return h(env, s, caster, onlyFirst, target)
+}
+
 // FirstTarget is Skill.getFirstOfTargetList with the caster's own target:
 // the first creature the skill would act on, nil if none.
 func (s *Skill) FirstTarget(env *Env, caster Creature) Creature {

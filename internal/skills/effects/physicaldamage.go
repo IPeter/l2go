@@ -11,8 +11,6 @@ import (
 // damage with a charged soulshot. Damage tells the attacker, hurts the
 // target and may be counter-attacked; no damage is "Your attack has
 // failed.". A suicide skill kills its caster.
-//
-// Fake death (FakeDeathDamageStand) comes with the FakeDeath effect.
 type physicalDamage struct{ skills.Base }
 
 func init() {
@@ -34,6 +32,7 @@ func (*physicalDamage) OnStart(info *skills.BuffInfo) {
 	if effector.IsAlikeDead() {
 		return
 	}
+	standUp(env, effected)
 	ss := sk.IsPhysical() && effector.ChargedShot(skills.Soulshot)
 	shld := skills.ShieldUse(env, effector, effected, sk, true)
 	crit := false

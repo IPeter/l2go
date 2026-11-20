@@ -4,10 +4,9 @@
 // them all into a skills.Registry. A factory parses the <effect>'s
 // parameters once, at load; the effect then keeps no per-creature state.
 //
-// Wave A (Phase 7.1) is ported: Buff, Debuff, PhysicalDamage,
-// MagicalDamage, DefenceTrait, AttackTrait, Heal, HealOverTime,
-// HealPercent, Escape, CpHeal, ManaHeal, ManaHealByLevel, ManaHealOverTime,
-// ManaHealPercent and Lucky.
+// Waves A, B and C of Plan 10 are ported (Ported lists them); the handlers
+// left for later milestones (summons, fishing, sieges...) load as stubs that
+// refuse the cast.
 package effects
 
 import (
@@ -78,6 +77,14 @@ func isSummon(c skills.Creature) bool {
 }
 
 func isNpc(c skills.Creature) bool { return c != nil && c.InstanceType().Is(data.InstanceNpc) }
+
+// standUp ends a player target's fake death when damage does that
+// (FakeDeathDamageStand), as the Mobius damage handlers do first.
+func standUp(env *skills.Env, effected skills.Creature) {
+	if isPlayer(effected) && effected.AsPlayer().IsFakeDeath() && env.Config.FakeDeathDamageStand {
+		effected.StopFakeDeath(true)
+	}
+}
 
 // sameCreature reports whether a and b are the same creature.
 func sameCreature(a, b skills.Creature) bool {

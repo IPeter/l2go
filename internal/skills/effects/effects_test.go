@@ -25,11 +25,12 @@ var waveA = []data.EffectName{
 	data.EffectManaHealByLevel, data.EffectManaHeal, data.EffectManaHealPercent, data.EffectLucky,
 }
 
-func TestPortedIsWaveA(t *testing.T) {
-	want := slices.Clone(waveA)
-	slices.Sort(want)
-	if got := effects.Ported(); !slices.Equal(got, want) {
-		t.Fatalf("ported = %v, want %v", got, want)
+func TestPortedHasWaveA(t *testing.T) {
+	got := effects.Ported()
+	for _, n := range waveA {
+		if !slices.Contains(got, n) {
+			t.Errorf("%s is not ported", n)
+		}
 	}
 }
 

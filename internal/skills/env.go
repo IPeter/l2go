@@ -62,6 +62,9 @@ type Config struct {
 	// StoreDances and StoreToggles keep dances and toggles among the
 	// effects a player saves (AltStoreDances true, AltStoreToggles false).
 	StoreDances, StoreToggles bool
+	// FakeDeathDamageStand makes damage end a player's fake death
+	// (FakeDeathDamageStand, false in Player.ini).
+	FakeDeathDamageStand bool
 }
 
 // DefaultConfig returns the Mobius defaults.
@@ -87,6 +90,7 @@ func DefaultConfig() Config {
 		PartyRange:                    1500,
 		StoreDances:                   true,
 		StoreToggles:                  false,
+		FakeDeathDamageStand:          false,
 	}
 }
 
@@ -128,12 +132,23 @@ type Scheduler interface {
 	GameTicks() int64
 }
 
+// Rand is the random source of skills, with Mobius Rnd semantics: the
+// stats.Rand of the formulas, plus Rnd.nextDouble and Rnd.nextGaussian,
+// which a few effects draw. rnd.Source has all of them.
+type Rand interface {
+	stats.Rand
+	// Float64 is Rnd.nextDouble: a number in [0, 1).
+	Float64() float64
+	// Gaussian is Rnd.nextGaussian.
+	Gaussian() float64
+}
+
 // Env is what the skills of one server share: the random source, the
 // timers, the settings and the world queries. Build it once and pass the
 // same pointer everywhere.
 type Env struct {
 	// Rand is the random source, with Mobius Rnd semantics.
-	Rand stats.Rand
+	Rand Rand
 	// Sched runs the buff clocks, effect ticks and icon updates.
 	Sched Scheduler
 	// World answers the target and party queries; it may be nil in tests
@@ -144,10 +159,19 @@ type Env struct {
 	// Log receives the warnings Mobius logs (a passive with an abnormal
 	// type, ...); nil means slog.Default().
 	Log *slog.Logger
+	// Skills finds the skills that effects cast (CallSkill, the trigger
+	// effects); set it to the Catalog once it is built. Nil finds none.
+	Skills SkillLookup
+}
+
+// SkillLookup finds a skill level (Mobius SkillData.getSkill); the Catalog
+// is one.
+type SkillLookup interface {
+	Skill(id, level int) (*Skill, bool)
 }
 
 // NewEnv checks cfg and returns an Env.
-func NewEnv(rnd stats.Rand, sched Scheduler, world World, cfg Config, log *slog.Logger) (*Env, error) {
+func NewEnv(rnd Rand, sched Scheduler, world World, cfg Config, log *slog.Logger) (*Env, error) {
 	if rnd == nil || sched == nil {
 		return nil, fmt.Errorf("skills: %w: an Env needs a random source and a scheduler", ErrInvalid)
 	}
@@ -196,6 +220,9 @@ type World interface {
 	OldCorpse(corpse, caster Creature) bool
 	// IsNight reports game-time night.
 	IsNight() bool
+	// ValidLocation returns where a creature moving from from towards to
+	// can stand (GeoEngine.getValidLocation).
+	ValidLocation(from, to Location) Location
 }
 
 // ZoneKind is a kind of zone the skills ask about (Mobius ZoneId).

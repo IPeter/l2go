@@ -87,3 +87,6 @@ func (w *World) OldCorpse(corpse, _ skills.Creature) bool { return w.Old[corpse.
 
 // IsNight reports night.
 func (w *World) IsNight() bool { return w.Night }
+
+// ValidLocation returns to: there is no geodata.
+func (w *World) ValidLocation(_, to skills.Location) skills.Location { return to }

@@ -68,7 +68,19 @@ func NewCatalog(d *data.Skills, reg *Registry) (*Catalog, error) {
 		t := &d.Skills[i]
 		c.byID[t.ID] = c.compile(t, reg)
 	}
+	c.markTree(d.OtherSkillTree(data.TreeHero), func(s *Skill) { s.hero = true })
+	c.markTree(d.OtherSkillTree(data.TreeGameMaster), func(s *Skill) { s.gm = true })
+	c.markTree(d.OtherSkillTree(data.TreeGameMasterAura), func(s *Skill) { s.gm = true })
 	return c, nil
+}
+
+// markTree marks the skill levels of a tree.
+func (c *Catalog) markTree(tree []data.SkillLearn, mark func(*Skill)) {
+	for i := range tree {
+		if sk, ok := c.Skill(tree[i].SkillID, tree[i].Level); ok {
+			mark(sk)
+		}
+	}
 }
 
 // compile compiles the levels of one skill.

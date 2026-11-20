@@ -1,6 +1,8 @@
 package skills
 
 import (
+	"time"
+
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/stats"
@@ -162,6 +164,190 @@ type Creature interface {
 	// UpdateAbnormalEffect broadcasts the abnormal visual masks (UserInfo,
 	// CharInfo or NpcInfo).
 	UpdateAbnormalEffect()
+
+	// ReduceCurrentHPByDOT takes the damage of a damage-over-time effect
+	// (Mobius reduceCurrentHpByDOT: reduceCurrentHp with awake = not a
+	// toggle, isDOT set).
+	ReduceCurrentHPByDOT(damage float64, attacker Creature, sk *Skill)
+	// IsLethalable reports whether lethal strikes work on the creature
+	// (Mobius isLethalable: the NPC template's flag, true for players).
+	IsLethalable() bool
+	// AbortAttack and AbortCast stop an attack or a cast in progress
+	// (Mobius abortAttack, abortCast); StopMove stops moving (stopMove(null)).
+	AbortAttack()
+	AbortCast()
+	StopMove()
+	// IsCastingNow reports a cast in progress; CanAbortCast whether it is
+	// still before its interrupt time (Mobius canAbortCast).
+	IsCastingNow() bool
+	CanAbortCast() bool
+	// SetTarget changes the target; nil clears it.
+	SetTarget(t Creature)
+	// SetImmobilized blocks or frees movement (Mobius setImmobilized).
+	SetImmobilized(immobilized bool)
+	// NotifyAI tells the creature's AI what an effect did to it (Mobius
+	// CreatureAI.notifyAction*, setIntention*); other is the effect's caster
+	// where the event names one.
+	NotifyAI(ev AIEvent, other Creature)
+	// Decay removes a dead NPC's corpse after delay, cancelling its decay
+	// timer (Mobius DecayTaskManager.cancel and onDecay; Npc.endDecayTask
+	// for a zero delay).
+	Decay(delay time.Duration)
+	// Revive cancels the corpse's decay and brings the creature back to
+	// life with the restore percent of a resurrection skill (Mobius
+	// DecayTaskManager.cancel and doRevive(percent)).
+	Revive(percent float64)
+
+	// SetRunning and SetWalking switch between running and walking (Mobius
+	// setRunning, setWalking).
+	SetRunning()
+	SetWalking()
+	// IsMovementDisabled reports a creature that cannot move now: stunned,
+	// rooted, sleeping, immobilized, dead, ... (Mobius isMovementDisabled).
+	IsMovementDisabled() bool
+	// SetLockedTarget locks a playable's target on t, nil unlocks it (Mobius
+	// Playable.setLockedTarget); other creatures ignore it.
+	SetLockedTarget(t Creature)
+	// AsAttackable returns the hate list and loot of an attackable NPC
+	// (Mobius asAttackable), nil for anything else.
+	AsAttackable() Attackable
+	// TeleToLocation teleports the creature (Mobius teleToLocation(loc,
+	// randomOffset)).
+	TeleToLocation(loc Location, randomOffset bool)
+	// SetXYZ puts the creature at loc without a teleport (Mobius setXYZ);
+	// BroadcastValidateLocation then shows it there (ValidateLocation).
+	SetXYZ(loc Location)
+	BroadcastValidateLocation()
+	// BroadcastStartRotation and BroadcastStopRotation broadcast the
+	// creature's StartRotation(heading, side, speed) and StopRotation(heading,
+	// speed) packets.
+	BroadcastStartRotation(heading, side, speed int)
+	BroadcastStopRotation(heading, speed int)
+	// StartFakeDeath and StopFakeDeath enter and leave fake death (Mobius
+	// startFakeDeath, stopFakeDeath(removeEffects)).
+	StartFakeDeath()
+	StopFakeDeath(removeEffects bool)
+	// BroadcastFakeDeathEnd broadcasts ChangeWaitType(WT_STOP_FAKEDEATH) and
+	// Revive, as the FakeDeath effect does when it ends.
+	BroadcastFakeDeathEnd()
+	// SetCollisionGrown gives an NPC its template's grown collision radius,
+	// or its normal one back (Mobius Npc.setCollisionRadius with
+	// getCollisionRadiusGrown or getFCollisionRadius); others ignore it.
+	SetCollisionGrown(grown bool)
+	// MakeTriggerCast casts a triggered skill at once (Mobius
+	// makeTriggerCast: the conditions, the reuse check and disable, the
+	// target list unless ignoreTargetType, the PvP check, MagicSkillUse and
+	// MagicSkillLaunched, then Skill.Activate).
+	MakeTriggerCast(sk *Skill, target Creature, ignoreTargetType bool)
+	// AddDamageListener calls fn each time the creature receives damage
+	// (NotifyDamageReceived), until RemoveDamageListeners is called with the
+	// same owner (Mobius addListener(ON_CREATURE_DAMAGE_RECEIVED) and
+	// removeListenerIf(listener.getOwner() == owner)). owner is comparable.
+	AddDamageListener(owner any, fn func(DamageEvent))
+	RemoveDamageListeners(owner any)
+}
+
+// DamageEvent is a damage a creature received (Mobius
+// OnCreatureDamageReceived): Target took Damage from Attacker.
+type DamageEvent struct {
+	Attacker, Target Creature
+	Damage           float64
+	Skill            *Skill
+	Crit, DOT        bool
+}
+
+// ItemHolder is an item ID and a count (Mobius ItemHolder).
+type ItemHolder struct {
+	ID    int
+	Count int64
+}
+
+// Attackable is what effects ask of an attackable NPC (Mobius Attackable,
+// Monster and AttackableAI): its hate list, its spoil and the AI changes of
+// the hate effects. Creature.AsAttackable returns it.
+type Attackable interface {
+	// AddDamageHate adds damage and hate for attacker (Mobius addDamageHate).
+	AddDamageHate(attacker Creature, damage, aggro int64)
+	// ReduceHate lowers the hate for target (Mobius reduceHate).
+	ReduceHate(target Creature, amount int64)
+	// StopHating sets the hate for target to 0 (Mobius stopHating).
+	StopHating(target Creature)
+	// ClearAggroList empties the hate list (Mobius clearAggroList).
+	ClearAggroList()
+	// Hating returns the hate for target (Mobius getHating).
+	Hating(target Creature) int64
+	// AggroList returns the creatures on the hate list, in the list's order
+	// (Mobius getAggroList().keySet()).
+	AggroList() []Creature
+	// SetFearTime sets how long the AI runs away (AttackableAI.setFearTime).
+	SetFearTime(t int)
+	// ClanHelpRange returns the template's clan help range; ok is false for
+	// a template without clans (NpcTemplate.getClans is null).
+	ClanHelpRange() (rng int, ok bool)
+	// IsClan reports whether this NPC's template belongs to one of the clans
+	// of of's template (NpcTemplate.isClan(of.getClans())).
+	IsClan(of Attackable) bool
+	// IsSpoiled reports a spoiled monster; SetSpoiler spoils it for the
+	// player with the object ID (Mobius setSpoilerObjectId).
+	IsSpoiled() bool
+	SetSpoiler(objectID int32)
+	// CheckSpoilOwner reports whether sweeper may sweep the corpse (Mobius
+	// checkSpoilOwner, telling it why not when sendMessage is set).
+	CheckSpoilOwner(sweeper Creature, sendMessage bool) bool
+	// SpoilLootItems returns the item IDs of the spoil loot (Mobius
+	// getSpoilLootItems); TakeSweep takes the loot (Mobius takeSweep), nil
+	// when there is none.
+	SpoilLootItems() []int
+	TakeSweep() []ItemHolder
+	// StartDistrust gives the monster the AI that attacks target (Mobius
+	// setAI(new DistrustAI(monster, target))); StopDistrust gives it back its
+	// own AI (setAI(new AttackableAI(monster))).
+	StartDistrust(target Creature)
+	StopDistrust()
+}
+
+// AIEvent is what an effect tells a creature's AI (Creature.NotifyAI).
+type AIEvent uint8
+
+// The AI events, by the Mobius calls they stand for.
+const (
+	// AIThink is notifyActionThink.
+	AIThink AIEvent = iota
+	// AIIdle is setIntentionIdle; AIActive setIntentionActive.
+	AIIdle
+	AIActive
+	// AIStunned, AIParalyzed, AIRooted, AIMuted and AISleeping are
+	// notifyActionStunned, ...Paralyzed, ...Rooted, ...Muted and
+	// ...Sleeping.
+	AIStunned
+	AIParalyzed
+	AIRooted
+	AIMuted
+	AISleeping
+	// AIAfraidStart is notifyActionAfraid(caster, true), when fear starts;
+	// AIAfraid is notifyActionAfraid(caster, false), on each fear tick.
+	AIAfraidStart
+	AIAfraid
+	// AIFollowOwner is a summon's setIntentionMoveTo(its owner); AISummonAttack
+	// is its doSummonAttack(the caster).
+	AIFollowOwner
+	AISummonAttack
+	// AIAttack is setIntentionAttack(other); AIRest is setIntentionRest.
+	AIAttack
+	AIRest
+	// AIAttacked is notifyActionAttacked(other); AIConfused is
+	// notifyActionConfused.
+	AIAttacked
+	AIConfused
+)
+
+// CreatedItem is an item instance an effect gave a player (Player.AddItem).
+type CreatedItem struct {
+	ObjectID  int32
+	ItemID    int
+	Stackable bool
+	// Enchant is the instance's enchant level.
+	Enchant int
 }
 
 // Player is what skills ask of a player besides Creature: Mobius Player
@@ -232,6 +418,52 @@ type Player interface {
 	SendShortBuff(sb ShortBuff)
 	// SendRegenMax sends ExRegenMax (the potion HP regeneration bar).
 	SendRegenMax(duration, ticks int, amount float64)
+
+	// IncreaseCharges adds count force charges up to max, with the messages
+	// and EtcStatusUpdate Mobius sends (Player.increaseCharges).
+	IncreaseCharges(count, max int)
+	// ReviveRequest asks the player whether to accept a resurrection by
+	// reviver (Mobius Player.reviveRequest: ConfirmDlg, then DlgAnswer);
+	// pet is set when the dead one is the player's pet.
+	ReviveRequest(reviver Creature, pet bool, power int)
+	// AddItem gives the player count of an item (Mobius Player.addItem with
+	// the REWARD process: the obtain message when sendMessage is set, the
+	// inventory update, an herb used at once), then sets the instance's
+	// enchant level when enchant is above 0 (Item.setEnchantLevel). It
+	// returns the instance, false when none was made.
+	AddItem(itemID, count, enchant int, from Creature, sendMessage bool) (CreatedItem, bool)
+	// SendItemsUpdate sends one InventoryUpdate listing every instance of
+	// the item IDs as modified.
+	SendItemsUpdate(itemIDs []int)
+
+	// SetHairStyle, SetHairColor and SetFace change the appearance (Mobius
+	// PlayerAppearance); BroadcastUserInfo shows the change.
+	SetHairStyle(v int)
+	SetHairColor(v int)
+	SetFace(v int)
+	BroadcastUserInfo()
+	// AddExpAndSp gives experience and SP (Mobius addExpAndSp).
+	AddExpAndSp(exp, sp float64)
+	// ReduceDeathPenaltyBuffLevel lowers the death penalty by a level
+	// (Mobius reduceDeathPenaltyBuffLevel).
+	ReduceDeathPenaltyBuffLevel()
+	// AddElementSeed counts a seed of the element for 5 seconds (Mobius
+	// addElementSeed).
+	AddElementSeed(e data.SeedElement)
+	// IsFakeDeath reports fake death; SetFakeDeath and SetRecentFakeDeath
+	// change the flags (Mobius setFakeDeath, setRecentFakeDeath).
+	IsFakeDeath() bool
+	SetFakeDeath(v bool)
+	SetRecentFakeDeath(v bool)
+	// SitDown sits the player down (Mobius sitDown(checkCast)).
+	SitDown(checkCast bool)
+	// CheckInventorySlotsAndWeight reports whether one of each item fits
+	// the inventory's slots and weight (Mobius
+	// PlayerInventory.checkInventorySlotsAndWeight).
+	CheckInventorySlotsAndWeight(itemIDs []int, sendMessage, sendSkillMessage bool) bool
+	// PartyDistributeItem hands an item to the player's party by its loot
+	// rule (Mobius Party.distributeItem(player, item, spoil, target)).
+	PartyDistributeItem(item ItemHolder, spoil bool, from Creature)
 }
 
 // Weapon is what skills read of an active weapon.

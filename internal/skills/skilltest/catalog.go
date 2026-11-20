@@ -8,12 +8,11 @@ import (
 
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/skills"
-	"github.com/IPeter/l2go/internal/stats"
 )
 
 // NewEnv returns an Env with the Mobius defaults over r, a fresh Sched and
 // w (which may be nil), logging nowhere.
-func NewEnv(tb testing.TB, r stats.Rand, w *World) (*skills.Env, *Sched) {
+func NewEnv(tb testing.TB, r skills.Rand, w *World) (*skills.Env, *Sched) {
 	tb.Helper()
 	sched := NewSched()
 	var world skills.World

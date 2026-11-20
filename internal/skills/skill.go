@@ -21,6 +21,16 @@ type Skill struct {
 	// refusal says why the skill cannot be used (a stub effect, a
 	// condition without a port); empty when it can.
 	refusal string
+	// hero and gm mark the levels of the hero and Game Master skill trees
+	// (SkillTreeData.isHeroSkill, isGMSkill).
+	hero, gm bool
+}
+
+// CanBeStolen is Skill.canBeStolen: whether a cancel can take the effect
+// away: not passive, toggle, debuff, static, a hero or Game Master skill, and
+// dispellable.
+func (s *Skill) CanBeStolen() bool {
+	return !s.IsPassive() && !s.IsToggle() && !s.IsDebuff && !s.hero && !s.gm && !s.IsStatic() && s.CanBeDispeled
 }
 
 // VisualMasks are the abnormal visual effect bits of a skill or creature,

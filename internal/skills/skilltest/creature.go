@@ -1,6 +1,8 @@
 package skilltest
 
 import (
+	"time"
+
 	"github.com/IPeter/l2go/internal/data"
 	sp "github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/skills"
@@ -97,6 +99,43 @@ type Creature struct {
 	VisualUpdates int
 	Breaks        int
 	Died          bool
+
+	// Wave B state and recorded calls.
+	NoLethal     bool // IsLethalable is false
+	Casting      bool // IsCastingNow
+	Abortable    bool // CanAbortCast
+	Immobilized  bool
+	DOTDamage    []float64
+	Aborts       []string // "attack", "cast" and "move", in call order
+	AI           []AIEvent
+	Decays       []time.Duration
+	Revives      []float64
+	ReviveAsks   []ReviveAsk
+	ChargeCalls  [][2]int // IncreaseCharges(count, max)
+	Items        []skills.CreatedItem
+	ItemMessages []bool  // the sendMessage of each AddItem
+	ItemUpdates  [][]int // SendItemsUpdate's item IDs
+	// ItemStackable lists the stackable item IDs; NextItemID numbers the
+	// instances AddItem makes (from 1000).
+	ItemStackable map[int]bool
+	NextItemID    int32
+
+	// Reactions holds the state and records of the AI, hate, appearance
+	// and the other calls of the hate, trigger and utility effects.
+	Reactions
+}
+
+// AIEvent is one recorded NotifyAI call.
+type AIEvent struct {
+	Event skills.AIEvent
+	Other skills.Creature
+}
+
+// ReviveAsk is one recorded ReviveRequest.
+type ReviveAsk struct {
+	Reviver skills.Creature
+	Pet     bool
+	Power   int
 }
 
 // New returns a creature with 1000 HP, MP and CP, level 1 and an effect
@@ -207,7 +246,7 @@ func clampTo(v float64, hi int) float64 { return max(0, min(v, float64(hi))) }
 func (c *Creature) CurrentHP() float64 { return c.HP }
 
 // SetCurrentHP sets the HP within 0 and the maximum.
-func (c *Creature) SetCurrentHP(hp float64) { c.HP = clampTo(hp, c.MaxHPV) }
+func (c *Creature) SetCurrentHP(hp float64) { c.HP = clampTo(hp, c.MaxHP()) }
 
 // CurrentMP returns the MP.
 func (c *Creature) CurrentMP() float64 { return c.MP }
@@ -221,8 +260,8 @@ func (c *Creature) CurrentCP() float64 { return c.CP }
 // SetCurrentCP sets the CP within 0 and the maximum.
 func (c *Creature) SetCurrentCP(cp float64) { c.CP = clampTo(cp, c.MaxCPV) }
 
-// MaxHP returns the maximum HP.
-func (c *Creature) MaxHP() int { return c.MaxHPV }
+// MaxHP returns MaxHPV through the maxHp modifiers, truncated.
+func (c *Creature) MaxHP() int { return int(c.Calc(stats.MaxHP, float64(c.MaxHPV), nil, nil)) }
 
 // MaxMP returns the maximum MP.
 func (c *Creature) MaxMP() int { return c.MaxMPV }
@@ -231,7 +270,7 @@ func (c *Creature) MaxMP() int { return c.MaxMPV }
 func (c *Creature) MaxCP() int { return c.MaxCPV }
 
 // MaxRecoverableHP returns the maximum HP.
-func (c *Creature) MaxRecoverableHP() int { return c.MaxHPV }
+func (c *Creature) MaxRecoverableHP() int { return c.MaxHP() }
 
 // MaxRecoverableMP returns the maximum MP.
 func (c *Creature) MaxRecoverableMP() int { return c.MaxMPV }
@@ -381,8 +420,10 @@ func (c *Creature) ReduceCurrentHP(dmg float64, _ skills.Creature, _ *skills.Ski
 	}
 }
 
-// NotifyDamageReceived does nothing.
-func (c *Creature) NotifyDamageReceived(float64, skills.Creature, *skills.Skill, bool, bool) {}
+// NotifyDamageReceived runs the damage listeners (AddDamageListener).
+func (c *Creature) NotifyDamageReceived(dmg float64, attacker skills.Creature, sk *skills.Skill, crit, dot bool) {
+	c.notifyDamage(skills.DamageEvent{Attacker: attacker, Target: c, Damage: dmg, Skill: sk, Crit: crit, DOT: dot})
+}
 
 // BreakAttack does nothing.
 func (c *Creature) BreakAttack() {}
@@ -501,6 +542,107 @@ func (c *Creature) SendShortBuff(sb skills.ShortBuff) { c.ShortBuffs = append(c.
 // SendRegenMax records duration, ticks and amount.
 func (c *Creature) SendRegenMax(d, ticks int, amount float64) {
 	c.RegenMax = append(c.RegenMax, [3]float64{float64(d), float64(ticks), amount})
+}
+
+// ReduceCurrentHPByDOT records the damage and takes it like ReduceCurrentHP.
+func (c *Creature) ReduceCurrentHPByDOT(dmg float64, attacker skills.Creature, sk *skills.Skill) {
+	c.DOTDamage = append(c.DOTDamage, dmg)
+	c.ReduceCurrentHP(dmg, attacker, sk)
+}
+
+// IsLethalable is false with NoLethal.
+func (c *Creature) IsLethalable() bool { return !c.NoLethal }
+
+// AbortAttack records "attack".
+func (c *Creature) AbortAttack() { c.Aborts = append(c.Aborts, "attack") }
+
+// AbortCast records "cast" and ends the cast.
+func (c *Creature) AbortCast() {
+	c.Aborts = append(c.Aborts, "cast")
+	c.Casting = false
+}
+
+// StopMove records "move" and stops moving.
+func (c *Creature) StopMove() {
+	c.Aborts = append(c.Aborts, "move")
+	c.Moving = false
+}
+
+// IsCastingNow returns Casting.
+func (c *Creature) IsCastingNow() bool { return c.Casting }
+
+// CanAbortCast returns Abortable.
+func (c *Creature) CanAbortCast() bool { return c.Abortable }
+
+// SetTarget sets the target.
+func (c *Creature) SetTarget(t skills.Creature) { c.Tgt = t }
+
+// SetImmobilized sets Immobilized.
+func (c *Creature) SetImmobilized(v bool) { c.Immobilized = v }
+
+// NotifyAI records the event.
+func (c *Creature) NotifyAI(ev skills.AIEvent, other skills.Creature) {
+	c.AI = append(c.AI, AIEvent{Event: ev, Other: other})
+}
+
+// AIEvents returns the recorded AI events without their creatures.
+func (c *Creature) AIEvents() []skills.AIEvent {
+	evs := make([]skills.AIEvent, len(c.AI))
+	for i, e := range c.AI {
+		evs[i] = e.Event
+	}
+	return evs
+}
+
+// Decay records the delay.
+func (c *Creature) Decay(d time.Duration) { c.Decays = append(c.Decays, d) }
+
+// Revive records the percent and revives the creature.
+func (c *Creature) Revive(percent float64) {
+	c.Revives = append(c.Revives, percent)
+	c.Dead, c.AlikeDead = false, false
+}
+
+// IncreaseCharges records the call and adds the charges up to max.
+func (c *Creature) IncreaseCharges(count, maxCharges int) {
+	c.ChargeCalls = append(c.ChargeCalls, [2]int{count, maxCharges})
+	if c.ChargesV < maxCharges {
+		c.ChargesV = min(c.ChargesV+count, maxCharges)
+	}
+}
+
+// ReviveRequest records the request.
+func (c *Creature) ReviveRequest(reviver skills.Creature, pet bool, power int) {
+	c.ReviveAsks = append(c.ReviveAsks, ReviveAsk{Reviver: reviver, Pet: pet, Power: power})
+}
+
+// AddItem records the item. A stackable item ID (ItemStackable) adds to its
+// earlier instance, if any.
+func (c *Creature) AddItem(itemID, count, enchant int, _ skills.Creature, sendMessage bool) (skills.CreatedItem, bool) {
+	if count <= 0 {
+		return skills.CreatedItem{}, false
+	}
+	c.ItemMessages = append(c.ItemMessages, sendMessage)
+	stackable := c.ItemStackable[itemID]
+	if stackable {
+		for _, it := range c.Items {
+			if it.ItemID == itemID {
+				return it, true
+			}
+		}
+	}
+	if c.NextItemID == 0 {
+		c.NextItemID = 1000
+	}
+	it := skills.CreatedItem{ObjectID: c.NextItemID, ItemID: itemID, Stackable: stackable, Enchant: max(enchant, 0)}
+	c.NextItemID++
+	c.Items = append(c.Items, it)
+	return it, true
+}
+
+// SendItemsUpdate records the item IDs.
+func (c *Creature) SendItemsUpdate(itemIDs []int) {
+	c.ItemUpdates = append(c.ItemUpdates, append([]int(nil), itemIDs...))
 }
 
 var (
