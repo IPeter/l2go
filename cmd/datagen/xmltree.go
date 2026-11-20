@@ -83,7 +83,7 @@ func parseXMLTree(b []byte, file string) (*xmlNode, error) {
 			stack, texts = stack[:len(stack)-1], texts[:len(texts)-1]
 		case xml.CharData:
 			if len(texts) > 0 {
-				texts[len(texts)-1].Write(t)
+				_, _ = texts[len(texts)-1].Write(t) // strings.Builder.Write never fails
 			}
 		}
 	}

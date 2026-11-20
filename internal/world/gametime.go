@@ -73,7 +73,7 @@ func (g *GameTime) update(now time.Time) {
 	}
 	g.night.Store(night)
 	for _, fn := range g.hooks {
-		g.loop.call("day/night hook", func() { fn(night) })
+		_ = g.loop.call("day/night hook", func() { fn(night) }) // a panic is logged by call; the other hooks go on
 	}
 }
 

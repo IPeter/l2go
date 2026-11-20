@@ -46,7 +46,7 @@ func New(seed uint64) *PCG {
 
 // RandomSeed returns a random seed for New, from math/rand/v2's global
 // source, which the runtime seeds. Log it, so the run can be replayed.
-func RandomSeed() uint64 { return rand.Uint64() }
+func RandomSeed() uint64 { return rand.Uint64() } //nolint:gosec // game randomness, not security
 
 // Seed returns the seed the source was made with.
 func (p *PCG) Seed() uint64 { return p.seed }
@@ -55,7 +55,7 @@ func (p *PCG) Seed() uint64 { return p.seed }
 func (p *PCG) draw(d Draw) Draw {
 	switch d.Kind {
 	case KindGet, KindGetInt64:
-		d.Int = int64(p.uint64n(uint64(d.Hi)))
+		d.Int = int64(p.uint64n(uint64(d.Hi))) //nolint:gosec // rules draws only for Hi > 0, so the result is below Hi
 	case KindBetween, KindBetweenInt64:
 		d.Int = p.between(d.Lo, d.Hi, d.hiIncluded())
 	case KindGetFloat32:
@@ -67,9 +67,9 @@ func (p *PCG) draw(d Draw) Draw {
 	case KindBetweenFloat64:
 		d.Float = scale64(p.unit64(), d.FLo, widen64(d.FHi))
 	case KindInt32:
-		d.Int = int64(int32(p.src.Uint64() >> 32))
+		d.Int = int64(int32(p.src.Uint64() >> 32)) //nolint:gosec // the top 32 bits as a Java int
 	case KindInt64:
-		d.Int = int64(p.src.Uint64())
+		d.Int = int64(p.src.Uint64()) //nolint:gosec // same bits as the Java long
 	case KindFloat32:
 		d.Float = float64(p.unit32())
 	case KindFloat64:
@@ -99,14 +99,14 @@ func (p *PCG) uint64n(n uint64) uint64 {
 // between returns a uniform number from lo to hi, lo < hi, with hi included
 // when inc is set.
 func (p *PCG) between(lo, hi int64, inc bool) int64 {
-	n := uint64(hi) - uint64(lo) // the numbers below hi: 1 to 2^64-1
+	n := uint64(hi) - uint64(lo) //nolint:gosec // two's complement difference: the numbers below hi, 1 to 2^64-1
 	if inc {
 		if n == math.MaxUint64 { // every int64
-			return int64(p.src.Uint64())
+			return int64(p.src.Uint64()) //nolint:gosec // same bits as the Java long
 		}
 		n++
 	}
-	return int64(uint64(lo) + p.uint64n(n))
+	return int64(uint64(lo) + p.uint64n(n)) //nolint:gosec // wraps back into [lo, hi]
 }
 
 // unit64 is ThreadLocalRandom.nextDouble: the top 53 bits of a word as a

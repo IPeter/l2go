@@ -354,8 +354,10 @@ func TestRunWhileRunning(t *testing.T) {
 func TestPostWhenInboxFull(t *testing.T) {
 	l := world.NewLoop(world.LoopOptions{InboxSize: 2})
 	ran := 0
-	if !l.Post(func() { ran++ }) || !l.Post(func() { ran++ }) {
-		t.Fatal("Post on a free inbox = false")
+	for i := range 2 {
+		if !l.Post(func() { ran++ }) {
+			t.Fatalf("Post %d on a free inbox = false", i+1)
+		}
 	}
 	if l.Post(func() { ran++ }) {
 		t.Error("Post on a full inbox = true")
@@ -425,7 +427,9 @@ func TestCheckOwner(t *testing.T) {
 	go func() { errc <- l.Run(ctx) }()
 	defer func() {
 		cancel()
-		<-errc
+		if err := <-errc; err != nil {
+			t.Errorf("Run: %v", err)
+		}
 	}()
 	if err := l.Call(ctx, func() {}); err != nil {
 		t.Fatal(err)

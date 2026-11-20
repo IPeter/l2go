@@ -370,9 +370,9 @@ func PositionOf(fromX, fromY, toX, toY, toHeading int) Position {
 		h = -h
 	}
 	switch {
-	case (h >= 0x2000 && h <= 0x6000) || uint32(h-0xA000) <= 0x4000:
+	case (h >= 0x2000 && h <= 0x6000) || uint32(h-0xA000) <= 0x4000: //nolint:gosec // unsigned range check, as Mobius's toUnsignedLong
 		return PosSide
-	case uint32(h-0x2000) <= 0xC000:
+	case uint32(h-0x2000) <= 0xC000: //nolint:gosec // as above
 		return PosFront
 	}
 	return PosBack

@@ -170,7 +170,7 @@ func (r rules) BetweenFloat64(lo, hi float64) float64 {
 }
 
 // Int32 is Rnd.nextInt(): any int32.
-func (r rules) Int32() int32 { return int32(r.d.draw(Draw{Kind: KindInt32}).Int) }
+func (r rules) Int32() int32 { return int32(r.d.draw(Draw{Kind: KindInt32}).Int) } //nolint:gosec // an Int32 draw holds an int32
 
 // Int64 is Rnd.nextLong(): any int64.
 func (r rules) Int64() int64 { return r.d.draw(Draw{Kind: KindInt64}).Int }

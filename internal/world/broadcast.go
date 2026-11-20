@@ -119,7 +119,7 @@ func (w *World) FlushUpdates() {
 	clear(w.upd.index)
 	if fn := w.upd.flush; fn != nil {
 		for _, p := range list {
-			w.loop.call("update flush", func() { fn(p.obj, p.u) })
+			_ = w.loop.call("update flush", func() { fn(p.obj, p.u) }) // a panic is logged by call; the other updates go on
 		}
 	}
 	clear(list)

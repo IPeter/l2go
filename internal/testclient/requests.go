@@ -67,6 +67,8 @@ const (
 
 // clientPacketNames maps client opcodes to Mobius packet names, for the
 // recorder.
+//
+//nolint:gosec // packet names, not credentials
 var clientPacketNames = map[byte]string{
 	OpProtocolVersion:           "ProtocolVersion",
 	OpMoveToLocation:            "MoveToLocation",

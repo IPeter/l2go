@@ -47,7 +47,7 @@ func javaRound(x float64) int64 {
 
 // javaRoundInt is Java's (int) Math.round(x): the long narrowed to its low
 // 32 bits.
-func javaRoundInt(x float64) int32 { return int32(javaRound(x)) }
+func javaRoundInt(x float64) int32 { return int32(javaRound(x)) } //nolint:gosec // Java (int) cast keeps the low bits
 
 // f32 rounds x to a Java float and widens it back to a double, as happens to
 // the template values Mobius keeps in float fields (base HP/MP/CP, collision).

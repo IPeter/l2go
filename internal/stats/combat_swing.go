@@ -40,7 +40,7 @@ func SwingTimingOf(pAtkSpd float64, shape AttackShape, reuseDelay int) SwingTimi
 	timeToHit := timeAtk / 2
 	reuse := 0
 	if reuseDelay != 0 {
-		reuse = int(javaInt(float64(int32(reuseDelay)*333) / pAtkSpd))
+		reuse = int(javaInt(float64(int32(reuseDelay)*333) / pAtkSpd)) //nolint:gosec // a weapon's reuse delay, in Java int arithmetic
 	}
 	ms := func(v int) time.Duration { return time.Duration(v) * time.Millisecond }
 	t := SwingTiming{

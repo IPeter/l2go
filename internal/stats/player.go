@@ -597,25 +597,25 @@ func (p *Player) CollisionHeight() float64 { return f32(p.collision().Height) }
 func (p *Player) View() PlayerView {
 	mm := p.MoveMultiplier()
 	v := PlayerView{
-		STR:                   int32(p.STR()),
-		DEX:                   int32(p.DEX()),
-		CON:                   int32(p.CON()),
-		INT:                   int32(p.INT()),
-		WIT:                   int32(p.WIT()),
-		MEN:                   int32(p.MEN()),
-		MaxHP:                 int32(p.MaxHP()),
-		MaxMP:                 int32(p.MaxMP()),
-		MaxCP:                 int32(p.MaxCP()),
-		WeightLimit:           int32(p.WeightLimit()),
-		InventoryLimit:        int32(p.InventoryLimit()),
+		STR:                   int32(p.STR()),            //nolint:gosec // computed as an int32 (javaInt)
+		DEX:                   int32(p.DEX()),            //nolint:gosec // as above
+		CON:                   int32(p.CON()),            //nolint:gosec // as above
+		INT:                   int32(p.INT()),            //nolint:gosec // as above
+		WIT:                   int32(p.WIT()),            //nolint:gosec // as above
+		MEN:                   int32(p.MEN()),            //nolint:gosec // as above
+		MaxHP:                 int32(p.MaxHP()),          //nolint:gosec // as above
+		MaxMP:                 int32(p.MaxMP()),          //nolint:gosec // as above
+		MaxCP:                 int32(p.MaxCP()),          //nolint:gosec // as above
+		WeightLimit:           int32(p.WeightLimit()),    //nolint:gosec // as above
+		InventoryLimit:        int32(p.InventoryLimit()), //nolint:gosec // configured slots plus an int32 bonus, Java int arithmetic
 		PAtk:                  javaInt(p.PAtk()),
 		PAtkSpd:               javaInt(p.PAtkSpd()),
 		PDef:                  javaInt(p.PDef()),
-		Evasion:               int32(p.Evasion()),
-		Accuracy:              int32(p.Accuracy()),
-		Crit:                  int32(p.Crit()),
+		Evasion:               int32(p.Evasion()),  //nolint:gosec // computed as an int32 (javaRoundInt)
+		Accuracy:              int32(p.Accuracy()), //nolint:gosec // as above
+		Crit:                  int32(p.Crit()),     //nolint:gosec // computed as an int32 (javaInt)
 		MAtk:                  javaInt(p.MAtk()),
-		MAtkSpd:               int32(p.MAtkSpd()),
+		MAtkSpd:               int32(p.MAtkSpd()), //nolint:gosec // as above
 		MDef:                  javaInt(p.MDef()),
 		RunSpd:                javaRoundInt(p.RunSpeed() / mm),
 		WalkSpd:               javaRoundInt(p.WalkSpeed() / mm),

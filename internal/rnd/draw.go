@@ -235,7 +235,7 @@ func (d Draw) badValue() string {
 			return fmt.Sprintf("outside [%d, %d)", d.Lo, d.Hi)
 		}
 	case KindInt32:
-		if d.Int != int64(int32(d.Int)) {
+		if d.Int != int64(int32(d.Int)) { //nolint:gosec // the truncation is the check
 			return "not an int32"
 		}
 	case KindGetFloat32, KindBetweenFloat32, KindGetFloat64, KindBetweenFloat64,

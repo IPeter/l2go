@@ -295,9 +295,9 @@ func (n *Npc) CollisionHeight() float64 { return f32(n.tmpl.Collision.Height) }
 func (n *Npc) View() NpcView {
 	mm := n.MoveMultiplier()
 	v := NpcView{
-		MaxHP:                 int32(n.MaxHP()),
+		MaxHP:                 int32(n.MaxHP()), //nolint:gosec // computed as an int32 (javaInt)
 		PAtkSpd:               javaInt(n.PAtkSpd()),
-		MAtkSpd:               int32(n.MAtkSpd()),
+		MAtkSpd:               int32(n.MAtkSpd()), //nolint:gosec // as above
 		RunSpd:                javaRoundInt(n.RunSpeed() / mm),
 		WalkSpd:               javaRoundInt(n.WalkSpeed() / mm),
 		SwimRunSpd:            javaRoundInt(n.SwimRunSpeed() / mm),

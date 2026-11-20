@@ -68,7 +68,7 @@ func (k RegionKey) valid() bool {
 }
 
 // pack turns a valid key into a map key: X takes 8 bits, Y 9, Z 4.
-func (k RegionKey) pack() uint32 { return uint32(k.X)<<13 | uint32(k.Y)<<4 | uint32(k.Z) }
+func (k RegionKey) pack() uint32 { return uint32(k.X)<<13 | uint32(k.Y)<<4 | uint32(k.Z) } //nolint:gosec // a valid key has small non-negative parts
 
 // region holds the objects whose position lies in it. Regions are created
 // when first entered and never removed.
@@ -81,11 +81,11 @@ type region struct {
 
 func (r *region) add(b *Base) {
 	b.region = r
-	b.slot = int32(len(r.objects))
+	b.slot = int32(len(r.objects)) //nolint:gosec // fewer objects than ObjectIDs, which are int32
 	r.objects = append(r.objects, b)
 	b.vslot = -1
 	if b.viewer != nil {
-		b.vslot = int32(len(r.viewers))
+		b.vslot = int32(len(r.viewers)) //nolint:gosec // as above
 		r.viewers = append(r.viewers, b)
 	}
 }

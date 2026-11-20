@@ -57,7 +57,7 @@ func TestNewIdentity(t *testing.T) {
 			t.Errorf("account and character share their name %q", id.Account)
 		}
 		for _, c := range id.Account + id.Char {
-			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+			if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
 				t.Errorf("name character %q is not a letter or digit", c)
 			}
 		}

@@ -149,7 +149,7 @@ func hasExportedFields(t reflect.Type) bool {
 func hexBytes(v reflect.Value) string {
 	b := make([]byte, v.Len())
 	for i := range b {
-		b[i] = byte(v.Index(i).Uint())
+		b[i] = byte(v.Index(i).Uint()) //nolint:gosec // the elements are bytes
 	}
 	return hex.EncodeToString(b)
 }

@@ -172,11 +172,11 @@ func resolveMapCells(o options, regions []data.MapRegion) error {
 func javaHashMapOrder(keys []string) ([]int, error) {
 	hashes := make([]uint32, len(keys))
 	for i, k := range keys {
-		h := uint32(javaStringHash(k))
+		h := uint32(javaStringHash(k)) //nolint:gosec // same bits, as Java's >>> sees them
 		hashes[i] = h ^ h>>16
 	}
 	capacity := 16
-	bucket := func(i int) uint32 { return hashes[i] & uint32(capacity-1) }
+	bucket := func(i int) uint32 { return hashes[i] & uint32(capacity-1) } //nolint:gosec // capacity is a small power of two
 	for i := range keys {
 		n := 0
 		for j := range i + 1 {

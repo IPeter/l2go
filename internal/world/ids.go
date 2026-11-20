@@ -65,7 +65,7 @@ func (a *IDAllocator) Next() (ObjectID, error) {
 		a.inUse++
 		return id, nil
 	case fresh:
-		id := ObjectID(a.next)
+		id := ObjectID(a.next) //nolint:gosec // fresh: next <= last, an ObjectID
 		a.next++
 		a.inUse++
 		return id, nil

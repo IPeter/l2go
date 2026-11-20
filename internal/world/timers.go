@@ -92,7 +92,7 @@ func (l *Loop) runTimer(t *timer) {
 	}
 	l.now = at
 	l.inEvent = true
-	l.call("timer", t.fn)
+	_ = l.call("timer", t.fn) // a panic is logged by call; the loop goes on
 	l.inEvent = false
 }
 

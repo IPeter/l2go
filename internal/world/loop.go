@@ -342,7 +342,7 @@ func (l *Loop) runCommand(c command) {
 	l.inEvent = true
 	perr := l.call("command", c.fn)
 	if perr != nil && c.onPanic != nil {
-		l.call("panic handler", func() { c.onPanic(perr.Value) })
+		_ = l.call("panic handler", func() { c.onPanic(perr.Value) }) // a panic is logged by call; the loop goes on
 	}
 	l.inEvent = false
 	if c.done != nil {

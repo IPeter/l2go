@@ -228,14 +228,14 @@ func (o *StatOp) UnmarshalText(text []byte) error {
 	if err != nil {
 		return err
 	}
-	*o = StatOp(v)
+	*o = StatOp(v) //nolint:gosec // an index into the 8 stat functions
 	return nil
 }
 
 // ParseStatOp returns the StatOp with the Mobius XML name.
 func ParseStatOp(name string) (StatOp, bool) {
 	v, ok := statOpTable.parse(name)
-	return StatOp(v), ok
+	return StatOp(v), ok //nolint:gosec // an index into the 8 stat functions
 }
 
 // Mask returns the Mobius item type mask of a weapon type, 1 << ordinal.
