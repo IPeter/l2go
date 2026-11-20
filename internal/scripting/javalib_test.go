@@ -103,7 +103,6 @@ func TestJavaErrorsPointAtCaller(t *testing.T) {
 		{`local s = J.trim(nil)`, "NullPointerException: trim on null"},
 		{`local n = J.idiv(1, 0)`, "ArithmeticException: / by zero"},
 		{`J.todo("lambda")`, "not translated: lambda"},
-		{`local o = J.obj(5)`, "J.obj needs world.find_object"},
 	} {
 		dir := scripttest.WriteScripts(t, map[string]string{
 			"lib/java.lua": javaLib(t),
@@ -614,16 +613,15 @@ s:on_event(function(event, npc, player)
     add(J.instance_of(npc, "Npc"))
     add(J.instance_of(npc, "WorldObject"))
     add(J.instance_of(npc, "Player"))
-    local ok, err = pcall(J.instance_of, npc, "Attackable")
-    add(ok)
-    add(string.find(tostring(err), "npc:is_type", 1, true) ~= nil)
+    add(J.instance_of(npc, "Attackable")) -- npc:is_type answers
+    add(J.instance_of(npc, "Monster"))
   end
   return table.concat(out, ",")
 end)
 `,
 	})
 	hero := &scripttest.Player{ObjectID: 0x10000001, Name: "Hero", Level: 20}
-	guard := &scripttest.Npc{ObjectID: 0x60000001, ID: 30733, Name: "Guard"}
+	guard := &scripttest.Npc{ObjectID: 0x60000001, ID: 30733, Name: "Guard", Types: []string{"Monster"}}
 
 	reply, _ := h.Event("JavaRefs", "refs", hero, guard)
 	if want := "1610612737,true,nil,268435457"; reply.Content != want {

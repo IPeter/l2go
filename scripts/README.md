@@ -3,7 +3,7 @@ Lua scripts
 
 Game content that changes often is written here in Lua. The game server loads every script at startup and can reload them without a restart. Networking, data loading and anything that runs every tick stay in Go.
 
-The hooks today: character creation, chat, and NPC scripts (first talk, quest-link talk and dialog links). Quests, timers and commands come as the game grows.
+The hooks today: character creation, chat, NPC scripts (first talk, quest-link talk and dialog links) and quests (quest states, items, kills and the other world events, timers). Commands come as the game grows.
 
 Layout
 ----
@@ -11,11 +11,12 @@ Layout
 ```
 events/     event rules, e.g. character_create.lua
 npcs/       NPC scripts, one folder each with its pages, e.g. talking_island_guard/
-lib/        shared helpers, loaded only through require("lib.name")
+quests/     quests, one folder each, named after the Mobius class: quests/Q00001_LettersOfLove/
+lib/        shared helpers, loaded only through require("lib.name"), e.g. lib/java.lua
 types/      API definitions for the editor (never run)
 ```
 
-More folders (`quests/`, `commands/`) appear when those features exist. Every `.lua` file outside `lib/` and `types/` runs when the scripts load, in path order (`events/a.lua` before `events/b.lua` before `npcs/x.lua`). Files and folders starting with `.` are skipped, and so is everything that is not `.lua` (pages are read by the game server when it shows them).
+More folders (`commands/`, `village_master/`) appear when those features exist. Every `.lua` file outside `lib/` and `types/` runs when the scripts load, in path order (`events/a.lua` before `events/b.lua` before `npcs/x.lua`). Files and folders starting with `.` are skipped, and so is everything that is not `.lua` (pages are read by the game server when it shows them).
 
 Writing a script
 ----
@@ -42,7 +43,7 @@ end)
 - All handlers of an event run in load order until one rejects or drops it.
 - Handlers of one event share a time limit (`scripts.eventTimeout`, 50 ms by default); each NPC handler call has the same limit. An endless loop is stopped, logged with its file and line, and the event gets the default result (allowed, the message unchanged, the NPC's default dialog).
 - A Lua error in a handler is logged with file and line; the other handlers still run.
-- Keep state you need after a reload or restart out of Lua globals: every reload starts from a fresh Lua state. (Saved state comes with the quest API.)
+- Keep state you need after a reload or restart out of Lua globals: every reload starts from a fresh Lua state. Quest states, player variables and `globals` are saved by the server.
 
 API
 ----
@@ -173,6 +174,88 @@ Every link a page offers is remembered for the player; a link that the last page
 
 The Mobius ports keep their page names and links. Where Mobius asks for quest states or items, which the Lua API does not have yet, the scripts take the branch of a player who never took the quest (marked in the code).
 
+### Quests: `quest`
+
+Quests follow Mobius's `Quest` and `QuestState` classes: the method names are Mobius's in snake case (`getQuestItemsCount` is `q:get_quest_items_count`), with the same arguments in the same order, so a Mobius quest reads almost line by line. `cmd/questport` translates Mobius's quests this way; `quests/Q00001_LettersOfLove` and `quests/Q00401_PathOfTheWarrior` are ported by hand and are the reference.
+
+```lua
+-- quests/Q00001_LettersOfLove/Q00001_LettersOfLove.lua (shortened)
+local q = quest.new(1, "Q00001_LettersOfLove", "Letters of Love")
+local DARIN, ROXXY = 30048, 30006
+local DARIN_LETTER = 687
+
+q:register_quest_items(DARIN_LETTER)
+q:add_start_npc(DARIN)
+q:add_talk_id(DARIN, ROXXY)
+
+q:on_event(function(event, npc, player)
+  local st = q:get_quest_state(player, false)
+  if st ~= nil and event == "30048-06.htm" then
+    st:start_quest()              -- cond 1, STARTED, the accept sound
+    q:give_items(player, DARIN_LETTER, 1)
+  end
+  return event                    -- the page the link named
+end)
+
+q:on_talk(function(npc, player)
+  local st = q:get_quest_state(player, true)
+  if st:is_created() then
+    return player:level() < 2 and "30048-01.htm" or "30048-02.htm"
+  elseif st:is_started() and npc:id() == ROXXY and st:is_cond(1) then
+    st:set_cond(2, true)          -- the quest log and the middle sound
+    return "30006-01.htm"
+  end
+  return q:get_no_quest_msg(player)
+end)
+```
+
+- `quest.new(id, name, description)` makes a quest: `id` ≥ 1 is listed in the quest log and can be aborted; `name` is the Mobius class name, used in `Script <name> <event>` links; `description` is the quest window's name. `script.new(name)` is `quest.new(-1, name, "")`, so everything here works for plain scripts too.
+- **Registration**, while the scripts load: `add_start_npc`, `add_talk_id`, `add_first_talk_id` (one owning script per NPC), `add_kill_id`, `add_attack_id`, `add_spawn_id`, `add_skill_see_id`, `add_spell_finished_id`, `add_aggro_range_enter_id`, `add_enter_zone_id`, `add_exit_zone_id`, `add_item_talk_id`. Each takes IDs or lists, as many as you like; duplicates count once. Plus `register_quest_items(...)` (taken on exit and abort), `set_custom(true)` (no quest mark, no `start_quest`), `set_on_enter_world(true)`, and `requires("clans", ...)` for quests that need a later feature (`clans`, `clan_halls`, `subclass`, `noblesse`, `pets`, `fishing`, `seven_signs`, `sepulchers`, `grand_bosses`, `doors`): they are not offered until it exists.
+- **Handlers**, one per kind: `q:on_x(fn)` handles every ID registered for x; `q:on_x(ids, fn)` registers the IDs and binds `fn` to them (the NPC script form above).
+
+| Handler | Arguments | Returns |
+|---|---|---|
+| `on_talk` | `npc, player` | a reply |
+| `on_first_talk` | `npc, player` | a reply; `nil` shows the NPC's own page |
+| `on_event` | `event, npc, player` (links and timers; `npc`, `player` may be nil) | a reply |
+| `on_kill` | `npc, killer, is_summon` — 2.5 s after the death | – |
+| `on_attack` | `npc, attacker, damage, is_summon, skill` | – |
+| `on_spawn` | `npc` | – |
+| `on_skill_see` | `npc, caster, skill, targets, is_summon` | – |
+| `on_spell_finished` | `npc, player, skill` | – |
+| `on_aggro_range_enter` | `npc, player, is_summon` | – |
+| `on_enter_zone`, `on_exit_zone` | `creature, zone` | – |
+| `on_item_talk` | `item, player` | a reply |
+| `on_death` | `killer, victim, st` | – |
+| `on_enter_world` | `player` | – |
+| `on_check_party_member`, `on_check_party_member_state` | `player, npc` / `st, npc` | boolean |
+| `on_action_for_each_player` | `player, npc, is_summon` | – |
+| `on_start` | – (after the scripts are in place, at startup and after each reload: spawns, timers, global variables) | – |
+
+**Quest state.** `q:get_quest_state(player, create)` returns the player's `QuestState` (nil when there is none and `create` is false). The state lives in the server and is saved with the character, so it survives reloads and restarts; keep progress there, never in Lua variables. Its methods: `get_state()` / `is_created()` / `is_started()` / `is_completed()` / `set_state(State.X)`, `start_quest()`, `get_cond()` (0 unless started), `is_cond(n)` (whatever the state, as Mobius), `set_cond(n, play_middle)`, `set` / `get` / `get_int` / `unset` / `is_set` (string values; names up to 20 characters, values up to 255), the memo states, `exit_quest(repeatable, play_finish)` (true deletes the state, false keeps it COMPLETED; or a `QuestType`), `is_now_available()` / `set_restart_time()` (daily quests, 06:30 server time), `get_player()`, and the tutorial methods.
+
+**Helpers** (Mobius `Quest` methods): `give_items`, `reward_items` (quest rates), `give_adena`, `take_items` (-1 takes all), `take_items_ids`, `get_quest_items_count`, `has_quest_items`, `has_at_least_one_quest_item`, `give_item_randomly(player, npc, id, min, max, limit, chance, play_sound)`, `add_exp_and_sp`, `play_sound(player, QuestSound.X)`, `get_item_equipped(player, Paperdoll.RHAND)`, `get_enchant_level`, `get_no_quest_msg`, `get_already_completed_msg`, `get_htm`, `show_html_file`, `add_spawn`, `add_radar` / `remove_radar` / `clear_radar`, `show_on_screen_msg`, and the party helpers `get_random_party_member`, `get_random_party_member_state`, `execute_for_each_player` (each player is alone until parties exist).
+
+**Timers.** `q:start_quest_timer(name, ms, npc, player, repeating)` runs `on_event(name, npc, player)` later; a reply goes to the timer's player. A timer is known by its name, NPC and player (nil matches only nil); starting one that runs already does nothing. A one-shot timer is gone before its handler runs, so the handler may start it again. `get_quest_timer`, `cancel_quest_timer`, `cancel_quest_timers(name)`. Timers stop when their NPC or player leaves the world and on reload; they are not saved.
+
+**Values.** Within one handler call, one object is always the same Lua value, so `st == other_st` and `player == st:get_player()` work as in Java. Players, NPCs and quest states expire when the handler returns: keep object IDs and get the objects back with `world.find_object(id)`.
+
+**Other modules.**
+
+| Module | Functions |
+|---|---|
+| `rnd` | `rnd(n)` → [0, n) (0 for n ≤ 0); `rnd(a, b)` → [a, b]; `rnd.bool()`, `rnd.double([max])`, `rnd.entry(list)`. Mobius `Rnd` rules from the server's one random source; `math.random` uses it too (still [1, n]), and `math.randomseed` is gone. |
+| `time` | `time.now_ms()`: the world clock. |
+| `world` | `world.find_object(id)`, `world.get_player(id)`. |
+| `globals` | `get(name, default)`, `get_int`, `get_long`, `get_bool`, `set(name, value)`: saved server-wide variables. |
+| `util` | `util.in_range(range, a, b, include_z)`. |
+
+**Constants** are read-only global tables with Mobius names; a name a table does not have is an error: `State`, `QuestType`, `QuestSound` (sound names), `Paperdoll`, `ChatType`, `Race`, `ClassId` (with `ClassId.level(id)`, `race`, `parent`, `is_mage`), `Category`, `SystemMessageId`, and `Config` (`ALT_PARTY_RANGE`, ...). `quest.DF_REWARD_35`, `_37` and `_39` are Mobius's Dimensional Diamond tables.
+
+**Java helpers.** `local J = require("lib.java")` gives translated code Java's library behaviour (0-based `J.substring`, `J.idiv`, `J.split`, sorted `J.spairs`, ...); see `lib/java.lua`.
+
+The world is only there in handlers: a quest helper, `time`, `world` or `globals` called while the scripts load is an error (use `on_start`).
+
 ### `Player` and `Npc`
 
 Handlers get players and NPCs as values with methods. They are valid only while that handler runs; keep `player:object_id()` instead of the player.
@@ -181,8 +264,17 @@ Handlers get players and NPCs as values with methods. They are valid only while 
 |---|---|
 | `player:object_id()`, `player:name()`, `player:level()` | integer, string, integer |
 | `player:class_id()`, `player:race()` | integer (race: 0 human, 1 elf, 2 dark elf, 3 orc, 4 dwarf) |
+| `player:adena()`, `player:item_count(id)`, `player:give_items(id, n)`, `player:take_items(id, n)` | the player's items |
+| `player:get_quest_state(name)` | the state of any quest, by name |
+| `player:sex()`, `player:base_class()`, `player:is_mage_class()`, `player:is_newbie()`, `player:is_dead()`, `player:is_in_category(Category.X)` | |
+| `player:var(name, default)`, `var_int`, `var_bool`, `set_var(name, value)` | player variables, saved with the character |
+| `player:is_in_party()`, `party_members()`, `clan()`, `is_clan_leader()`, `is_sub_class_active()`, `is_noble()` | alone, no clan, until those features exist |
+| `player:social_action(n)`, `teleport(x, y, z)`, `send_message(text)`, `send_system_message(SystemMessageId.X, ...)` | |
+| `x()`, `y()`, `z()`, `heading()`, `is_inside_radius_2d(other, r)`, `is_inside_radius_3d(other, r)` | players and NPCs |
 | `npc:object_id()`, `npc:id()`, `npc:name()` | integer, integer (the template ID), string |
 | `npc:say(text)` | Says `text` in normal NPC chat to the players around. |
+| `npc:broadcast_say(ChatType.X, text)`, `npc:show_chat_window(player)`, `npc:social_action(n)`, `npc:delete()` | |
+| `npc:is_dead()`, `npc:get_script_value()`, `set_script_value(n)`, `is_script_value(n)`, `npc:is_type("Monster")` | |
 
 ### `html`
 
@@ -253,6 +345,20 @@ func TestGuard(t *testing.T) {
 - `Fire`, `CharacterCreate`, `Chat`, `FirstTalk`, `Talk` and `Event` fail the test if a handler errors; `FireAllowErrors` returns the error instead.
 - `scripttest.Player` and `scripttest.Npc` are fake players and NPCs; `Ref()` gives them to the engine directly.
 - `Said()` returns what NPCs said, `Logs()` what the scripts logged, and `Reload()` reloads like the server.
+
+Quests are tested the same way, against a fake world (`h.World()`): fake players carry items, equipment, exp and their quest states (`hero.Quest("Q00001_LettersOfLove")`), and the world records sounds, social actions, messages, quest log updates and timer replies. `h.Kill(player, npc)` runs the kill handlers after Mobius's 2.5 s delay on the fake clock, `h.Advance(d)` runs due quest timers, `h.Start()` the `on_start` handlers, and `h.SetRand(rnd.NewScripted(t, rnd.Get(10, 3)))` forces the random draws (a draw the script does not expect fails the test):
+
+```go
+h := scripttest.Load(t, "../../scripts", "quests/Q00401_PathOfTheWarrior/Q00401_PathOfTheWarrior.lua")
+hero := &scripttest.Player{ObjectID: 1, Name: "Hero", Level: 19}
+auron := &scripttest.Npc{ObjectID: 2, ID: 30010}
+h.Talk("Q00401_PathOfTheWarrior", hero, auron)
+h.Event("Q00401_PathOfTheWarrior", "30010-06.htm", hero, auron)
+h.SetRand(rnd.NewScripted(t, rnd.Get(10, 3)))
+h.Kill(hero, &scripttest.Npc{ObjectID: 3, ID: 20035})
+```
+
+The walkthroughs of the hand-ported quests are in `internal/scripting/quests_test.go`.
 
 The tests for the shipped scripts are in `internal/scripting/scripts_test.go` and, for the NPC scripts ported from Mobius, `internal/game/dialog_script_test.go`, which also runs scripts inside a game server.
 

@@ -41,6 +41,8 @@ func (v *vm) newState() *lua.LState {
 	for _, m := range v.modules() {
 		L.SetGlobal(m.name, L.SetFuncs(L.NewTable(), m.funcs))
 	}
+	v.initRnd(L)
+	v.initConstants(L)
 	initRejectionType(L)
 	v.initTypes(L)
 	return L
@@ -61,6 +63,13 @@ func (v *vm) modules() []module {
 		{name: "html", funcs: v.htmlFuncs()},
 		{name: "log", funcs: v.logFuncs()},
 		{name: "script", funcs: v.scriptFuncs()},
+		{name: "quest", funcs: v.questFuncs()},
+		{name: "rnd", funcs: v.rndFuncs()},
+		{name: "time", funcs: v.timeFuncs()},
+		{name: "world", funcs: v.worldFuncs()},
+		{name: "globals", funcs: v.globalsFuncs()},
+		{name: "util", funcs: v.utilFuncs()},
+		{name: "ClassId", funcs: v.classFuncs()},
 	}
 }
 

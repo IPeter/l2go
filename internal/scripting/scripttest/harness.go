@@ -17,6 +17,7 @@ package scripttest
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/IPeter/l2go/internal/data"
+	"github.com/IPeter/l2go/internal/rnd"
 	"github.com/IPeter/l2go/internal/scripting"
 )
 
@@ -31,14 +34,21 @@ import (
 // handler timeout.
 const callTimeout = 5 * time.Second
 
-// Harness is a script engine for one test.
+// Harness is a script engine for one test, with a fake world (World), a
+// fake clock and a random source tests can script (SetRand).
 type Harness struct {
 	t      testing.TB
 	dir    string
 	engine *scripting.Engine
 	logs   *recorder
 	out    *output
+	world  *World
+	rand   *switchSource
 }
+
+// switchSource is the harness's random source: a seeded one until the test
+// sets its own.
+type switchSource struct{ rnd.Source }
 
 // Load loads the scripts in dir. With no files, every script runs, as on
 // the server; otherwise only the given scripts (slash paths relative to
@@ -85,16 +95,116 @@ func WriteScript(t testing.TB, dir, name, src string) {
 
 func start(t testing.TB, opts scripting.Options) *Harness {
 	t.Helper()
-	h := &Harness{t: t, dir: opts.Dir, logs: newRecorder(t), out: &output{}}
+	h := &Harness{
+		t: t, dir: opts.Dir, logs: newRecorder(t), out: &output{},
+		world: NewWorld(), rand: &switchSource{rnd.New(1)},
+	}
 	opts.Logger = slog.New(h.logs)
 	opts.Output = h.out
+	opts.World = h.world
+	opts.Rand = h.rand
+	opts.Constants = Constants()
 	e, err := scripting.New(t.Context(), opts)
 	if err != nil {
 		t.Fatalf("loading scripts: %v", err)
 	}
 	t.Cleanup(e.Close)
 	h.engine = e
+	h.syncCustom()
 	return h
+}
+
+// syncCustom tells the fake world which quests are custom, as the game
+// tells its quest model.
+func (h *Harness) syncCustom() {
+	clear(h.world.Custom)
+	for _, q := range h.engine.Quests() {
+		if q.Custom {
+			h.world.Custom[q.Name] = true
+		}
+	}
+}
+
+// Constants returns the generated constant tables the server passes to the
+// engine, built from internal/data: ClassId (with the class helpers).
+func Constants() scripting.Constants {
+	var c scripting.Constants
+	for _, pc := range data.PlayerClasses() {
+		parent := -1
+		if p, ok := pc.Parent(); ok {
+			parent = int(p)
+		}
+		c.Classes = append(c.Classes, scripting.ClassInfo{
+			ID: int(pc), Name: pc.String(), Level: pc.Level(), Race: int(pc.Race()), Parent: parent, Mage: pc.IsMage(),
+		})
+	}
+	return c
+}
+
+// World returns the fake world.
+func (h *Harness) World() *World { return h.world }
+
+// SetRand makes src the random source of rnd, math.random and the quest
+// helpers, e.g. rnd.NewScripted(t, rnd.Get(10, 3)) to force a drop.
+func (h *Harness) SetRand(src rnd.Source) { h.rand.Source = src }
+
+// Start runs the scripts' on_start handlers, as the game does once its
+// world is ready.
+func (h *Harness) Start() {
+	h.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	if err := h.engine.Start(ctx); err != nil {
+		h.t.Fatalf("on_start failed: %v", err)
+	}
+}
+
+// Advance moves the fake clock by d and runs the quest timers that come
+// due, as the world loop does.
+func (h *Harness) Advance(d time.Duration) { h.world.Advance(d) }
+
+// KillDelay is Mobius's onKillDelay: the kill event runs this long after
+// the death.
+const KillDelay = 2500 * time.Millisecond
+
+// Kill runs the kill handlers for npc, killed by player, after the 2.5 s
+// kill delay on the fake clock (timers due meanwhile run too). The test
+// fails if a handler fails.
+func (h *Harness) Kill(player *Player, npc *Npc) {
+	h.t.Helper()
+	h.world.Add(player, npc)
+	var err error
+	h.world.After(KillDelay, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+		defer cancel()
+		err = h.engine.Kill(ctx, npc.Ref(), player.Ref(), false)
+	})
+	h.world.Advance(KillDelay)
+	if err != nil {
+		h.t.Fatalf("kill handler failed: %v", err)
+	}
+}
+
+// Attack runs the attack handlers for npc, hit by player for damage.
+func (h *Harness) Attack(player *Player, npc *Npc, damage int) {
+	h.t.Helper()
+	h.world.Add(player, npc)
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	if err := h.engine.Attack(ctx, npc.Ref(), player.Ref(), damage, false, nil); err != nil {
+		h.t.Fatalf("attack handler failed: %v", err)
+	}
+}
+
+// EnterWorld runs the on_enter_world handlers for player.
+func (h *Harness) EnterWorld(player *Player) {
+	h.t.Helper()
+	h.world.Add(player)
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	if err := h.engine.EnterWorld(ctx, player.Ref()); err != nil {
+		h.t.Fatalf("enter-world handler failed: %v", err)
+	}
 }
 
 // Engine returns the engine, for calls the harness has no helper for.
@@ -114,6 +224,7 @@ func (h *Harness) Reload() error {
 		return err
 	}
 	h.engine.Swap(p)
+	h.syncCustom()
 	return nil
 }
 
@@ -155,7 +266,7 @@ func (h *Harness) FirstTalk(player *Player, npc *Npc) (scripting.Reply, bool) {
 	h.t.Helper()
 	return h.npcCall("first talk", func(ctx context.Context) (scripting.Reply, bool) {
 		return h.engine.FirstTalk(ctx, npc.ID, player.Ref(), npc.Ref())
-	})
+	}, player, npc)
 }
 
 // Talk runs the on_talk handler script registered for npc's template, as
@@ -165,7 +276,7 @@ func (h *Harness) Talk(script string, player *Player, npc *Npc) (scripting.Reply
 	h.t.Helper()
 	return h.npcCall("talk", func(ctx context.Context) (scripting.Reply, bool) {
 		return h.engine.Talk(ctx, script, npc.ID, player.Ref(), npc.Ref())
-	})
+	}, player, npc)
 }
 
 // Event runs the on_event handler of script, as when player clicks
@@ -175,11 +286,12 @@ func (h *Harness) Event(script, event string, player *Player, npc *Npc) (scripti
 	h.t.Helper()
 	return h.npcCall("event "+event, func(ctx context.Context) (scripting.Reply, bool) {
 		return h.engine.Event(ctx, script, event, player.Ref(), npc.Ref())
-	})
+	}, player, npc)
 }
 
-func (h *Harness) npcCall(what string, call func(context.Context) (scripting.Reply, bool)) (scripting.Reply, bool) {
+func (h *Harness) npcCall(what string, call func(context.Context) (scripting.Reply, bool), objs ...any) (scripting.Reply, bool) {
 	h.t.Helper()
+	h.world.Add(objs...)
 	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
 	defer cancel()
 	reply, ok := call(ctx)
@@ -196,6 +308,50 @@ type Player struct {
 	Level    int
 	ClassID  int
 	Race     int
+
+	// Quest-era details (scripting.PlayerDetails).
+	Sex        int
+	BaseClass  int
+	Mage       bool
+	Newbie     bool
+	Dead       bool
+	Categories []int
+
+	X, Y, Z, Heading int
+
+	// Items maps item IDs to counts; Equipped paperdoll slots to item IDs.
+	Items    map[int]int64
+	Equipped map[int]int
+	Exp, Sp  int64
+	// Vars are the player variables (player:var).
+	Vars map[string]string
+
+	quests map[string]*QuestState
+}
+
+// Quest returns the player's state of a quest in the fake world, or nil.
+func (p *Player) Quest(name string) *QuestState { return p.quests[name] }
+
+// Quests returns the names of the player's quest states, sorted.
+func (p *Player) Quests() []string { return slices.Sorted(maps.Keys(p.quests)) }
+
+// Give adds items to the player.
+func (p *Player) Give(itemID int, count int64) { p.addItem(itemID, count) }
+
+func (p *Player) addItem(itemID int, count int64) {
+	if p.Items == nil {
+		p.Items = make(map[int]int64)
+	}
+	p.Items[itemID] += count
+}
+
+// Equip puts an item into a paperdoll slot (the item must be in Items to
+// be counted).
+func (p *Player) Equip(slot, itemID int) {
+	if p.Equipped == nil {
+		p.Equipped = make(map[int]int)
+	}
+	p.Equipped[slot] = itemID
 }
 
 // Ref returns the player as the engine sees it; nil for a nil Player. It
@@ -209,17 +365,74 @@ func (p *Player) Ref() scripting.PlayerRef {
 
 type playerRef struct{ p *Player }
 
+var (
+	_ scripting.PlayerItems   = playerRef{}
+	_ scripting.PlayerDetails = playerRef{}
+	_ scripting.PlayerVars    = playerRef{}
+	_ scripting.Located       = playerRef{}
+)
+
 func (r playerRef) ObjectID() int32 { return r.p.ObjectID }
 func (r playerRef) Name() string    { return r.p.Name }
 func (r playerRef) Level() int      { return r.p.Level }
 func (r playerRef) ClassID() int    { return r.p.ClassID }
 func (r playerRef) Race() int       { return r.p.Race }
 
+func (r playerRef) Sex() int          { return r.p.Sex }
+func (r playerRef) BaseClassID() int  { return r.p.BaseClass }
+func (r playerRef) IsMageClass() bool { return r.p.Mage }
+func (r playerRef) IsNewbie() bool    { return r.p.Newbie }
+func (r playerRef) IsDead() bool      { return r.p.Dead }
+func (r playerRef) InCategory(c int) bool {
+	return slices.Contains(r.p.Categories, c)
+}
+
+func (r playerRef) Location() scripting.Location {
+	return scripting.Location{X: r.p.X, Y: r.p.Y, Z: r.p.Z, Heading: r.p.Heading}
+}
+
+func (r playerRef) Var(name string) (string, bool) {
+	v, ok := r.p.Vars[name]
+	return v, ok
+}
+
+func (r playerRef) SetVar(name, value string) {
+	if r.p.Vars == nil {
+		r.p.Vars = make(map[string]string)
+	}
+	r.p.Vars[name] = value
+}
+
+func (r playerRef) Adena() int64               { return r.p.Items[57] }
+func (r playerRef) ItemCount(itemID int) int64 { return r.p.Items[itemID] }
+func (r playerRef) GiveItems(itemID int, count int64) bool {
+	r.p.addItem(itemID, count)
+	return true
+}
+
+func (r playerRef) TakeItems(itemID int, count int64) bool {
+	have := r.p.Items[itemID]
+	if count < 0 || count >= have {
+		delete(r.p.Items, itemID)
+		return count < 0 || count == have
+	}
+	r.p.Items[itemID] = have - count
+	return true
+}
+
 // Npc is a fake NPC. ID is its template ID.
 type Npc struct {
 	ObjectID int32
 	ID       int
 	Name     string
+
+	X, Y, Z, Heading int
+	Dead             bool
+	ScriptValue      int
+	// Types are the Mobius NPC classes npc:is_type answers true for.
+	Types []string
+	// Deleted is set by npc:delete().
+	Deleted bool
 }
 
 // Ref returns the NPC as the engine sees it; nil for a nil Npc.
@@ -232,9 +445,22 @@ func (n *Npc) Ref() scripting.NpcRef {
 
 type npcRef struct{ n *Npc }
 
+var (
+	_ scripting.NpcDetails = npcRef{}
+	_ scripting.Located    = npcRef{}
+)
+
 func (r npcRef) ObjectID() int32 { return r.n.ObjectID }
 func (r npcRef) ID() int         { return r.n.ID }
 func (r npcRef) Name() string    { return r.n.Name }
+
+func (r npcRef) IsDead() bool             { return r.n.Dead }
+func (r npcRef) ScriptValue() int         { return r.n.ScriptValue }
+func (r npcRef) SetScriptValue(v int)     { r.n.ScriptValue = v }
+func (r npcRef) IsType(class string) bool { return slices.Contains(r.n.Types, class) }
+func (r npcRef) Location() scripting.Location {
+	return scripting.Location{X: r.n.X, Y: r.n.Y, Z: r.n.Z, Heading: r.n.Heading}
+}
 
 // Speech is one npc:say.
 type Speech struct {

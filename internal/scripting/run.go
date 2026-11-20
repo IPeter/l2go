@@ -68,6 +68,21 @@ func (v *vm) call(fn *lua.LFunction, args ...lua.LValue) (lua.LValue, lua.LValue
 	return r1, r2, nil
 }
 
+// callWith is call with the arguments built inside the protected call, so
+// a Go panic while building them (a ref's ObjectID) is an error too.
+func (v *vm) callWith(fn *lua.LFunction, args func() []lua.LValue) (lua.LValue, lua.LValue, error) {
+	wrapper := v.L.NewFunction(func(L *lua.LState) int {
+		a := args()
+		L.Push(fn)
+		for _, x := range a {
+			L.Push(x)
+		}
+		L.Call(len(a), 2)
+		return 2
+	})
+	return v.call(wrapper)
+}
+
 // handlerError turns the error of a failed handler into an *Error, naming
 // timeouts and cancellation. what names the handler, for example
 // "chat handler".

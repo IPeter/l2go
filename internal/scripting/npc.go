@@ -71,7 +71,11 @@ func (e *Engine) HasFirstTalk(npcID int) bool {
 	if e.closed {
 		return false
 	}
-	_, ok := e.vm.firstTalk[npcID]
+	owner, ok := e.vm.firstTalk[npcID]
+	if !ok {
+		return false
+	}
+	_, ok = owner.script.handlerFor(hookFirstTalk, npcID)
 	return ok
 }
 
@@ -87,17 +91,22 @@ func (e *Engine) FirstTalk(ctx context.Context, npcID int, player PlayerRef, npc
 	if !found {
 		return Reply{}, false
 	}
+	reg, found := owner.script.handlerFor(hookFirstTalk, npcID)
+	if !found {
+		return Reply{}, false
+	}
 	defer e.settle()
 	v := e.vm
-	return v.npcCall(ctx, e.opts.Timeout, owner.script, owner.reg.handler, "on_first_talk", func() []lua.LValue {
+	return v.npcCall(ctx, e.opts.Timeout, owner.script, reg.handler, "on_first_talk", func() []lua.LValue {
 		return []lua.LValue{v.newNpc(v.L, npc), v.newPlayer(v.L, player)}
 	})
 }
 
-// Talk runs the s:on_talk handler that script registered for the NPC
-// template npcID: player clicked the "Script <script>" link (Mobius's quest
-// link) at npc. ok is false when there is nothing to show: no such script
-// or handler, the handler returned nil, or it failed (Reply.Err).
+// Talk runs the talk handler of script for the NPC template npcID: player
+// clicked the "Script <script>" link (Mobius's quest link) at npc, or chose
+// the quest in the quest window. A quest's start NPCs count as talk NPCs.
+// ok is false when there is nothing to show: no such script or handler,
+// the handler returned nil, or it failed (Reply.Err).
 func (e *Engine) Talk(ctx context.Context, script string, npcID int, player PlayerRef, npc NpcRef) (reply Reply, ok bool) {
 	if err := e.stopped(ctx); err != nil {
 		return Reply{Err: err}, false
@@ -106,7 +115,7 @@ func (e *Engine) Talk(ctx context.Context, script string, npcID int, player Play
 	if !found {
 		return Reply{}, false
 	}
-	reg, found := s.talk[npcID]
+	reg, found := s.handlerFor(hookTalk, npcID)
 	if !found {
 		return Reply{Script: s.name, Dir: s.dir}, false
 	}
@@ -117,16 +126,19 @@ func (e *Engine) Talk(ctx context.Context, script string, npcID int, player Play
 	})
 }
 
-// TalkScripts returns the names of the scripts with an on_talk handler for
-// the NPC template npcID, in load order. The game layer lists them when a
-// player opens the NPC's quest link without a script name.
+// TalkScripts returns the names of the scripts with a talk handler for the
+// NPC template npcID (talk or start NPCs), in load order. The game layer
+// lists them when a player opens the NPC's quest link without a script
+// name.
 func (e *Engine) TalkScripts(npcID int) []string {
 	if e.closed {
 		return nil
 	}
 	var names []string
-	for _, s := range e.vm.talkers[npcID] {
-		names = append(names, s.name)
+	for _, s := range e.vm.byID[hookTalk][npcID] {
+		if _, ok := s.handlerFor(hookTalk, npcID); ok {
+			names = append(names, s.name)
+		}
 	}
 	return names
 }
@@ -144,12 +156,13 @@ func (e *Engine) Event(ctx context.Context, script, event string, player PlayerR
 	if !found {
 		return Reply{}, false
 	}
-	if s.event == nil {
+	reg, found := s.handlerFor(hookEvent, 0)
+	if !found {
 		return Reply{Script: s.name, Dir: s.dir}, false
 	}
 	defer e.settle()
 	v := e.vm
-	return v.npcCall(ctx, e.opts.Timeout, s, s.event.handler, "on_event", func() []lua.LValue {
+	return v.npcCall(ctx, e.opts.Timeout, s, reg.handler, "on_event", func() []lua.LValue {
 		return []lua.LValue{lua.LString(event), v.newNpc(v.L, npc), v.newPlayer(v.L, player)}
 	})
 }
@@ -177,7 +190,7 @@ func (v *vm) npcCall(ctx context.Context, timeout time.Duration, s *npcScript, h
 	v.event = nil
 	defer func() { v.event = prev }()
 
-	ret, vars, err := v.call(h.fn, args()...)
+	ret, vars, err := v.callWith(h.fn, args)
 	if err != nil {
 		base.Err = handlerError(ctx, err, h, s.name+" "+what+" handler", timeout)
 		v.logger.Warn("script handler failed", "script", s.name, "handler", h.where(), "err", base.Err)

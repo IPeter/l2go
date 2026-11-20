@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/IPeter/l2go/internal/scripting"
 )
@@ -100,6 +101,72 @@ end)`})
 	p.Level = 10 // the ref reads the fields at call time
 	if res := h.Chat(scripting.ChatMessage{Player: p.Ref(), Type: 8, Text: "WTS"}); res.Dropped {
 		t.Errorf("trade at level 10 = %+v", res)
+	}
+}
+
+// The fake quest state follows Mobius's __compltdStateFlags arithmetic.
+func TestQuestStateCondFlags(t *testing.T) {
+	w := NewWorld()
+	p := &Player{ObjectID: 1}
+	st := w.NewQuestState(p.Ref(), "Q1")
+	st.SetState(scripting.StateStarted)
+	steps := []struct {
+		cond  string
+		flags string // "" for unset
+	}{
+		{"1", ""},
+		{"2", ""},
+		{"4", "-2147483637"}, // 0x80000001 | 0b11 | 0b1000: step 3 skipped
+		{"5", "-2147483621"}, // | 0b10000
+	}
+	for i, s := range steps {
+		st.Set("cond", s.cond)
+		got, ok := st.Get("__compltdStateFlags")
+		if (s.flags == "" && ok) || (s.flags != "" && got != s.flags) {
+			t.Errorf("step %d cond %s: flags %q (set %v), want %q", i, s.cond, got, ok, s.flags)
+		}
+	}
+	// Back below 3 always drops the flags.
+	st.Set("cond", "2")
+	if got, ok := st.Get("__compltdStateFlags"); ok {
+		t.Errorf("back to 2: flags %q, want unset", got)
+	}
+	// 1 → 4 skips steps 2 and 3; back to 3 keeps step 1 done, step 2
+	// skipped, and the skip mark.
+	st.Set("cond", "1")
+	st.Set("cond", "4")
+	if got, _ := st.Get("__compltdStateFlags"); got != "-2147483639" {
+		t.Errorf("1, 4: flags %q, want -2147483639", got)
+	}
+	st.Set("cond", "3")
+	if got, _ := st.Get("__compltdStateFlags"); got != "-2147483647" {
+		t.Errorf("1, 4, 3: flags %q, want -2147483647", got)
+	}
+	if st.Cond() != 3 {
+		t.Errorf("cond = %d", st.Cond())
+	}
+	if w.QuestLists[1] == 0 || len(w.QuestMarks) == 0 {
+		t.Error("no QuestList or quest mark recorded")
+	}
+}
+
+// Timers run in due order, then start order, each at its time.
+func TestWorldTimers(t *testing.T) {
+	w := NewWorld()
+	var got []string
+	w.After(2*time.Second, func() { got = append(got, "b@"+w.Now().Sub(Start).String()) })
+	w.After(time.Second, func() { got = append(got, "a@"+w.Now().Sub(Start).String()) })
+	w.After(2*time.Second, func() { got = append(got, "c@"+w.Now().Sub(Start).String()) })
+	stop := w.Every(1500*time.Millisecond, func() { got = append(got, "r@"+w.Now().Sub(Start).String()) })
+	w.Advance(3 * time.Second)
+	stop()
+	w.Advance(3 * time.Second)
+	want := []string{"a@1s", "r@1.5s", "b@2s", "c@2s", "r@3s"}
+	if !slices.Equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
+	}
+	if w.Pending() != 0 {
+		t.Errorf("pending = %d", w.Pending())
 	}
 }
 

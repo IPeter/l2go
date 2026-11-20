@@ -49,15 +49,22 @@ type vm struct {
 	broken map[string]bool               // files that did not compile
 	loaded map[string]lua.LValue         // results of files that ran
 
-	handlers  map[string][]handler   // events.on_<name> handlers by event name
-	scripts   map[string]*npcScript  // script.new objects by name
-	firstTalk map[int]firstTalkOwner // by NPC template ID
-	talkers   map[int][]*npcScript   // scripts with on_talk, by NPC template ID, in load order
-	loading   bool                   // scripts are loading: handlers may register
-	running   []string               // files running while loading, innermost last
-	event     *eventRun              // the event being handled, or nil
-	depth     int                    // runs in progress (nested runs count too)
-	refs      []*lua.LUserData       // Player and Npc values handed out in this run
+	handlers  map[string][]handler           // events.on_<name> handlers by event name
+	scripts   map[string]*npcScript          // script.new and quest.new objects by name
+	order     []*npcScript                   // the same, in load order
+	questIDs  map[int]*npcScript             // quests by ID
+	firstTalk map[int]firstTalkOwner         // by NPC template ID
+	byID      [numHooks]map[int][]*npcScript // scripts registered for an ID, per handler kind, in load order
+	loading   bool                           // scripts are loading: handlers may register
+	running   []string                       // files running while loading, innermost last
+	event     *eventRun                      // the event being handled, or nil
+	depth     int                            // runs in progress (nested runs count too)
+	refs      []*lua.LUserData               // Player, Npc and QuestState values handed out in this run
+	refCache  map[refKey]*lua.LUserData      // the same values by object, so one object is one value per run
+	timers    map[timerKey]*questTimer       // running quest timers
+	timerSeq  uint64                         // start order of quest timers
+	quest     questEnv                       // what the quest API works with
+	engine    *Engine                        // the engine running this vm, nil while prepared
 
 	files int // .lua files compiled
 }
@@ -127,9 +134,21 @@ func load(ctx context.Context, opts Options) (*vm, error) {
 		loaded:    make(map[string]lua.LValue),
 		handlers:  make(map[string][]handler),
 		scripts:   make(map[string]*npcScript),
+		questIDs:  make(map[int]*npcScript),
 		firstTalk: make(map[int]firstTalkOwner),
-		talkers:   make(map[int][]*npcScript),
+		refCache:  make(map[refKey]*lua.LUserData),
+		timers:    make(map[timerKey]*questTimer),
+		quest: questEnv{
+			world:  opts.World,
+			rand:   opts.Rand,
+			consts: opts.Constants,
+			rates:  opts.Rates,
+		},
 	}
+	for k := range v.byID {
+		v.byID[k] = make(map[int][]*npcScript)
+	}
+	v.quest.actions, _ = opts.World.(QuestActions)
 	v.L = v.newState()
 
 	for _, f := range files {

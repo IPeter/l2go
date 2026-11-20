@@ -25,6 +25,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/IPeter/l2go/internal/rnd"
 )
 
 // Defaults for Options.
@@ -55,6 +57,21 @@ type Options struct {
 	// makes those calls log at debug level only (as in `l2go scripts
 	// check`).
 	Output Output
+	// World is the game world as quests see it (quest states, items,
+	// timers). Nil leaves the quest helpers raising errors when called,
+	// which is fine for loading and checking scripts. It may also implement
+	// QuestActions.
+	World QuestWorld
+	// Rand is the random source behind rnd and math.random (Mobius Rnd).
+	// Nil uses a source seeded at random.
+	Rand rnd.Source
+	// Constants are the generated constant tables (ClassId, Category,
+	// SystemMessageId, ...). The built-in tables (State, QuestSound, ...)
+	// are always there.
+	Constants Constants
+	// Rates are the quest rates that the script side applies (Mobius
+	// RatesConfig). The zero value means Mobius's defaults.
+	Rates Rates
 }
 
 func (o Options) withDefaults() Options {
@@ -70,6 +87,10 @@ func (o Options) withDefaults() Options {
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.DiscardHandler)
 	}
+	if o.Rand == nil {
+		o.Rand = rnd.New(rnd.RandomSeed())
+	}
+	o.Rates = o.Rates.withDefaults()
 	return o
 }
 
@@ -103,7 +124,9 @@ func New(ctx context.Context, opts Options) (*Engine, error) {
 		return nil, err
 	}
 	opts.Logger.Info("scripts loaded", "dir", opts.Dir, "files", v.files)
-	return &Engine{opts: opts, vm: v}, nil
+	e := &Engine{opts: opts, vm: v}
+	v.engine = e
+	return e, nil
 }
 
 // Invoke runs the handlers of ev on the caller's goroutine and returns
@@ -203,8 +226,15 @@ func (e *Engine) Swap(p *Prepared) {
 	}
 	old := e.vm
 	e.vm, p.vm = p.vm, nil
+	e.vm.engine = e
+	old.stopTimers()
 	old.close()
 	e.opts.Logger.Info("scripts reloaded", "dir", e.opts.Dir, "files", e.vm.files)
+	// The new scripts' on_start handlers run now; at startup the game calls
+	// Start itself.
+	ctx, cancel := context.WithTimeout(context.Background(), e.opts.LoadTimeout)
+	defer cancel()
+	_ = e.Start(ctx) // failures are logged
 }
 
 // Close closes the Lua state. Call it once the loop no longer calls the
@@ -219,6 +249,9 @@ func (e *Engine) Close() {
 		e.pending.Close()
 		e.pending = nil
 	}
+	// The loop may be gone: forget the timers without cancelling them on
+	// it. A timer that still fires finds the engine closed.
+	e.vm.dropTimers()
 	if e.vm.depth == 0 {
 		e.vm.close()
 	}

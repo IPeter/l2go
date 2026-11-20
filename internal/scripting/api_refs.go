@@ -2,6 +2,7 @@ package scripting
 
 import (
 	"fmt"
+	"math"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -18,6 +19,24 @@ type PlayerRef interface {
 	ClassID() int
 	// Race is 0 human, 1 elf, 2 dark elf, 3 orc, 4 dwarf.
 	Race() int
+}
+
+// PlayerItems is the part of a PlayerRef that reaches the player's items:
+// player:adena(), player:item_count(), player:give_items() and
+// player:take_items(). The game's players implement it; the methods raise
+// a Lua error for a PlayerRef without it.
+type PlayerItems interface {
+	// Adena is the adena the player carries.
+	Adena() int64
+	// ItemCount is how many items of the template the player carries, worn
+	// ones included.
+	ItemCount(itemID int) int64
+	// GiveItems gives count items of the template, with the reward
+	// messages, and reports whether they were given.
+	GiveItems(itemID int, count int64) bool
+	// TakeItems takes count items of the template (all for a negative
+	// count) and reports whether the player had that many.
+	TakeItems(itemID int, count int64) bool
 }
 
 // NpcRef is an NPC as scripts see it (the Npc class in types/l2go.lua).
@@ -44,6 +63,11 @@ const (
 	playerType = "l2go.player"
 	npcType    = "l2go.npc"
 	scriptType = "l2go.script"
+	stateType  = "l2go.queststate"
+	timerType  = "l2go.questtimer"
+	itemType   = "l2go.item"
+	zoneType   = "l2go.zone"
+	skillType  = "l2go.skill"
 )
 
 // playerArg and npcArg mark refs in Event.Data, so the event table gets
@@ -61,20 +85,42 @@ type (
 	npcBox    struct{ ref NpcRef }
 )
 
-// newPlayer returns a Player value for p, or nil.
+// refKey identifies the object behind a ref, so that one object is one Lua
+// value within a run (Java's identity checks, st == st2, keep working).
+type refKey struct {
+	kind  byte // 'p' player, 'n' NPC, 's' quest state
+	id    int32
+	quest string // quest states only
+}
+
+// newPlayer returns a Player value for p, or nil. Within a run, the same
+// player is always the same value.
 func (v *vm) newPlayer(L *lua.LState, p PlayerRef) lua.LValue {
 	if p == nil {
 		return lua.LNil
 	}
-	return v.newRef(L, &playerBox{ref: p}, playerType)
+	key := refKey{kind: 'p', id: p.ObjectID()}
+	if ud, ok := v.refCache[key]; ok {
+		return ud
+	}
+	ud := v.newRef(L, &playerBox{ref: p}, playerType)
+	v.refCache[key] = ud
+	return ud
 }
 
-// newNpc returns an Npc value for n, or nil.
+// newNpc returns an Npc value for n, or nil. Within a run, the same NPC is
+// always the same value.
 func (v *vm) newNpc(L *lua.LState, n NpcRef) lua.LValue {
 	if n == nil {
 		return lua.LNil
 	}
-	return v.newRef(L, &npcBox{ref: n}, npcType)
+	key := refKey{kind: 'n', id: n.ObjectID()}
+	if ud, ok := v.refCache[key]; ok {
+		return ud
+	}
+	ud := v.newRef(L, &npcBox{ref: n}, npcType)
+	v.refCache[key] = ud
+	return ud
 }
 
 func (v *vm) newRef(L *lua.LState, box any, typ string) *lua.LUserData {
@@ -94,10 +140,13 @@ func (v *vm) expireRefs() {
 			b.ref = nil
 		case *npcBox:
 			b.ref = nil
+		case *stateBox:
+			b.st, b.player = nil, nil
 		}
 		v.refs[i] = nil
 	}
 	v.refs = v.refs[:0]
+	clear(v.refCache)
 }
 
 // luaType is a userdata class of the script API. scripts/types/l2go.lua
@@ -113,8 +162,13 @@ type luaType struct {
 func (v *vm) types() []luaType {
 	return []luaType{
 		{name: "Script", meta: scriptType, methods: v.scriptMethods(), tostring: scriptString},
-		{name: "Player", meta: playerType, methods: playerMethods(), tostring: playerString},
+		{name: "Player", meta: playerType, methods: v.playerMethods(), tostring: playerString},
 		{name: "Npc", meta: npcType, methods: v.npcMethods(), tostring: npcString},
+		{name: "QuestState", meta: stateType, methods: v.stateMethods(), tostring: stateString},
+		{name: "QuestTimer", meta: timerType, methods: v.timerMethods(), tostring: timerString},
+		{name: "Item", meta: itemType, methods: itemMethods(), tostring: itemString},
+		{name: "Zone", meta: zoneType, methods: zoneMethods(), tostring: zoneString},
+		{name: "Skill", meta: skillType, methods: skillMethods(), tostring: skillString},
 	}
 }
 
@@ -134,14 +188,83 @@ func (v *vm) initTypes(L *lua.LState) {
 }
 
 // playerMethods are the methods of Player values.
-func playerMethods() map[string]lua.LGFunction {
-	return map[string]lua.LGFunction{
+func (v *vm) playerMethods() map[string]lua.LGFunction {
+	m := map[string]lua.LGFunction{
 		"object_id": playerGetter("object_id", func(p PlayerRef) lua.LValue { return lua.LNumber(p.ObjectID()) }),
 		"name":      playerGetter("name", func(p PlayerRef) lua.LValue { return lua.LString(p.Name()) }),
 		"level":     playerGetter("level", func(p PlayerRef) lua.LValue { return lua.LNumber(p.Level()) }),
 		"class_id":  playerGetter("class_id", func(p PlayerRef) lua.LValue { return lua.LNumber(p.ClassID()) }),
 		"race":      playerGetter("race", func(p PlayerRef) lua.LValue { return lua.LNumber(p.Race()) }),
+		"adena": func(L *lua.LState) int {
+			L.Push(lua.LNumber(checkPlayerItems(L, "adena").Adena()))
+			return 1
+		},
+		"item_count": func(L *lua.LState) int {
+			items := checkPlayerItems(L, "item_count")
+			L.Push(lua.LNumber(items.ItemCount(checkItemID(L, "item_count"))))
+			return 1
+		},
+		"give_items": func(L *lua.LState) int {
+			items := checkPlayerItems(L, "give_items")
+			id := checkItemID(L, "give_items")
+			count := checkCount(L, "give_items", 1)
+			if count <= 0 {
+				L.ArgError(3, "player:give_items(): the count must be at least 1")
+				return 0
+			}
+			L.Push(lua.LBool(items.GiveItems(id, count)))
+			return 1
+		},
+		"take_items": func(L *lua.LState) int {
+			items := checkPlayerItems(L, "take_items")
+			id := checkItemID(L, "take_items")
+			count := checkCount(L, "take_items", -1)
+			if count == 0 {
+				L.ArgError(3, "player:take_items(): the count must not be 0 (-1 takes all)")
+				return 0
+			}
+			L.Push(lua.LBool(items.TakeItems(id, count)))
+			return 1
+		},
 	}
+	for name, fn := range v.playerQuestMethods() {
+		m[name] = fn
+	}
+	return m
+}
+
+// checkPlayerItems returns the items of the player method was called on.
+func checkPlayerItems(L *lua.LState, method string) PlayerItems {
+	p := checkPlayer(L, method)
+	items, ok := p.(PlayerItems)
+	if !ok {
+		L.RaiseError("player:%s(): this player has no items", method)
+		return nil
+	}
+	return items
+}
+
+// checkItemID returns argument 2, an item template ID.
+func checkItemID(L *lua.LState, method string) int {
+	v := float64(L.CheckNumber(2))
+	if v != math.Trunc(v) || v < 1 || v > math.MaxInt32 {
+		L.ArgError(2, fmt.Sprintf("player:%s(): the item ID must be a positive integer", method))
+		return 0
+	}
+	return int(v)
+}
+
+// checkCount returns argument 3, an item count, or def when it is absent.
+func checkCount(L *lua.LState, method string, def int64) int64 {
+	if L.Get(3) == lua.LNil {
+		return def
+	}
+	v := float64(L.CheckNumber(3))
+	if v != math.Trunc(v) || v < math.MinInt32 || v > math.MaxInt32 {
+		L.ArgError(3, fmt.Sprintf("player:%s(): the count must be an integer", method))
+		return 0
+	}
+	return int64(v)
 }
 
 func playerGetter(method string, get func(PlayerRef) lua.LValue) lua.LGFunction {
@@ -153,12 +276,16 @@ func playerGetter(method string, get func(PlayerRef) lua.LValue) lua.LGFunction 
 
 // npcMethods are the methods of Npc values.
 func (v *vm) npcMethods() map[string]lua.LGFunction {
-	return map[string]lua.LGFunction{
+	m := map[string]lua.LGFunction{
 		"object_id": npcGetter("object_id", func(n NpcRef) lua.LValue { return lua.LNumber(n.ObjectID()) }),
 		"id":        npcGetter("id", func(n NpcRef) lua.LValue { return lua.LNumber(n.ID()) }),
 		"name":      npcGetter("name", func(n NpcRef) lua.LValue { return lua.LString(n.Name()) }),
 		"say":       v.npcSay,
 	}
+	for name, fn := range v.npcQuestMethods() {
+		m[name] = fn
+	}
+	return m
 }
 
 func npcGetter(method string, get func(NpcRef) lua.LValue) lua.LGFunction {
