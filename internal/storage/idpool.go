@@ -117,11 +117,14 @@ func (p *IDPool) TryNextN(n int) ([]int32, bool) {
 	defer p.mu.Unlock()
 	var ids []int32
 	ok := n >= 1 && n <= len(p.ids)
+	need := 0 // IDs the pool lacked for this call
 	if ok {
 		ids = slices.Clone(p.ids[:n])
 		p.ids = p.ids[n:]
+	} else {
+		need = n
 	}
-	p.refillLocked()
+	p.refillLocked(need)
 	return ids, ok
 }
 
@@ -142,10 +145,11 @@ func (p *IDPool) Close() {
 	p.wg.Wait()
 }
 
-// refillLocked starts a refill when the pool is low, unless one is running
-// or the last one failed less than RetryDelay ago.
-func (p *IDPool) refillLocked() {
-	if p.closed || p.refilling || len(p.ids) >= p.opts.Low {
+// refillLocked starts a refill when the pool is low or holds fewer than need
+// IDs (a TryNextN it could not serve, which may ask for more than Low),
+// unless one is running or the last one failed less than RetryDelay ago.
+func (p *IDPool) refillLocked(need int) {
+	if p.closed || p.refilling || len(p.ids) >= max(p.opts.Low, need) {
 		return
 	}
 	if !p.failedAt.IsZero() && time.Since(p.failedAt) < p.opts.RetryDelay {

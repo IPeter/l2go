@@ -242,6 +242,25 @@ func TestIDPoolTryNextN(t *testing.T) {
 	})
 }
 
+// TestIDPoolTryNextNAboveLow asks for more IDs than the pool holds while it
+// still holds Low or more: the failed call starts a refill all the same.
+func TestIDPoolTryNextNAboveLow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		a := &fakeAllocator{next: storage.FirstObjectID}
+		p := newTestPool(t, a, storage.IDPoolOptions{Block: 10, Low: 2})
+		defer p.Close()
+		take(t, p, 5)
+		synctest.Wait()
+		if ids, ok := p.TryNextN(6); ok {
+			t.Fatalf("TryNextN(6) with 5 left = %#x, want none", ids)
+		}
+		synctest.Wait()
+		if ids, ok := p.TryNextN(6); !ok || ids[0] != storage.FirstObjectID+5 {
+			t.Errorf("TryNextN(6) after the refill = %#x, %v", ids, ok)
+		}
+	})
+}
+
 func TestIDPoolClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		a := &fakeAllocator{next: storage.FirstObjectID}
