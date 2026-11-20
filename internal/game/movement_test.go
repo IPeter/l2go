@@ -68,6 +68,19 @@ func walkTC(pos world.Position) testclient.Position {
 	return testclient.Position{X: pos.X, Y: pos.Y, Z: pos.Z}
 }
 
+// walkFor lets d pass in steps of ten seconds. The loop runs at most 100
+// missed ticks back to back and drops older ones, and a walk then jumps
+// ahead by the dropped ticks (its step counts the game ticks since the last
+// update, as Mobius's does), skipping the region changes on the way.
+func walkFor(e *testEnv, d time.Duration) {
+	e.t.Helper()
+	for d > 0 {
+		step := min(d, 10*time.Second)
+		e.advance(step)
+		d -= step
+	}
+}
+
 // walkState reads on the loop whether p walks, and where it is.
 func walkState(e *testEnv, p *Player) (walking bool, pos world.Position) {
 	e.onLoop(func() { walking, pos = p.Move != nil, p.Position() })
@@ -137,7 +150,7 @@ func TestWalkOutOfSightAndBack(t *testing.T) {
 	far := walkOffset(home, 5000, 0, 0)
 
 	walkClick(e, sa, home, far)
-	e.advance(time.Minute)
+	walkFor(e, time.Minute)
 	pas := sa.take(t)
 	checkNames(t, "Alice walking away", pas, "MoveToLocation", "DeleteObject", "MoveToLocation")
 	if d := pas[1].(testclient.DeleteObject); d.ObjectID != pb.ObjectID() {
@@ -153,7 +166,7 @@ func TestWalkOutOfSightAndBack(t *testing.T) {
 	}
 
 	walkClick(e, sa, far, home)
-	e.advance(time.Minute)
+	walkFor(e, time.Minute)
 	checkNames(t, "Alice walking back", sa.take(t), "MoveToLocation", "CharInfo", "RelationChanged", "MoveToLocation")
 	pbs = sb.take(t)
 	checkNames(t, "Bob as Alice comes back", pbs, "CharInfo", "RelationChanged", "MoveToLocation", "MoveToLocation")

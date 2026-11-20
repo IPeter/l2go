@@ -109,6 +109,9 @@ func TestCombatFlow(t *testing.T) {
 		f.send(msg(0x2b).i32(testMeID).b)
 		f.send(mobiusAttack(first))
 		f.send(mobiusStatusUpdate(monster.ObjectID, StatusAttribute{StatusCurHP, 70}))
+		// Wait until the client has checked its combat stance: the
+		// background reader applies AutoAttackStop as soon as it arrives.
+		f.expect([]byte{OpRequestSkillCoolTime})
 
 		// The second swing kills it, and it drops adena.
 		f.send(mobiusAttack(second))
@@ -147,6 +150,9 @@ func TestCombatFlow(t *testing.T) {
 	}
 	if me := w.Me(); !me.InCombat || me.TargetID != monster.ObjectID {
 		t.Errorf("after the first swing: in combat %v, target %d", me.InCombat, me.TargetID)
+	}
+	if err := c.SendRaw(ctx, OpRequestSkillCoolTime, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	d, err := Await(ctx, c, func(d Die) bool { return d.ObjectID == monster.ObjectID })

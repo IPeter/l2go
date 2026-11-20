@@ -453,7 +453,8 @@ func TestDecodeGamePacketErrors(t *testing.T) {
 		body   []byte
 		substr string
 	}{
-		{"unknown opcode", []byte{0x42, 1, 2}, "unknown packet (opcode 0x42"},
+		// 0x08 is not an Interlude server opcode.
+		{"unknown opcode", []byte{0x08, 1, 2}, "unknown packet (opcode 0x08"},
 		{"KeyPacket after the handshake", mobiusKeyPacket(1, testKeyHalf, true, 1), "KeyPacket (opcode 0x00"},
 		{"empty", nil, "empty body"},
 		{"CharCreateFail with an extra byte", []byte{0x1a, 2, 0, 0, 0, 0}, "1 bytes after the last field"},
@@ -465,9 +466,9 @@ func TestDecodeGamePacketErrors(t *testing.T) {
 			t.Errorf("%s: got %v, want an error containing %q", tt.name, err, tt.substr)
 		}
 	}
-	_, err := decodeGamePacket([]byte{0x42})
+	_, err := decodeGamePacket([]byte{0x08})
 	var upe *UnexpectedPacketError
-	if !errors.As(err, &upe) || upe.Opcode != 0x42 || upe.Server != "game" {
+	if !errors.As(err, &upe) || upe.Opcode != 0x08 || upe.Server != "game" {
 		t.Errorf("unknown opcode: got %#v", err)
 	}
 }

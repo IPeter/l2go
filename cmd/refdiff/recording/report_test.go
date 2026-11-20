@@ -3,6 +3,7 @@ package recording
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -66,6 +67,8 @@ func TestWriteTextCutsQuietRuns(t *testing.T) {
 	for range 20 {
 		entries = append(entries, srv("NpcInfo", "X", "1"))
 	}
+	// Clip so that the two appends below do not share a backing array.
+	entries = slices.Clip(entries)
 	left := oneStream("l2go", append(entries, srv("UserInfo", "RunSpd", "126"))...)
 	right := oneStream("reference", append(entries, srv("UserInfo", "RunSpd", "115"))...)
 	res := Diff(left, right, Options{})

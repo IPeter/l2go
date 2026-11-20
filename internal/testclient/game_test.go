@@ -246,8 +246,9 @@ func TestGameRaw(t *testing.T) {
 		f.recv()
 		f.sendKey(1, true)
 		f.expect([]byte{0x0e})
-		f.send(msg(0x42).u32(1).b)
-		f.send(msg(0x42).u32(2).b)
+		// 0x08 is not an Interlude server opcode.
+		f.send(msg(0x08).u32(1).b)
+		f.send(msg(0x08).u32(2).b)
 		f.send(msg(0x19).i32(1).b)
 		f.drain()
 	})
@@ -265,10 +266,10 @@ func TestGameRaw(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if op != 0x42 || !reflect.DeepEqual(body, []byte{1, 0, 0, 0}) {
+	if op != 0x08 || !reflect.DeepEqual(body, []byte{1, 0, 0, 0}) {
 		t.Errorf("ReadRaw = 0x%02x % x", op, body)
 	}
-	if _, err := c.ReadPacket(ctx); err == nil || !strings.Contains(err.Error(), "opcode 0x42") {
+	if _, err := c.ReadPacket(ctx); err == nil || !strings.Contains(err.Error(), "opcode 0x08") {
 		t.Errorf("ReadPacket of an unknown packet: got %v", err)
 	}
 	p, err := c.ReadPacket(ctx)

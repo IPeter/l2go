@@ -151,14 +151,15 @@ func TestCondSeesContext(t *testing.T) {
 		tg, ok := ctx.Target.(target)
 		return ok && tg.name == "Gremlin"
 	})
+	// REvas, not a keepsPositive stat: those would turn the unmet result 0 into 1.
 	var ms Modifiers
-	if err := ms.Add(Modifier{Stat: SDef, Op: OpAdd, Value: 7, Cond: onlyGremlin}); err != nil {
+	if err := ms.Add(Modifier{Stat: REvas, Op: OpAdd, Value: 7, Cond: onlyGremlin}); err != nil {
 		t.Fatal(err)
 	}
-	if got := calcStat(tenTimes{}, ms.Of(SDef), SDef, 0, Context{Target: target{"Gremlin"}}); got != 7 {
+	if got := calcStat(tenTimes{}, ms.Of(REvas), REvas, 0, Context{Target: target{"Gremlin"}}); got != 7 {
 		t.Errorf("with the Gremlin as target = %v, want 7", got)
 	}
-	if got := calcStat(tenTimes{}, ms.Of(SDef), SDef, 0, Context{}); got != 0 {
+	if got := calcStat(tenTimes{}, ms.Of(REvas), REvas, 0, Context{}); got != 0 {
 		t.Errorf("without target = %v, want 0", got)
 	}
 }
