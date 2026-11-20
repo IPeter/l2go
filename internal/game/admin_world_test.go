@@ -105,11 +105,13 @@ func TestAdminButtonArguments(t *testing.T) {
 		t.Errorf("QuickBox Item 57 100: %d adena, want %d", got, before+100)
 	}
 
-	// An empty QuickBox sends the bare command, which the GM command
-	// answers (this is what reaches the server when the box is empty).
-	if msgs := messages(e.bypass(gs, "admin_move_to")); !slices.Equal(msgs, []string{"Wrong or no Coordinates given."}) {
-		t.Errorf("empty QuickBox Teleport: messages %q", msgs)
+	// The bare command (the main page's Teleport button, or an empty
+	// QuickBox) opens the teleport page, as Mobius AdminTeleport does.
+	ps = e.bypass(gs, "admin_move_to")
+	if msgs := messages(ps); len(msgs) != 0 {
+		t.Errorf("bare admin_move_to: messages %q, want the teleport page", msgs)
 	}
+	onePage(t, ps)
 }
 
 // The GM shop: //gmshop, a gmstore page, admin_buy opens the buylist with

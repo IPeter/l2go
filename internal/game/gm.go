@@ -47,6 +47,12 @@ func setupGM(s *Server) error {
 // and is told "You have been teleported to x y z".
 func (s *Server) gmTeleport(name string) GMCommand {
 	return func(p *Player, args []string) {
+		// Mobius AdminTeleport: //move_to with no coordinates (the admin
+		// panel's Teleport button) opens the teleport page.
+		if len(args) == 0 && name == "move_to" {
+			s.ShowAdminPage(p, "teleports.htm")
+			return
+		}
 		if len(args) < 3 {
 			p.SendMessage("Wrong or no Coordinates given.")
 			return
