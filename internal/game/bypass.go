@@ -29,7 +29,7 @@ var nonHTMLBypasses = []string{
 var notYetCommands = map[string]bool{
 	"wear": true, "multisell": true, "exc_multisell": true,
 	"depositp": true, "withdrawp": true, "withdrawsortedp": true,
-	"depositc": true, "withdrawc": true, "withdrawsortedc": true,
+	"withdrawsortedc": true,
 	"package_deposit": true, "package_withdraw": true,
 	"enchantskilllist": true, "augment": true,
 	"giveblessing": true, "loto": true,
@@ -229,6 +229,8 @@ func (s *Server) runBypassHandler(p *Player, n *Npc, command string) {
 		s.bypassDepositP(p)
 	case n != nil && word == "withdrawp":
 		s.bypassWithdrawP(p)
+	case n != nil && clanWarehouseCommands[word]:
+		s.bypassClanWarehouse(p, n, word) // clan_warehouse.go
 	case n != nil && word == "skilllist":
 		s.bypassSkillList(p, n) // skill_learn.go
 	case n != nil && word == "supportmagic":

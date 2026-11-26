@@ -396,9 +396,11 @@ func allowed(opcode byte, st game.State) bool {
 		return st == game.StateAuthenticated || st == game.StateInGame
 	case clientpackets.OpEnterWorld:
 		return st == game.StateEntering
+	case clientpackets.OpRequestPledgeCrest:
+		// Allowed on the character screen too, as in Mobius; the game
+		// answers it only once a player is in the game.
+		return st == game.StateAuthenticated || st == game.StateInGame
 	default:
-		// TODO(M9): RequestPledgeCrest (0x68) is allowed on the character
-		// screen too, for the clan crests of the list.
 		return st == game.StateInGame
 	}
 }

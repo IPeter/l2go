@@ -104,7 +104,25 @@ func (s *Server) SaveJoint(players []*Player, extra storage.Batch) {
 // saveJoint is SaveJoint with done, which, if not nil, runs after the write
 // with its error, on the saver's goroutine; it must not block.
 func (s *Server) saveJoint(players []*Player, extra storage.Batch, done func(error)) {
+	// Hand over only the saves asked for before the first listed player: a
+	// listed player's own request goes into the batch (written alone, its
+	// snapshot could reach the database without the other side), and the
+	// later ones stay for the end of the tick, after the batch.
+	reqs := s.items.saveRequests
+	cut := len(reqs)
+	for i, p := range reqs {
+		if slices.Contains(players, p) {
+			cut = i
+			break
+		}
+	}
+	s.items.saveRequests = reqs[:cut:cut]
 	s.flushSaveRequests()
+	for _, p := range reqs[cut:] {
+		if !slices.Contains(players, p) {
+			s.items.saveRequests = append(s.items.saveRequests, p)
+		}
+	}
 	var (
 		saves   []storage.CharacterSave
 		ids     []int32

@@ -58,6 +58,11 @@ type World struct {
 	// The AI world (ai.go).
 	ai         aiWorld
 	cinematics []Cinematic
+	// areasB is the state of the second half of the area scripts (areas_b.go).
+	areasB areasBWorld
+	// effectPoints and castRanges are the skill data of boss.go.
+	effectPoints map[int]int
+	castRanges   map[int]int
 	// onGone tells the engine an NPC left the world (the game's NpcGone);
 	// onSpawn runs the spawn handlers of a new NPC.
 	onGone  func(objectID int32)
@@ -566,8 +571,11 @@ func (w *World) MagicSkillUse(caster, target any, skillID, level int, hitTime, _
 	w.act(Action{Kind: "magic_skill_use", Object: objectID(caster), Target: objectID(target), Value: skillID, Level: level, HitTime: hitTime})
 }
 
-// NpcSetTarget records the target.
+// NpcSetTarget records the target and sets the NPC's Target.
 func (w *World) NpcSetTarget(npc scripting.NpcRef, target any) {
+	if n := npcOf(npc); n != nil {
+		n.Target = fakeOf(target)
+	}
 	w.act(Action{Kind: "set_target", Object: npc.ObjectID(), Target: objectID(target)})
 }
 

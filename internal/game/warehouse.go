@@ -57,6 +57,7 @@ func setupWarehouse(s *Server) error {
 func (s *Server) bypassDepositP(p *Player) {
 	p.SendActionFailed()
 	s.warehouse.active[p] = true
+	s.closeClanWarehouse(p) // clan_warehouse.go
 	s.BlockInventory(p)
 	var items []serverpackets.ItemInfo
 	for _, it := range p.inv.Items() {
@@ -78,6 +79,7 @@ func (s *Server) bypassDepositP(p *Player) {
 func (s *Server) bypassWithdrawP(p *Player) {
 	p.SendActionFailed()
 	s.warehouse.active[p] = true
+	s.closeClanWarehouse(p) // clan_warehouse.go
 	wh := p.Warehouse()
 	if wh == nil || wh.Len() == 0 {
 		p.SendSystemMessage(warehouseMsgNothingDeposited)
@@ -146,6 +148,10 @@ func (s *Server) handleWarehouseDeposit(p *Player, body []byte) {
 	}
 	if s.flood(&p.items.nextTransaction, time.Duration(s.gs.Economy.FloodTransaction)) {
 		p.SendMessage("You are depositing items too fast.")
+		return
+	}
+	if s.clanWarehouseOpen(p) {
+		s.clanWarehouseDeposit(p, req.Items) // clan_warehouse.go
 		return
 	}
 	wh := p.Warehouse()
@@ -217,6 +223,10 @@ func (s *Server) handleWarehouseWithdraw(p *Player, body []byte) {
 	}
 	if s.flood(&p.items.nextTransaction, time.Duration(s.gs.Economy.FloodTransaction)) {
 		p.SendMessage("You are withdrawing items too fast.")
+		return
+	}
+	if s.clanWarehouseOpen(p) {
+		s.clanWarehouseWithdraw(p, req.Items) // clan_warehouse.go
 		return
 	}
 	wh := p.Warehouse()

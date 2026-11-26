@@ -202,6 +202,9 @@ func (s *Server) isAggressiveTowards(n *Npc, target Creature) bool {
 	if p.IsDead() || !within3D(n.Position(), p.Position(), s.npcAggroRange(n)) {
 		return false
 	}
+	if silentMoveHides(n, p) {
+		return false
+	}
 	c := s.aiClassOf(n)
 	switch {
 	case c.guard, c.friendly:

@@ -303,6 +303,9 @@ func (v *vm) playerMethods() map[string]lua.LGFunction {
 	for name, fn := range v.playerQuestMethods() {
 		m[name] = fn
 	}
+	for name, fn := range v.areaPlayerMethods() { // ai_areas.go
+		m[name] = fn
+	}
 	return m
 }
 
@@ -356,6 +359,9 @@ func (v *vm) npcMethods() map[string]lua.LGFunction {
 		"say":       v.npcSay,
 	}
 	for name, fn := range v.npcQuestMethods() {
+		m[name] = fn
+	}
+	for name, fn := range v.areaNpcMethods() { // ai_areas.go
 		m[name] = fn
 	}
 	return m

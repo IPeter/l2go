@@ -111,7 +111,7 @@ func (s *Server) handleSay2(p *Player, body []byte) {
 	case serverpackets.ChatClan:
 		s.chatClan(p, text) // clan_members.go
 	case serverpackets.ChatAlliance:
-		p.SendMessage("You are not in an alliance.")
+		s.chatAlliance(p, text) // alliance.go
 	case serverpackets.ChatPetitionPlayer, serverpackets.ChatPetitionGM:
 		p.SendSystemMessage(chatSysMsgNoPetition)
 	default:

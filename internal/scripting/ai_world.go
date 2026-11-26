@@ -159,7 +159,8 @@ type WorldGeo interface {
 type ZoneControl interface {
 	// ZonePlayers returns the players inside the zone.
 	ZonePlayers(zoneID int) []PlayerRef
-	// ZoneIsInside reports whether obj is inside the zone.
+	// ZoneIsInside reports whether obj, a PlayerRef, an NpcRef or a
+	// Location, is inside the zone.
 	ZoneIsInside(zoneID int, obj any) bool
 	// ZoneMovePlayers is BossZone.movePlayersTo(loc).
 	ZoneMovePlayers(zoneID int, loc Location)

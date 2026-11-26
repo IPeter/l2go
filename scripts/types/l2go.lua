@@ -954,6 +954,25 @@ function Skill:level() end
 ---@return string
 function Skill:target_type() end
 
+---The skill's effect point (Mobius getEffectPoint): below 0 for harmful
+---skills, above 0 for helpful ones.
+---@return integer
+function Skill:effect_point() end
+
+---The skill's cast range (Mobius getCastRange); -1 for none.
+---@return integer
+function Skill:cast_range() end
+
+---Whether the skill is magic (Mobius isMagic).
+---@return boolean
+function Skill:is_magic() end
+
+---Whether an effect of the skill is of the type, a Mobius EffectType name
+---such as "AGGRESSION" (Mobius hasEffectType).
+---@param effect_type string
+---@return boolean
+function Skill:has_effect_type(effect_type) end
+
 -------------------------------------------------------------------------------
 -- Player and Npc
 -------------------------------------------------------------------------------
@@ -1240,6 +1259,50 @@ function Player:calculate_distance_2d(other) end
 ---@param other Player|Npc|Position
 ---@return number
 function Player:calculate_distance_3d(other) end
+
+---The level of the skill's effect on the player, nil when it has none
+---(Mobius getEffectList().getBuffInfoBySkillId(id).getSkill().getLevel()).
+---@param skill integer|Skill a skill ID or a skill
+---@return integer?
+function Player:effect_level(skill) end
+
+---The weight penalty, 0 to 4 (Mobius getWeightPenalty).
+---@return integer
+function Player:weight_penalty() end
+
+---Whether the player is a GM (Mobius isGM).
+---@return boolean
+function Player:is_gm() end
+
+---Whether the player is invisible (Mobius isInvisible, a GM's //invis).
+---@return boolean
+function Player:is_invisible() end
+
+---Whether the player is a hero (Mobius isHero).
+---@return boolean
+function Player:is_hero() end
+
+---Kills the player (Mobius doDie(killer)).
+---@param killer? Player|Npc the player itself when left out
+function Player:die(killer) end
+
+---Teleports the player to the nearest town (Mobius
+---teleToLocation(TeleportWhereType.TOWN)).
+function Player:teleport_to_town() end
+
+---Whether the player holds a cursed weapon (Mobius
+---isCursedWeaponEquipped); always false until cursed weapons exist.
+---@return boolean
+function Player:is_cursed_weapon_equipped() end
+
+---true: tells a player from an NPC where a handler gets either (Mobius
+---isPlayer).
+---@return boolean
+function Player:is_player() end
+
+---Whether the player is in its attack stance (Mobius isInCombat).
+---@return boolean
+function Player:is_in_combat() end
 
 ---An NPC handle, as handlers receive it. It may be kept across handlers:
 ---while the NPC is in the world it is the same value. Once the NPC is gone
@@ -1648,6 +1711,133 @@ function Npc:calculate_distance_2d(other) end
 ---@return number
 function Npc:calculate_distance_3d(other) end
 
+---Whether the NPC could cast the skill now (Mobius checkDoCastConditions):
+---not disabled, enough MP and HP, not muted for it. false for a nil skill.
+---@param skill Skill? from skills.get
+---@return boolean
+function Npc:check_do_cast_conditions(skill) end
+
+---Removes the skill's effects from the NPC (Mobius
+---stopSkillEffects(REMOVED, id)).
+---@param skill integer|Skill a skill ID or a skill
+function Npc:stop_skill_effects(skill) end
+
+-- The grand boss scripts' NPC methods.
+
+---Casts the skill at the NPC's target when it can (Mobius
+---Attackable.useMagic): not while casting, with the MP for it, not muted.
+---A nil skill does nothing.
+---@param skill Skill? from skills.get
+function Npc:use_magic(skill) end
+
+---The NPC's target (Mobius getTarget), set by npc:set_target or its AI.
+---@return Player|Npc|nil
+function Npc:target() end
+
+---Sets the current HP and MP (Mobius setCurrentHpMp), at most the maximum.
+---@param hp number
+---@param mp number
+function Npc:set_hp_mp(hp, mp) end
+
+---The current MP (Mobius getCurrentMp).
+---@return number
+function Npc:mp() end
+
+---The maximum MP (Mobius getMaxMp).
+---@return number
+function Npc:max_mp() end
+
+---For a dead minion: it comes back after ms while its leader lives,
+---instead of after the default time (Mobius
+---getLeader().getMinionList().onMinionDie(minion, ms)).
+---@param ms integer
+function Npc:minion_respawn(ms) end
+
+---Moves the NPC's spawn point, where it walks home to and respawns
+---(Mobius getSpawn().setLocation).
+---@param pos Position|Player|Npc
+function Npc:set_spawn_location(pos) end
+
+---Makes the NPC walk into the skill's range of target and cast it (Mobius
+---getAI().setIntentionCast). A nil skill does nothing.
+---@param skill Skill? from skills.get
+---@param target Player|Npc
+function Npc:set_intention_cast(skill, target) end
+
+---The level of the skill's effect on the NPC, nil when it is not on it
+---(Mobius getEffectList().getBuffInfoBySkillId(id).getSkill().getLevel()).
+---@param skill integer|Skill
+---@return integer?
+function Npc:effect_level(skill) end
+
+---Whether the skill's effects are on the NPC (Mobius isAffectedBySkill).
+---@param skill integer|Skill
+---@return boolean
+function Npc:is_affected_by_skill(skill) end
+
+-- Monster flags (Mobius ai/others).
+
+---With false, lethal strikes no longer work on the NPC (Mobius
+---setLethalable).
+---@param lethalable? boolean true when left out
+function Npc:set_lethalable(lethalable) end
+
+---With true, the monster is aggressive towards players in Silent Move too
+---(Mobius Attackable.setSeeThroughSilentMove).
+---@param see? boolean true when left out
+function Npc:set_see_through_silent_move(see) end
+
+---Whether the NPC's world region is active: players are near (Mobius
+---getWorldRegion().isActive()).
+---@return boolean
+function Npc:is_in_active_region() end
+
+---A minion list of the template parameters, e.g. "Privates" (Mobius
+---getParameters().getMinionList(name)); empty when there is none.
+---@param name string
+---@return {id: integer, count: integer}[]
+function Npc:param_minions(name) end
+
+---false: tells an NPC from a player where a handler gets either (Mobius
+---isPlayer).
+---@return boolean
+function Npc:is_player() end
+
+-- More area script methods (Mobius ai/areas).
+
+---Whether the NPC is in the middle of a swing (Mobius isAttackingNow).
+---@return boolean
+function Npc:is_attacking_now() end
+
+---Whether the NPC cannot use the skill now (Mobius isSkillDisabled): under
+---reuse, or all its skills disabled. true for a nil skill.
+---@param skill Skill?
+---@return boolean
+function Npc:is_skill_disabled(skill) end
+
+---The aggression range (Mobius getAggroRange).
+---@return integer
+function Npc:aggro_range() end
+
+---The template's clan help range (Mobius getTemplate().getClanHelpRange()).
+---@return integer
+function Npc:clan_help_range() end
+
+---A skill of the template parameters, e.g. "PhysicalSpecial1" (Mobius
+---getParameters().getObject(name, SkillHolder.class)); nil when there is
+---none.
+---@param name string
+---@return Skill?
+function Npc:param_skill(name) end
+
+---Shows the player the NPC's teleport list of that name (Mobius
+---TeleporterData.getHolder(npc_id, list).showTeleportList(player, npc));
+---false when the NPC has no such list.
+---@param player Player
+---@param list string e.g. "list1"
+---@return boolean
+function Npc:show_teleport_list(player, list) end
+
 -------------------------------------------------------------------------------
 -- rnd, time, world, globals, util
 -------------------------------------------------------------------------------
@@ -1753,6 +1943,14 @@ function world.players_around(obj, radius) end
 ---@return (Player|Npc)[]
 function world.visible_objects(obj, class, radius) end
 
+---Whether from can see to: doors, fences and geodata between them (Mobius
+---GeoEngine.canSeeTarget). Without geodata, true unless a door is closed
+---between them.
+---@param from Player|Npc
+---@param to Player|Npc
+---@return boolean
+function world.can_see_target(from, to) end
+
 ---The last point of a straight walk from from to to, stopped by geodata
 ---(Mobius GeoEngine.getValidLocation). Without geodata, to.
 ---@param from Position|Player|Npc
@@ -1852,8 +2050,9 @@ zones = {}
 ---@return Player[]
 function zones.players_inside(zone_id) end
 
+---Whether a player, an NPC or a position is inside the zone.
 ---@param zone_id integer
----@param obj Player|Npc
+---@param obj Player|Npc|Position
 ---@return boolean
 function zones.is_inside(zone_id, obj) end
 
@@ -1878,6 +2077,31 @@ function zones.allow_entry(zone_id, player, seconds) end
 ---@param zone_id integer
 ---@param player Player
 function zones.remove_player(zone_id, player) end
+
+---The NPCs inside the zone (Mobius getCharactersInside without the
+---players).
+---@param zone_id integer
+---@return Npc[]
+function zones.npcs_inside(zone_id) end
+
+---The zones containing a position, in zone ID order (Mobius
+---ZoneManager.getZones); zone:type() is the Mobius zone type, e.g.
+---"EffectZone".
+---@param pos Position|Player|Npc
+---@return Zone[]
+function zones.at(pos) end
+
+---A parameter of the zone's data, e.g. "skillIdLvl" of an EffectZone; nil
+---when it has none.
+---@param zone_id integer
+---@param name string
+---@return string?
+function zones.param(zone_id, name) end
+
+---Turns a zone on or off (Mobius ZoneType.setEnabled).
+---@param zone_id integer
+---@param enabled boolean
+function zones.set_enabled(zone_id, enabled) end
 
 ---Doors (Mobius DoorData, Door).
 doors = {}
@@ -2128,7 +2352,12 @@ AbnormalType = {}
 
 ---Server settings quests read, with Mobius names: ALT_PARTY_RANGE,
 ---ALT_VILLAGES_REPEATABLE_QUEST_REWARD, DISABLE_TUTORIAL,
----RAID_MIN_RESPAWN_MULTIPLIER, RAID_MAX_RESPAWN_MULTIPLIER.
+---RAID_MIN_RESPAWN_MULTIPLIER, RAID_MAX_RESPAWN_MULTIPLIER,
+---RAID_DISABLE_CURSE, AUTO_LOOT; and GrandBoss.ini's (the grandBosses section):
+---<BOSS>_SPAWN_INTERVAL and <BOSS>_SPAWN_RANDOM in hours for ANTHARAS,
+---VALAKAS, BAIUM, CORE, ORFEN, QUEEN_ANT and ZAKEN, ANTHARAS_WAIT_TIME and
+---VALAKAS_WAIT_TIME in minutes, ANTHARAS_, VALAKAS_ and
+---BAIUM_RECOGNIZE_HERO.
 ---@class Config
 ---@field [string] any
 Config = {}

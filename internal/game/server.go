@@ -186,11 +186,15 @@ type Server struct {
 	party      partyFeature      // party.go
 	stores     storeFeature      // store.go
 	clan       clanFeature       // clan.go
+	crests     crestFeature      // clan_crest.go
+	clanSkills clanSkillsFeature // clan_skills.go
 	bosses     bossFeature       // raid.go
 	doors      doorFeature       // door.go
 	walkers    walkerFeature     // walker.go
 	animation  animationFeature  // animation.go
 	vehicles   vehicleFeature    // vehicle.go
+
+	clanWH clanWarehouseFeature // clan_warehouse.go
 }
 
 var _ Service = (*Server)(nil)
@@ -282,6 +286,7 @@ func New(opts Options) (*Server, error) {
 	s.adminChar.accounts = opts.Accounts
 	s.friends.store = opts.Relations
 	s.clan.store = opts.Clans
+	s.crests.store = opts.Crests
 	s.bosses.data, s.bosses.store = opts.Bosses, opts.BossStore
 	s.doors.data = opts.Objects
 	bg := context.Background()

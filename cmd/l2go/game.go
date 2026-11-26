@@ -104,7 +104,7 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		return err
 	}
 	// Mobius's quest defaults until the quest config keys exist.
-	quests := game.QuestSettings{}
+	quests := game.QuestSettings{GrandBosses: &gs.GrandBosses, AutoLoot: gs.Combat.AutoLoot}
 
 	// The scripts run on the world loop. Their output (npc:say and the
 	// like) and the quests' world (quest states, items, timers) reach the
@@ -161,6 +161,7 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		Characters:      store.Characters(),
 		Relations:       store.Relations(), // friend and block lists
 		Clans:           store.Clans(),     // the clan registry, loaded before the loop starts
+		Crests:          store.Crests(),    // clan and alliance crests, loaded after the clans
 		IDs:             store.IDs(),
 		IDPool:          idPool,
 		Passives:        passives,

@@ -142,7 +142,7 @@ func (v *vm) zonesFuncs() map[string]lua.LGFunction {
 		id := int(checkInt(L, 1, fn))
 		return worldAs[ZoneControl](v, L, fn), id
 	}
-	return map[string]lua.LGFunction{
+	m := map[string]lua.LGFunction{
 		"players_inside": func(L *lua.LState) int {
 			z, id := zones(L, "zones.players_inside")
 			L.Push(v.playerList(L, z.ZonePlayers(id)))
@@ -151,7 +151,13 @@ func (v *vm) zonesFuncs() map[string]lua.LGFunction {
 		"is_inside": func(L *lua.LState) int {
 			const fn = "zones.is_inside"
 			z, id := zones(L, fn)
-			L.Push(lua.LBool(z.ZoneIsInside(id, checkObject(L, 2, fn))))
+			var obj any
+			if _, isPos := L.Get(2).(*lua.LTable); isPos {
+				obj = locationArg(L, 2, fn) // a position (Mobius isInsideZone(x, y, z))
+			} else {
+				obj = checkObject(L, 2, fn)
+			}
+			L.Push(lua.LBool(z.ZoneIsInside(id, obj)))
 			return 1
 		},
 		"move_players": func(L *lua.LState) int {
@@ -180,6 +186,10 @@ func (v *vm) zonesFuncs() map[string]lua.LGFunction {
 			return 0
 		},
 	}
+	for name, fn := range v.areaZonesFuncs() { // ai_areas.go
+		m[name] = fn
+	}
+	return m
 }
 
 // doorsFuncs is the doors module (Mobius DoorData, Door).

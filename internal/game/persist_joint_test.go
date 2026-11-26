@@ -318,3 +318,34 @@ func TestSaveJointOnTheServer(t *testing.T) {
 		t.Error("Bob, not in the failed joint save, left the world")
 	}
 }
+
+// A save a joint-saved player asked for earlier in the tick goes into the
+// batch, never to the saver on its own (it could reach the database without
+// the other side); saves asked for after it stay for the end of the tick.
+func TestSaveJointTakesTheListedPlayersRequests(t *testing.T) {
+	e := newEnv(t, nil)
+	for _, n := range []string{"alice", "bob", "carol"} {
+		e.createCharacter(n, strings.ToUpper(n[:1])+n[1:], classHumanFighter, storage.AccessLevelPlayer)
+	}
+	pa, pb, pc := e.enter(newSession("alice"), 0), e.enter(newSession("bob"), 0), e.enter(newSession("carol"), 0)
+	before := e.store.saveCount(pa.ObjectID()) + e.store.saveCount(pb.ObjectID())
+
+	done := make(chan error, 1)
+	var pending []*Player
+	e.onLoop(func() {
+		e.srv.RequestSave(pa)
+		e.srv.RequestSave(pc)
+		e.srv.RequestSave(pb)
+		e.srv.saveJoint([]*Player{pa, pb}, storage.Batch{}, func(err error) { done <- err })
+		pending = slices.Clone(e.srv.items.saveRequests)
+	})
+	if err := <-done; err != nil {
+		t.Fatalf("joint save: %v", err)
+	}
+	if n := e.store.saveCount(pa.ObjectID()) + e.store.saveCount(pb.ObjectID()); n != before {
+		t.Errorf("Alice and Bob got %d single saves next to the joint save, want none", n-before)
+	}
+	if !slices.Equal(pending, []*Player{pc}) {
+		t.Errorf("save requests after the joint save = %v, want only Carol's", pending)
+	}
+}

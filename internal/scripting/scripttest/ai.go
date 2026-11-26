@@ -43,6 +43,7 @@ type aiWorld struct {
 	doors       map[int]bool
 	bosses      map[int]*Boss
 	targetTypes map[int]string
+	magic       map[int]bool // SetSkillMagic (areas.go)
 	geo         func(from, to scripting.Location) scripting.Location
 	spawnEvents bool
 	// gameStart is the real time of game 00:00 on day 0.
@@ -514,6 +515,13 @@ type Zone struct {
 	Allowed map[int32]time.Duration
 	// Oust is where zones.oust_all sends players.
 	Oust scripting.Location
+	// The area scripts' view (areas.go): Type is zone:type() and Params the
+	// zone's data for zones.param; zones.at finds the zone at the points of
+	// Area; zones.set_enabled sets Disabled.
+	Type     string
+	Params   map[string]string
+	Area     *Area
+	Disabled bool
 }
 
 // AddZone makes a zone; put players and NPCs inside through its fields.
@@ -539,14 +547,32 @@ func (w *World) ZonePlayers(id int) []scripting.PlayerRef {
 	return out
 }
 
-// ZoneIsInside looks in Players and Npcs.
+// ZoneIsInside looks in Players and Npcs; a position must be in Area. An
+// NPC in no zone's Npcs list is inside when it stands in Area (NPCs the
+// scripts spawn).
 func (w *World) ZoneIsInside(id int, obj any) bool {
 	z := w.zone(id)
+	if loc, ok := obj.(scripting.Location); ok {
+		return z.Area.contains(loc)
+	}
 	switch x := fakeOf(obj).(type) {
 	case *Player:
 		return slices.Contains(z.Players, x)
 	case *Npc:
-		return slices.Contains(z.Npcs, x)
+		if slices.Contains(z.Npcs, x) {
+			return true
+		}
+		return z.Area != nil && !w.listedInZone(x) && z.Area.contains(scripting.Location{X: x.X, Y: x.Y, Z: x.Z})
+	}
+	return false
+}
+
+// listedInZone reports whether an NPC is in some zone's Npcs list.
+func (w *World) listedInZone(n *Npc) bool {
+	for _, z := range w.aiState().zones {
+		if slices.Contains(z.Npcs, n) {
+			return true
+		}
 	}
 	return false
 }

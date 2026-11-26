@@ -102,6 +102,7 @@ func (v *vm) timeFuncs() map[string]lua.LGFunction {
 func (v *vm) worldFuncs() map[string]lua.LGFunction {
 	m := v.worldAIFuncs()
 	maps.Copy(m, v.worldQuestFuncs())
+	maps.Copy(m, v.worldAreaFuncs()) // api_area_ai.go
 	return m
 }
 
@@ -309,7 +310,15 @@ var builtinConstants = map[string]map[string]any{
 	// sets the server's values through Constants.Tables["Config"].
 	"Config": {
 		"ALT_PARTY_RANGE": defaultPartyRange, "ALT_VILLAGES_REPEATABLE_QUEST_REWARD": false, "DISABLE_TUTORIAL": false,
-		"RAID_MIN_RESPAWN_MULTIPLIER": 1.0, "RAID_MAX_RESPAWN_MULTIPLIER": 1.0,
+		"RAID_MIN_RESPAWN_MULTIPLIER": 1.0, "RAID_MAX_RESPAWN_MULTIPLIER": 1.0, "AUTO_LOOT": false,
+		// GrandBoss.ini (the game's grandBosses section): respawn interval and
+		// random part in hours, the wait times in minutes.
+		"ANTHARAS_WAIT_TIME": 20, "ANTHARAS_SPAWN_INTERVAL": 264, "ANTHARAS_SPAWN_RANDOM": 8, "ANTHARAS_RECOGNIZE_HERO": true,
+		"VALAKAS_WAIT_TIME": 20, "VALAKAS_SPAWN_INTERVAL": 264, "VALAKAS_SPAWN_RANDOM": 8, "VALAKAS_RECOGNIZE_HERO": true,
+		"BAIUM_SPAWN_INTERVAL": 168, "BAIUM_SPAWN_RANDOM": 8, "BAIUM_RECOGNIZE_HERO": true,
+		"CORE_SPAWN_INTERVAL": 60, "CORE_SPAWN_RANDOM": 8, "ORFEN_SPAWN_INTERVAL": 48, "ORFEN_SPAWN_RANDOM": 8,
+		"QUEEN_ANT_SPAWN_INTERVAL": 36, "QUEEN_ANT_SPAWN_RANDOM": 8, "ZAKEN_SPAWN_INTERVAL": 60, "ZAKEN_SPAWN_RANDOM": 8,
+		"RAID_DISABLE_CURSE": false,
 	},
 	// Mobius Intention, as npc:intention() returns it.
 	"Intention": {

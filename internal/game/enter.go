@@ -284,13 +284,12 @@ func (p *Player) dropTimer(id world.TimerID) {
 // the Player.ini defaults and the configured warehouse sizes).
 func (s *Server) storageMaxCount(p *Player) []byte {
 	const (
-		warehouseClan     = 200 // MaximumWarehouseSlotsForClan
-		privateSellOther  = 3   // MaxPvtStoreSellSlotsOther
-		privateSellDwarf  = 4   // MaxPvtStoreSellSlotsDwarf
-		privateBuyOther   = 4   // MaxPvtStoreBuySlotsOther
-		privateBuyDwarf   = 5   // MaxPvtStoreBuySlotsDwarf
-		dwarfRecipeLimit  = 50  // DwarfRecipeLimit
-		commonRecipeLimit = 50  // CommonRecipeLimit
+		privateSellOther  = 3  // MaxPvtStoreSellSlotsOther
+		privateSellDwarf  = 4  // MaxPvtStoreSellSlotsDwarf
+		privateBuyOther   = 4  // MaxPvtStoreBuySlotsOther
+		privateBuyDwarf   = 5  // MaxPvtStoreBuySlotsDwarf
+		dwarfRecipeLimit  = 50 // DwarfRecipeLimit
+		commonRecipeLimit = 50 // CommonRecipeLimit
 	)
 	var sell, buy int32 = privateSellOther, privateBuyOther
 	if p.char.Race == stats.RaceDwarf {
@@ -301,8 +300,8 @@ func (s *Server) storageMaxCount(p *Player) []byte {
 	bonus := func(s stats.Stat) int32 { return int32(p.stats.Calc(s, 0)) }
 	return serverpackets.NewExStorageMaxCountPacket(serverpackets.ExStorageMaxCount{
 		Inventory:      p.stats.View().InventoryLimit,
-		Warehouse:      int32(min(s.warehouseLimit(p), math.MaxInt32)), //nolint:gosec // clamped
-		ClanWarehouse:  warehouseClan,
+		Warehouse:      int32(min(s.warehouseLimit(p), math.MaxInt32)),           //nolint:gosec // clamped
+		ClanWarehouse:  int32(min(s.gs.Items.WarehouseSlotsClan, math.MaxInt32)), //nolint:gosec // clamped
 		PrivateSell:    sell + bonus(stats.PrivateSellLimit),
 		PrivateBuy:     buy + bonus(stats.PrivateBuyLimit),
 		DwarfRecipe:    dwarfRecipeLimit + bonus(stats.DwarfRecipeLimit),

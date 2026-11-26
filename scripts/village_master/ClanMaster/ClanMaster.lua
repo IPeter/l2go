@@ -5,8 +5,8 @@
 -- The clan actions on the pages (npc_%objectId%_create_clan,
 -- increase_clan_level, dissolve_clan, recover_clan, change_clan_leader,
 -- cancel_clan_leader_change and the others) are commands of the game's
--- village masters, as in Mobius VillageMaster.onBypassFeedback; the unit
--- and clan skill ones answer as not available yet until they exist.
+-- village masters, as in Mobius VillageMaster.onBypassFeedback, the unit
+-- and clan skill ones included.
 --
 -- The pages are Mobius's, served from
 -- data/html/scripts/village_master/ClanMaster/.

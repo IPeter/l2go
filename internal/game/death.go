@@ -185,6 +185,7 @@ func (s *Server) onDeath(victim, killer Creature) {
 	if killer != nil {
 		p.char.ExpBeforeDeath = 0
 		s.dropOnDeath(p, killer)
+		s.clanWarKill(p, killer) // clanwar.go
 		pvp, siege := p.Zones.Inside(ZonePvP), p.Zones.Inside(ZoneSiege)
 		if s.combatSettings().Delevel && !isLucky(p) && (siege || !pvp) {
 			s.deathExpPenalty(p, killer)
@@ -199,7 +200,8 @@ func (s *Server) onDeath(victim, killer Creature) {
 // deathExpPenalty is Mobius calculateDeathExpPenalty: the loss of
 // stats.CombatRules.DeathExpLoss for p's level span and experienceLoss.xml
 // percent, after keeping the exp before death; RemoveExp may lower the
-// level. Nothing is sent but the UserInfo of a delevel.
+// level. A death to a player p is at war with costs a quarter
+// (isAtWarWith, clanwar.go). Nothing is sent but the UserInfo of a delevel.
 func (s *Server) deathExpPenalty(p *Player, killer Creature) {
 	level := p.Level()
 	maxLevel := s.MaxLevel()
@@ -215,6 +217,7 @@ func (s *Server) deathExpPenalty(p *Player, killer Creature) {
 		Percent: percent,
 		Killer:  killerKind(killer),
 		Karma:   p.char.Karma > 0,
+		Reduced: atWarWith(p, killer),
 	})
 	p.char.ExpBeforeDeath = p.char.Exp
 	s.RemoveExp(p, lost)

@@ -878,9 +878,9 @@ func (b *skillBase) UpdateAbnormalEffect() {
 
 // IsLethalable reports whether lethal strikes work: on players, and on NPCs
 // that are not undying, raid bosses or grand bosses (their constructors call
-// setLethalable(false)).
+// setLethalable(false)), or made not lethalable by a script.
 func (b *skillBase) IsLethalable() bool {
-	return b.n == nil || (!b.n.Template.Status.Undying && (b.n.class == nil || !b.n.class.raid))
+	return b.n == nil || (!b.n.Template.Status.Undying && (b.n.class == nil || !b.n.class.raid) && !b.n.script.notLethalable)
 }
 
 // SetTarget changes the target.
@@ -1195,8 +1195,8 @@ func (a *skillPlayer) SiegeSide() int { return 0 }
 // ClanID returns the clan.
 func (a *skillPlayer) ClanID() int { return int(a.p.char.ClanID) }
 
-// AllyID is 0: alliances do not exist yet.
-func (a *skillPlayer) AllyID() int { return 0 }
+// AllyID returns the alliance of the clan.
+func (a *skillPlayer) AllyID() int { return int(a.p.AllyID()) }
 
 // IsInSiege is false.
 func (a *skillPlayer) IsInSiege() bool { return false }

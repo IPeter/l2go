@@ -161,8 +161,9 @@ func questAvailable(q scripting.QuestInfo) bool {
 }
 
 // questFeatures are the q:requires features the game has: clans since M9
-// (Plan 12 Phase 7).
-var questFeatures = map[string]bool{"clans": true}
+// (Plan 12 Phase 7), the Four Sepulchers since M10 (Plan 13 Phase 10.7,
+// scripts/ai/areas/ImperialTomb/FourSepulchers).
+var questFeatures = map[string]bool{"clans": true, "sepulchers": true}
 
 // showQuestChooseWindow lets p choose one of quests (Mobius
 // showQuestChooseWindow).

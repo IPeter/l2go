@@ -375,6 +375,19 @@ type Player struct {
 	// Abnormals are the abnormal types of the effects on the player
 	// (player:buff_info_by_abnormal_type).
 	Abnormals []string
+	// GM, Invisible and Hero are player:is_gm(), is_invisible() and
+	// is_hero().
+	GM, Invisible, Hero bool
+	// CursedWeapon is player:is_cursed_weapon_equipped().
+	CursedWeapon bool
+	// The area scripts' state (areas.go): EffectLevels are the levels of the
+	// skills in Effects (1 when missing); Weight is player:weight_penalty();
+	// Party the party's members, the leader first (MakeParty), nil alone.
+	EffectLevels map[int]int
+	Weight       int32
+	Party        []*Player
+	// InCombat is player:is_in_combat() (areas_b.go).
+	InCombat bool
 
 	quests map[string]*QuestState
 }
@@ -598,6 +611,28 @@ type Npc struct {
 	Box, Interacted, Bombed bool
 	// NoReturn is set by npc:set_can_return_to_spawn_point(false).
 	NoReturn bool
+	// CannotCast makes npc:check_do_cast_conditions false (areas.go).
+	CannotCast bool
+	// The monster flags (monsters.go): NotLethalable and SeeThroughSilentMove
+	// are set by their npc: setters; InactiveRegion makes
+	// npc:is_in_active_region() false; ParamMinions are the template's
+	// minion lists (npc:param_minions).
+	NotLethalable, SeeThroughSilentMove, InactiveRegion bool
+	ParamMinions                                        map[string][]scripting.TemplateMinion
+	// The boss scripts' state (boss.go): Target is npc:target(), a *Player
+	// or *Npc that npc:set_target sets; MP and MaxMP are npc:mp() and
+	// npc:max_mp().
+	Target    any
+	MP, MaxMP float64
+	// More area scripts' state (areas_b.go): AttackingNow is
+	// npc:is_attacking_now(); DisabledSkills the skill IDs
+	// npc:is_skill_disabled answers true for; AggroRange and ClanHelpRange
+	// the ranges; ParamSkills the template's skill parameters
+	// (npc:param_skill).
+	AttackingNow              bool
+	DisabledSkills            []int
+	AggroRange, ClanHelpRange int
+	ParamSkills               map[string]scripting.Skill
 }
 
 // Hate is one row of a fake NPC's aggro list. Target is a *Player or *Npc.

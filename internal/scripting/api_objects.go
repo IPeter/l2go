@@ -260,6 +260,15 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 	for name, fn := range v.playerPartyMethods() { // party.go
 		m[name] = fn
 	}
+	for name, fn := range v.playerAreaMethods() { // api_area_ai.go
+		m[name] = fn
+	}
+	for name, fn := range v.playerBossMethods() { // api_boss.go
+		m[name] = fn
+	}
+	for name, fn := range playerMonsterMethods() { // api_monsters.go
+		m[name] = fn
+	}
 	return m
 }
 
@@ -325,6 +334,15 @@ func (v *vm) npcQuestMethods() map[string]lua.LGFunction {
 	for name, fn := range v.npcControlMethods() {
 		m[name] = fn
 	}
+	for name, fn := range v.npcMonsterMethods() { // api_monsters.go
+		m[name] = fn
+	}
+	for name, fn := range v.npcBossMethods() { // api_boss.go
+		m[name] = fn
+	}
+	for name, fn := range v.npcAreaMethods() { // api_area_ai.go
+		m[name] = fn
+	}
 	return m
 }
 
@@ -367,9 +385,13 @@ func zoneMethods() map[string]lua.LGFunction {
 
 func (v *vm) skillMethods() map[string]lua.LGFunction {
 	return map[string]lua.LGFunction{
-		"id":          func(L *lua.LState) int { L.Push(lua.LNumber(valueOf[Skill](L, "Skill", "id").ID)); return 1 },
-		"level":       func(L *lua.LState) int { L.Push(lua.LNumber(valueOf[Skill](L, "Skill", "level").Level)); return 1 },
-		"target_type": v.skillTargetType,
+		"id":              func(L *lua.LState) int { L.Push(lua.LNumber(valueOf[Skill](L, "Skill", "id").ID)); return 1 },
+		"level":           func(L *lua.LState) int { L.Push(lua.LNumber(valueOf[Skill](L, "Skill", "level").Level)); return 1 },
+		"target_type":     v.skillTargetType,
+		"effect_point":    v.skillEffectPoint,   // api_boss.go
+		"cast_range":      v.skillCastRange,     // api_boss.go
+		"is_magic":        v.skillIsMagic,       // ai_areas.go
+		"has_effect_type": v.skillHasEffectType, // api_area_ai.go
 	}
 }
 

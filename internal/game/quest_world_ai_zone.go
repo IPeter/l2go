@@ -40,16 +40,26 @@ func (o *ScriptOutput) ZonePlayers(zoneID int) []scripting.PlayerRef {
 // ZoneIsInside is ZoneType.isInsideZone(object): the object's position is
 // inside the zone's shape.
 func (o *ScriptOutput) ZoneIsInside(zoneID int, obj any) bool {
-	s, c := o.srv.Load(), scanCenter(obj)
-	if s == nil || c == nil || s.dialog.zones == nil {
+	s := o.srv.Load()
+	if s == nil || s.dialog.zones == nil {
 		return false
+	}
+	var x, y, z int
+	if loc, isLoc := obj.(scripting.Location); isLoc {
+		x, y, z = loc.X, loc.Y, loc.Z // Mobius isInsideZone(x, y, z)
+	} else {
+		c := scanCenter(obj)
+		if c == nil {
+			return false
+		}
+		pos := c.Position()
+		x, y, z = int(pos.X), int(pos.Y), int(pos.Z)
 	}
 	i, ok := s.dialog.zones.byID[zoneID]
 	if !ok {
 		return false
 	}
-	pos := c.Position()
-	return s.dialog.zones.rules[i].zone.Shape.Contains(int(pos.X), int(pos.Y), int(pos.Z))
+	return s.dialog.zones.rules[i].zone.Shape.Contains(x, y, z)
 }
 
 // ZoneMovePlayers is BossZone.movePlayersTo.
@@ -59,9 +69,14 @@ func (o *ScriptOutput) ZoneMovePlayers(zoneID int, loc scripting.Location) {
 	}
 }
 
-// ZoneOustAll is BossZone.oustAllPlayers.
+// ZoneOustAll is BossZone.oustAllPlayers, or ZoneType.oustAllPlayers (to
+// town) for other zones.
 func (o *ScriptOutput) ZoneOustAll(zoneID int) {
 	if s := o.srv.Load(); s != nil {
+		if s.bosses.zones[zoneID] == nil {
+			s.oustToTown(zoneID) // quest_world_ai_areas.go
+			return
+		}
 		s.BossZoneOustAll(zoneID)
 	}
 }

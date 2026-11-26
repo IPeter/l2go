@@ -310,8 +310,9 @@ func castReuseText(sk *skills.Skill, left time.Duration) string {
 // siege zones; in a common arena anything goes; clan mates and peaceful
 // players (no flag, no karma) take only a damage skill with an effect
 // range, forced with Ctrl on the current target; others must be flagged or
-// have karma. Parties, duels, the Olympiad, sieges and clan wars do not
-// exist yet.
+// have karma. Members of clans at mutual war always may; alliance members
+// count as clan mates. Parties, duels, the Olympiad and sieges do not exist
+// yet.
 func (s *Server) checkPvPSkill(p, target *Player, sk *skills.Skill) bool {
 	if sk == nil || target == nil {
 		return false
@@ -334,8 +335,13 @@ func (s *Server) checkPvPSkill(p, target *Player, sk *skills.Skill) bool {
 	if p.Zones.Inside(ZonePvP) && target.Zones.Inside(ZonePvP) {
 		return true
 	}
-	if p.char.ClanID != 0 && target.char.ClanID != 0 && p.char.ClanID == target.char.ClanID {
-		return forced
+	if p.clan.clan != nil && target.clan.clan != nil {
+		if MutualWar(p.clan.clan, target.clan.clan) {
+			return true // clanwar.go
+		}
+		if sameClanOrAlly(p, target) {
+			return forced
+		}
 	}
 	if target.PvPFlag == 0 && target.Karma() == 0 {
 		return forced

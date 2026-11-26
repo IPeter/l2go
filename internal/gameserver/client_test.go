@@ -297,6 +297,7 @@ func TestAllowed(t *testing.T) {
 		{clientpackets.OpCharacterSelect, []game.State{aut}},
 		{clientpackets.OpLogout, []game.State{aut, ing}},
 		{clientpackets.OpEnterWorld, []game.State{ent}},
+		{clientpackets.OpRequestPledgeCrest, []game.State{aut, ing}},
 		{clientpackets.OpRequestRestart, []game.State{ing}},
 		{clientpackets.OpEx, []game.State{ing}},
 		{clientpackets.OpMoveToLocation, []game.State{ing}},

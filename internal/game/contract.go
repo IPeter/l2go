@@ -125,7 +125,11 @@ type Options struct {
 	// loop starts (decision T1). They are written with the character
 	// store's storage.BatchWriter. Nil starts without clans.
 	Clans storage.ClanStore
-	IDs   storage.IDAllocator
+	// Crests hands out crest IDs and holds the crest images (decision T3),
+	// loaded by New after the clans. They are written with the character
+	// store's storage.BatchWriter. Nil keeps new crests in memory only.
+	Crests storage.CrestStore
+	IDs    storage.IDAllocator
 	// IDPool gives new items their object IDs on the loop (decision I3).
 	// Fill it before Run. Nil makes New create one on IDs and fill it.
 	IDPool *storage.IDPool

@@ -328,8 +328,8 @@ func (p *Player) relationTo(v *Player) int32 {
 }
 
 // autoAttackableBy reports whether v attacks p with a plain click (Mobius
-// Player.isAutoAttackable for a player attacker, without duels, parties,
-// clans, sieges and events, which do not exist yet).
+// Player.isAutoAttackable for a player attacker, without duels, sieges and
+// events, which do not exist yet).
 func (p *Player) autoAttackableBy(v *Player) bool {
 	switch {
 	case p.Invisible() && p.IsGM():
@@ -342,8 +342,12 @@ func (p *Player) autoAttackableBy(v *Player) bool {
 		return false
 	case p.Zones.Inside(ZonePeace) || p.Zones.Inside(ZoneNoPvP):
 		return false
+	case warAutoAttackable(p, v): // clanwar.go
+		return true
 	case p.Zones.Inside(ZonePvP) && v.Zones.Inside(ZonePvP) && (!p.Zones.Inside(ZoneSiege) || !v.Zones.Inside(ZoneSiege)):
 		return true
+	case sameClanOrAlly(p, v): // alliance.go
+		return false
 	}
 	return p.char.Karma > 0 || p.PvPFlag > 0
 }

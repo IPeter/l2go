@@ -73,6 +73,10 @@ type npcScriptState struct {
 	followTarget Creature
 	// noReturn is Mobius !canReturnToSpawnPoint (clan_script.go).
 	noReturn bool
+	// notLethalable is Mobius !isLethalable as scripts set it;
+	// seeThroughSilentMove Attackable.canSeeThroughSilentMove
+	// (quest_world_ai_monsters.go).
+	notLethalable, seeThroughSilentMove bool
 }
 
 // scriptStateSpawned is the scripts' part of Mobius Npc.onSpawn and

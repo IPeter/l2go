@@ -59,7 +59,7 @@ func skillListPacket(p *Player) []byte {
 			ID:       int32(sk.DisplayID),    //nolint:gosec // skill IDs are small
 			Level:    int32(sk.DisplayLevel), //nolint:gosec // skill levels are small
 			Passive:  sk.IsPassive(),
-			Disabled: !sk.IsPassive() && formal,
+			Disabled: p.clanSkillDisabled(sk) || (!sk.IsPassive() && formal),
 		}
 	}
 	return serverpackets.NewSkillListPacket(entries)

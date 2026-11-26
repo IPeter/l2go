@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
@@ -52,6 +53,9 @@ type QuestSettings struct {
 	KillEventDelay time.Duration
 	// DisableTutorial turns the tutorial events off (DisableTutorial).
 	DisableTutorial bool
+	// AutoLoot is the scripts' Config.AUTO_LOOT (Mobius AutoLoot): scripted
+	// drops go straight into the inventory.
+	AutoLoot bool
 	// NewCharAlwaysNewbie makes every character a newbie
 	// (AltNewCharAlwaysIsNewbie).
 	NewCharAlwaysNewbie bool
@@ -68,6 +72,9 @@ type QuestSettings struct {
 	// giveItemRandomly, on the script side) (QuestItemDropAmountMultiplier);
 	// zero means 1.
 	ItemDropAmount float64
+	// GrandBosses are the grand boss settings the boss scripts read as
+	// Config values (GrandBoss.ini); nil means Mobius's defaults.
+	GrandBosses *config.GrandBosses
 }
 
 // Mobius defaults of QuestSettings.
@@ -481,10 +488,11 @@ func ScriptConstants(c *data.Constants, partyRange int, q QuestSettings) scripti
 			out.Tables[t.Name] = m
 		}
 	}
-	cfg := map[string]any{"DISABLE_TUTORIAL": q.DisableTutorial}
+	cfg := map[string]any{"DISABLE_TUTORIAL": q.DisableTutorial, "AUTO_LOOT": q.AutoLoot}
 	if partyRange > 0 {
 		cfg["ALT_PARTY_RANGE"] = partyRange
 	}
+	grandBossConstants(cfg, q.GrandBosses)
 	out.Tables["Config"] = cfg
 	abnormal := make(map[string]any, data.NumAbnormalTypes)
 	for i := range data.NumAbnormalTypes {
@@ -502,6 +510,36 @@ func ScriptConstants(c *data.Constants, partyRange int, q QuestSettings) scripti
 		})
 	}
 	return out
+}
+
+// grandBossConstants puts the grand boss settings into the scripts' Config
+// table with Mobius's names and units (GrandBossConfig): hours for the
+// respawns, minutes for the waits. nil leaves the engine's defaults.
+func grandBossConstants(cfg map[string]any, g *config.GrandBosses) {
+	if g == nil {
+		return
+	}
+	hours := func(d config.Duration) int { return int(time.Duration(d) / time.Hour) }
+	minutes := func(d config.Duration) int { return int(time.Duration(d) / time.Minute) }
+	cfg["ANTHARAS_WAIT_TIME"] = minutes(g.AntharasWaitTime)
+	cfg["ANTHARAS_SPAWN_INTERVAL"] = hours(g.IntervalOfAntharasSpawn)
+	cfg["ANTHARAS_SPAWN_RANDOM"] = hours(g.RandomOfAntharasSpawn)
+	cfg["ANTHARAS_RECOGNIZE_HERO"] = g.AntharasRecognizeHero
+	cfg["VALAKAS_WAIT_TIME"] = minutes(g.ValakasWaitTime)
+	cfg["VALAKAS_SPAWN_INTERVAL"] = hours(g.IntervalOfValakasSpawn)
+	cfg["VALAKAS_SPAWN_RANDOM"] = hours(g.RandomOfValakasSpawn)
+	cfg["VALAKAS_RECOGNIZE_HERO"] = g.ValakasRecognizeHero
+	cfg["BAIUM_SPAWN_INTERVAL"] = hours(g.IntervalOfBaiumSpawn)
+	cfg["BAIUM_SPAWN_RANDOM"] = hours(g.RandomOfBaiumSpawn)
+	cfg["BAIUM_RECOGNIZE_HERO"] = g.BaiumRecognizeHero
+	cfg["CORE_SPAWN_INTERVAL"] = hours(g.IntervalOfCoreSpawn)
+	cfg["CORE_SPAWN_RANDOM"] = hours(g.RandomOfCoreSpawn)
+	cfg["ORFEN_SPAWN_INTERVAL"] = hours(g.IntervalOfOrfenSpawn)
+	cfg["ORFEN_SPAWN_RANDOM"] = hours(g.RandomOfOrfenSpawn)
+	cfg["QUEEN_ANT_SPAWN_INTERVAL"] = hours(g.IntervalOfQueenAntSpawn)
+	cfg["QUEEN_ANT_SPAWN_RANDOM"] = hours(g.RandomOfQueenAntSpawn)
+	cfg["ZAKEN_SPAWN_INTERVAL"] = hours(g.IntervalOfZakenSpawn)
+	cfg["ZAKEN_SPAWN_RANDOM"] = hours(g.RandomOfZakenSpawn)
 }
 
 // ----- global variables -----

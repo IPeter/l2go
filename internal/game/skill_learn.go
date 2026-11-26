@@ -20,8 +20,8 @@ import (
 //     back; an NPC that does not teach the class shows its no-teach page.
 //   - RequestAcquireSkillInfo answers with the SP and spellbooks a level
 //     takes; RequestAcquireSkill checks the level, SP, prerequisites and
-//     items again, takes them and gives the skill. Fishing and clan skills
-//     (FISHING, PLEDGE) wait for Milestones 11 and 9.
+//     items again, takes them and gives the skill. Clan skills (PLEDGE) are
+//     in clan_skills.go; fishing skills (FISHING) wait for Milestone 11.
 //   - A new character starts with the level-1 skills of its class tree
 //     (NewCharacterSkills, Mobius CharacterCreate). Login and every level
 //     change give the auto-get skills (RewardSkills); losing levels lowers
@@ -295,8 +295,12 @@ func (s *Server) handleRequestAcquireSkillInfo(p *Player, body []byte) {
 		s.log.Warn("game: RequestAcquireSkillInfo for an unknown skill", append(p.logArgs(), "skill", id, "level", level)...)
 		return
 	}
+	if req.Type == clientpackets.AcquireSkillPledge {
+		s.clanSkillInfo(p, id, level) // clan_skills.go
+		return
+	}
 	if req.Type != clientpackets.AcquireSkillClass {
-		s.log.Debug("game: fishing and clan skills are not learned yet", append(p.logArgs(), "skill", id, "type", req.Type)...)
+		s.log.Debug("game: fishing skills are not learned yet", append(p.logArgs(), "skill", id, "type", req.Type)...)
 		return
 	}
 	class := learningClass(p)
@@ -342,8 +346,12 @@ func (s *Server) handleRequestAcquireSkill(p *Player, body []byte) {
 		s.log.Warn("game: RequestAcquireSkill for an unknown skill", append(p.logArgs(), "skill", id, "level", level)...)
 		return
 	}
+	if req.Type == clientpackets.AcquireSkillPledge {
+		s.learnClanSkill(p, sk) // clan_skills.go
+		return
+	}
 	if req.Type != clientpackets.AcquireSkillClass {
-		s.log.Debug("game: fishing and clan skills are not learned yet", append(p.logArgs(), "skill", id, "type", req.Type)...)
+		s.log.Debug("game: fishing skills are not learned yet", append(p.logArgs(), "skill", id, "type", req.Type)...)
 		return
 	}
 	class := learningClass(p)

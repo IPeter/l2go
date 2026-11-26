@@ -39,6 +39,7 @@ func (s *Server) ChangeClass(p *Player, id int) {
 		s.log.Warn("game: class change to an unknown class", append(p.logArgs(), "class", id)...)
 		return
 	}
+	s.academyGraduation(p, id) // clan_academy.go
 	pos := p.Position()
 	if p.InWorld() {
 		s.world.Broadcast(p, serverpackets.NewMagicSkillUsePacket(serverpackets.MagicSkillUse{
