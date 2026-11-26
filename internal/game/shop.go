@@ -196,7 +196,7 @@ func (s *Server) sellListPacket(p *Player) serverpackets.SellList {
 	out := serverpackets.SellList{Adena: itemCount32(p.inv.Adena())}
 	for _, it := range p.inv.Items() {
 		t := it.Template()
-		if it.Equipped() || !t.Sellable {
+		if it.Equipped() || !t.Sellable || augmentLocked(it) {
 			continue
 		}
 		info := ItemInfo(it)

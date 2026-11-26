@@ -27,7 +27,7 @@ func (s *Server) startDecay(n *Npc) {
 	if _, ok := f.decay[n]; !ok {
 		f.decayOrder = append(f.decayOrder, n)
 	}
-	f.decay[n] = s.Now().Add(s.corpseTime(n))
+	f.decay[n] = s.Now().Add(s.corpseTime(n) + s.manorCorpseExtension(n)) // manor_sow.go: a sown corpse
 }
 
 // CancelNpcDecay stops the decay of n's corpse, for a revive (Mobius

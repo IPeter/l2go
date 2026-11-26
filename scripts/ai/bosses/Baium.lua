@@ -12,8 +12,10 @@
 -- BAIUM_SPAWN_RANDOM; a cube stands for 15 minutes, then the top is
 -- emptied.
 --
--- Deviations: the anti-strider skill is left out (the server has no mounts
--- yet); Baium's wake-up social actions and the archangels' "first
+-- A strider rider hitting Baium gets Hinder Strider (4258) unless it has it
+-- or the skill is under reuse.
+--
+-- Deviations: Baium's wake-up social actions and the archangels' "first
 -- playable in range" are seen and taken by the players around him instead
 -- of those in the zone, and summons are not candidates. Mobius sets a
 -- stored WAITING status back to ALIVE without spawning the statue; so does
@@ -40,6 +42,9 @@ local SKILL_SPEAR_ATTACK = 4132
 local SKILL_ANGEL_HEAL = 4133
 local SKILL_HEAL_OF_BAIUM = 4135
 local SKILL_BAIUM_PRESENT = 4136
+local SKILL_ANTI_STRIDER = 4258 -- Hinder Strider
+
+local MOUNT_STRIDER = 1 -- player:mount_type()
 
 local ZONE = 70051
 
@@ -440,6 +445,12 @@ s:on_attack(function(npc, attacker, damage, is_summon, skill)
   last_attack = time.now_ms()
   local id = npc:id()
   if id == BAIUM then
+    local hinder = skills.get(SKILL_ANTI_STRIDER, 1)
+    if attacker:mount_type() == MOUNT_STRIDER and not attacker:is_affected_by_skill(SKILL_ANTI_STRIDER)
+      and not npc:is_skill_disabled(hinder) then
+      npc:set_target(attacker)
+      npc:cast(hinder)
+    end
     local ratio = npc:hp() / npc:max_hp()
     if skill == nil then
       refresh_ai_params(attacker, npc, damage * 1000)

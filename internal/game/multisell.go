@@ -372,10 +372,13 @@ func (s *Server) multisellNpcOK(p *Player, list *preparedMultisell) bool {
 		p.Position().InRange3D(n.Position(), s.npcInteractionRange())
 }
 
-// multisellTake is one item an exchange takes, and how many of it.
+// multisellTake is one item an exchange takes, and how many of it. exact is
+// set for an item taken at exactly its ingredient's enchant level, whose
+// augmentation goes to a product (Mobius MultiSellChoose).
 type multisellTake struct {
 	it    *inventory.Item
 	count int64
+	exact bool
 }
 
 // multisellExchange makes amount exchanges of entry e (Mobius
@@ -453,14 +456,20 @@ func (s *Server) multisellExchange(p *Player, list *preparedMultisell, e *multis
 		s.closeMultisell(p)
 		return
 	}
+	// The augmentations of the items taken at an exact enchant level, in the
+	// order taken, go to the products (Mobius's augmentation list).
+	var augs []int32
 	for _, t := range plan {
+		if t.exact && t.it.Augmented() {
+			augs = append(augs, t.it.Augmentation())
+		}
 		if !s.DestroyItem(p, t.it, t.count, true) {
 			s.log.Error("game: multisell ingredient not destroyed", append(p.logArgs(), "itemObjectId", t.it.ObjectID(), "count", t.count)...)
 			s.closeMultisell(p)
 			return
 		}
 	}
-	s.giveMultisellProducts(p, list, e, amount)
+	s.giveMultisellProducts(p, list, e, amount, augs)
 	s.SendItemList(p, false)
 	p.Send(loadStatusUpdate(p))
 }
@@ -552,7 +561,7 @@ func (s *Server) planMultisellTake(p *Player, list *preparedMultisell, e *multis
 				return nil, false
 			}
 			taken[pick] = 1
-			plan = append(plan, multisellTake{it: pick, count: 1})
+			plan = append(plan, multisellTake{it: pick, count: 1, exact: exact})
 		}
 	}
 	return plan, true
@@ -560,8 +569,10 @@ func (s *Server) planMultisellTake(p *Player, list *preparedMultisell, e *multis
 
 // giveMultisellProducts gives the products of amount exchanges with Mobius's
 // messages: a stack at once, other items one by one, at the entry's enchant
-// level when the list keeps enchant levels or the level is above 0.
-func (s *Server) giveMultisellProducts(p *Player, list *preparedMultisell, e *multisellEntry, amount int64) {
+// level when the list keeps enchant levels or the level is above 0; then the
+// i-th item of each such product gets the i-th of augs, the augmentations of
+// the ingredients taken (Mobius MultiSellChoose).
+func (s *Server) giveMultisellProducts(p *Player, list *preparedMultisell, e *multisellEntry, amount int64, augs []int32) {
 	for _, pr := range e.products {
 		n := pr.count * amount
 		if pr.stackable() {
@@ -569,14 +580,19 @@ func (s *Server) giveMultisellProducts(p *Player, list *preparedMultisell, e *mu
 				s.log.Error("game: multisell product not given", append(p.logArgs(), "item", pr.itemID, "count", n, "err", err)...)
 			}
 		} else {
+			keep := list.maintainEnchantment || pr.enchant > 0
 			enchant := int32(-1)
-			if list.maintainEnchantment || pr.enchant > 0 {
+			if keep {
 				enchant = pr.enchant
 			}
-			for range n {
-				if _, err := s.AddItem(p, pr.itemID, 1, enchant, false, false); err != nil {
+			for i := range n {
+				it, err := s.AddItem(p, pr.itemID, 1, enchant, false, false)
+				if err != nil {
 					s.log.Error("game: multisell product not given", append(p.logArgs(), "item", pr.itemID, "err", err)...)
 					break
+				}
+				if keep && it != nil && i < int64(len(augs)) {
+					it.SetAugmentation(augs[i])
 				}
 			}
 		}

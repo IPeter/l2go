@@ -13,9 +13,9 @@
 -- Killed, he comes back after Config.ZAKEN_SPAWN_INTERVAL hours, give or
 -- take ZAKEN_SPAWN_RANDOM.
 --
--- Not ported: the mount debuff (4258) for mounted attackers; the server
--- has no mounts yet. The players his area teleport remembers are kept by
--- object ID.
+-- A mounted attacker gets his mount debuff (Hinder Strider, 4258) unless
+-- it has it. The players his area teleport remembers are kept by object
+-- ID.
 
 local boss = require("lib.boss")
 
@@ -46,6 +46,7 @@ local SKILL_4220 = 4220
 local SKILL_4221 = 4221
 local SKILL_REGEN_CANCEL = 4242
 local SKILL_FACE_NIGHT = 4224
+local SKILL_MOUNT_DEBUFF = 4258
 
 local NIGHT_END_HOUR = 5
 local TELEPORT_RANGE = 1500
@@ -443,6 +444,9 @@ local function skill_roll(npc, target, within_range)
 end
 
 s:on_attack(function(npc, attacker, damage, is_summon)
+  if npc:id() == ZAKEN and attacker:is_mounted() and not attacker:is_affected_by_skill(SKILL_MOUNT_DEBUFF) then
+    cast_at(npc, attacker, SKILL_MOUNT_DEBUFF)
+  end
   local target = original(attacker, is_summon)
   npc:add_damage_hate(target, 0, math.floor(((damage / npc:max_hp()) / 0.05) * 20000))
   if rnd(10) < 1 then

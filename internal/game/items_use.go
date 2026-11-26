@@ -49,12 +49,17 @@ func (s *Server) handleUseItem(p *Player, body []byte) {
 	if !it.Equipped() && !s.checkItemCondition(p, it) {
 		return
 	}
+	if s.fishingItemRefused(p, it.ItemID()) { // fishing.go
+		return
+	}
 	if !s.itemUseReady(p, it) { // item_skill.go: stun, sleep, item reuse
 		return
 	}
 	s.onActionRequest(p)
 	if it.Equipable() {
-		if !s.equipWhileCasting(p) {
+		if !s.equipWhileCasting(p) && !s.mountBlocksEquip(p, it) && // mount.go
+			!cursedBlocksEquip(p, it) && // cursedweapon.go
+			!s.overEnchantedOnUse(p, it) { // enchant_protect.go
 			s.useEquippableItem(p, it)
 		}
 		return
@@ -102,7 +107,7 @@ func (s *Server) useEquippableItem(p *Player, it *inventory.Item) {
 		}
 		p.inv.UnequipItem(it)
 	} else {
-		p.inv.Equip(it, inventory.Wearer{GM: p.IsGM()})
+		p.inv.Equip(it, inventory.Wearer{GM: p.IsGM(), Hero: p.IsHero()})
 		if it.Equipped() {
 			if it.Enchant() > 0 {
 				p.SendSystemMessage(sysMsgEquippedS1S2, serverpackets.NumberParam(it.Enchant()), name)
@@ -145,6 +150,8 @@ func (s *Server) handleUnEquipItem(p *Player, body []byte) {
 	switch {
 	case slot == storage.PaperdollLHand && t.Etc != nil:
 		return // arrows and lures
+	case t.Part() == data.BodyPartLRHand && p.CursedWeaponEquipped():
+		return // cursedweapon.go: the weapon stays on
 	case p.IsDead():
 		return
 	case t.Weapon != nil && t.Weapon.ForceEquip && !p.IsGM():
@@ -196,7 +203,9 @@ func (s *Server) handleDestroyItem(p *Player, body []byte) {
 		return
 	}
 	t := it.Template()
-	if !p.IsGM() && !t.Destroyable {
+	// Mobius Item.isDestroyable: an augmented item only with AltAllowAugmentDestroy.
+	destroyable := t.Destroyable && (s.augment.cfg.AllowDestroy || !it.Augmented())
+	if (!p.IsGM() && !destroyable) || s.IsCursedWeapon(it.ItemID()) { // cursedweapon.go: not even a GM
 		if t.Hero {
 			p.SendSystemMessage(sysMsgHeroWeaponsNoDestroy)
 		} else {
@@ -210,6 +219,10 @@ func (s *Server) handleDestroyItem(p *Player, body []byte) {
 		return
 	}
 	count = min(count, it.Count())
+	if s.collarInUse(p, it.ObjectID()) { // mount.go: the collar of the pet out or ridden
+		p.SendSystemMessage(sysMsgPetSummonedNoDestroy)
+		return
+	}
 	name := s.itemNameParam(it.ItemID())
 	if it.Equipped() {
 		if it.Enchant() > 0 {

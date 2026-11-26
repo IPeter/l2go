@@ -35,9 +35,12 @@ func (s *Server) handleRestartPoint(p *Player, body []byte) {
 	if !p.dead {
 		return
 	}
+	if s.residenceRestart(p, req.Point) { // siege_zone.go: castle and headquarters
+		return
+	}
 	switch req.Point {
 	case clientpackets.RestartPointClanHall:
-		s.log.Warn("game: RequestRestartPoint to a clan hall without one", p.logArgs()...)
+		s.hallRestart(p) // clanhall.go
 	case clientpackets.RestartPointCastle:
 		// Mobius returns quietly for a player without a clan.
 	case clientpackets.RestartPointSiegeHQ:
@@ -88,6 +91,7 @@ func (s *Server) RevivePlayer(p *Player) {
 		p.Send(serverpackets.NewRevivePacket(p.ObjectID()))
 	}
 	p.Send(etcStatusPacket(p))
+	s.mountRevived(p) // mount.go: a rider's mount eats again
 }
 
 // RestoreExp gives p back percent of the exp its last death took (Mobius
@@ -115,6 +119,9 @@ func (s *Server) restartLocation(p *Player) (data.Location, bool) {
 	w := s.worldData
 	if w == nil {
 		return data.Location{}, false
+	}
+	if loc, ok := s.dawnSiegeRespawn(p); ok { // sevensigns_castle.go: the Seal of Strife
+		return loc, true
 	}
 	race := data.Race(p.Race()) //nolint:gosec // player races are 0-4
 	pos := p.Position()

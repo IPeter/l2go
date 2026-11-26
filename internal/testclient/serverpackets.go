@@ -175,6 +175,7 @@ var serverPackets = map[byte]serverPacket{
 	OpStopRotation:            {"StopRotation", readStopRotation},
 	OpSystemMessage:           {"SystemMessage", readSystemMessage},
 	OpSetupGauge:              {"SetupGauge", readSetupGauge},
+	OpChooseInventoryItem:     {"ChooseInventoryItem", readChooseInventoryItem}, // enchant.go
 	OpMagicSkillLaunched:      {"MagicSkillLaunched", readMagicSkillLaunched},
 	OpLeaveWorld:              {"LeaveWorld", readLeaveWorld},
 	OpAbnormalStatusUpdate:    {"AbnormalStatusUpdate", readAbnormalStatusUpdate},
@@ -274,6 +275,10 @@ var exServerPackets = map[uint16]serverPacket{
 	0x32:                   {name: "ExSetCompassZoneCode"},
 	0x38:                   {"ExShowScreenMessage", readExShowScreenMessage},
 	ExOpUseSharedGroupItem: {"ExUseSharedGroupItem", readExUseSharedGroupItem},
+
+	// Skill enchanting (M11e, subclasspackets.go).
+	ExOpEnchantSkillList: {"ExEnchantSkillList", readExEnchantSkillList},
+	ExOpEnchantSkillInfo: {"ExEnchantSkillInfo", readExEnchantSkillInfo},
 
 	// Clans (M9, clanpackets.go).
 	ExOpPledgeEmblem:                  {"ExPledgeEmblem", readExPledgeEmblem},

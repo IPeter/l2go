@@ -89,6 +89,8 @@ func (s *Server) storeInteract(p, owner *Player) {
 		p.Send(s.storeListSell(p, owner))
 	case StoreBuy:
 		p.Send(s.storeListBuy(p, owner))
+	case StoreManufacture:
+		p.Send(s.workshopSellList(p, owner)) // workshop.go
 	}
 }
 

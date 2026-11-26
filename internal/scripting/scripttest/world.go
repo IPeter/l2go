@@ -60,6 +60,18 @@ type World struct {
 	cinematics []Cinematic
 	// areasB is the state of the second half of the area scripts (areas_b.go).
 	areasB areasBWorld
+	// longEvents are the seasonal events (longevents.go).
+	longEvents longEventsWorld
+	// heroes are the hero table (hero.go).
+	heroes heroWorld
+	// Manor is the castle manor (manor.go).
+	Manor ManorState
+	// SevenSigns is the Seven Signs state (sevensigns.go).
+	SevenSigns SevenSignsState
+	// Halls and HallClans are the clan halls and the clans the hall scripts
+	// read (clanhall.go).
+	Halls     map[int]*ClanHall
+	HallClans map[int32]scripting.ClanInfo
 	// effectPoints and castRanges are the skill data of boss.go.
 	effectPoints map[int]int
 	castRanges   map[int]int

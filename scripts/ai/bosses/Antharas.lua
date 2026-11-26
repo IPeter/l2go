@@ -13,8 +13,10 @@
 -- Config.ANTHARAS_SPAWN_INTERVAL hours, give or take ANTHARAS_SPAWN_RANDOM;
 -- a cube stands for 15 minutes, then the nest is emptied.
 --
--- Deviations: the anti-strider skill is left out (the server has no mounts
--- yet); setOnKillDelay(0) is not ported (his kill handler runs 2.5 s after
+-- A strider rider hitting him gets the wish to cast Hinder Strider (4258)
+-- on it, unless it has it.
+--
+-- Deviations: setOnKillDelay(0) is not ported (his kill handler runs 2.5 s after
 -- his death, as for every NPC); the earthquake of his return reaches the
 -- players around him, not every player online. Behemoths and bombers are
 -- counted only while their killer is in the nest, as in Mobius.
@@ -53,6 +55,9 @@ local REGEN = { 4125, 4239, 4240, 4241 } -- by phase, level 1
 local BOMBER_DISPEL = { 5042, 1 }
 local FEAR_SHORT = { 5092, 1 }
 local METEOR = { 5093, 1 }
+local ANTI_STRIDER = { 4258, 1 } -- Hinder Strider
+
+local MOUNT_STRIDER = 1 -- player:mount_type()
 
 local ZONE = 70050
 
@@ -581,6 +586,12 @@ s:on_attack(function(npc, attacker, damage, is_summon, sk)
     if not zones.is_inside(ZONE, attacker) or status() ~= IN_FIGHT then
       log.warn("Antharas: a player attacked Antharas in invalid conditions", "player", attacker:name())
       attacker:teleport(80464, 152294, -3534)
+    end
+    if attacker:mount_type() == MOUNT_STRIDER and not attacker:is_affected_by_skill(ANTI_STRIDER[1]) then
+      local hinder = skill(ANTI_STRIDER)
+      if hinder ~= nil and npc:check_do_cast_conditions(hinder) then
+        boss.cast_desire(npc, attacker, hinder, 100)
+      end
     end
     local hp, max = npc:hp(), npc:max_hp()
     if sk == nil then

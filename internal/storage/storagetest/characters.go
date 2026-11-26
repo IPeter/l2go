@@ -83,7 +83,8 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 		LastAccess:  created.Add(time.Hour),
 		Newbie:      true,
 		Items: []storage.Item{
-			{ObjectID: objectID + 1, ItemID: itemSquireSword, Count: 1, Slot: storage.PaperdollRHand, Mana: storage.NoMana},
+			// Augmented: option 91 low, 14578 high (decision M11d).
+			{ObjectID: objectID + 1, ItemID: itemSquireSword, Count: 1, Slot: storage.PaperdollRHand, Mana: storage.NoMana, Augmentation: 14578<<16 | 91},
 			{ObjectID: objectID + 2, ItemID: itemSquireShirt, Count: 1, Enchant: 3, Slot: storage.PaperdollChest, Loc: storage.LocPaperdoll, Mana: storage.NoMana},
 			{ObjectID: objectID + 3, ItemID: itemAdena, Count: 5_000_000_000, Slot: storage.PaperdollNone, Mana: storage.NoMana},
 			{ObjectID: objectID + 4, ItemID: itemBoneArrow, Count: 700, Loc: storage.LocWarehouse, Mana: storage.NoMana, CustomType1: 2, CustomType2: 3},
@@ -117,6 +118,22 @@ func sampleCharacter(objectID int32, account, name string, created time.Time) st
 		ItemReuse: []storage.ItemReuse{
 			{ItemID: 1061, ObjectID: objectID + 9, ReuseDelay: 10_000, ReuseEnd: 1_795_000_004_321},
 		},
+		// Dyes on the base class and a subclass, with an empty slot.
+		Hennas: map[int32]storage.HennaSlots{0: {1, 0, 180}, 2: {7, 8, 0}},
+		// Recipe books out of ID order (the stores keep the order), a dwarven
+		// book on the base class and one subclass.
+		Recipes: storage.RecipeBook{Common: []int32{900, 851}, Dwarven: map[int32][]int32{0: {5, 1}, 2: {33}}},
+		// On its second subclass, a noble: the base class's progress is kept
+		// apart.
+		ClassIndex: 2,
+		Noble:      true,
+		Subclasses: []storage.Subclass{
+			{ClassIndex: 1, ClassID: 2, Level: 76, Exp: 2_000_000_000, SP: 70},
+			{ClassIndex: 2, ClassID: 54, Level: 7, Exp: 1_234_567_890_123, SP: 4321},
+		},
+		BaseLevel: 78,
+		BaseExp:   2_500_000_000,
+		BaseSP:    1000,
 	}
 }
 
@@ -201,6 +218,21 @@ func changedCharacter(c storage.Character) storage.Character {
 		{ClassIndex: 1, Slot: 0, Page: 1, Type: storage.ShortcutSkill, ID: 1177, Level: 5},
 	}
 	c.ItemReuse = nil
+	// A dye came off the base class, the subclass lost its dyes (an empty
+	// class is not stored), another subclass got one.
+	c.Hennas = map[int32]storage.HennaSlots{0: {1, 0, 0}, 2: {}, 3: {0, 0, 9}}
+	// A common recipe was deleted, the base class registered a dwarven one,
+	// the subclass's book was emptied (not stored) and another subclass got
+	// one.
+	c.Recipes = storage.RecipeBook{Common: []int32{851}, Dwarven: map[int32][]int32{0: {5, 1, 2}, 2: {}, 3: {40}}}
+	// Back on the base class, which lost its noblesse; the first subclass
+	// was replaced.
+	c.ClassIndex, c.Noble = 0, false
+	c.Subclasses = []storage.Subclass{
+		{ClassIndex: 1, ClassID: 88, Level: 40, Exp: 835_863, SP: 0},
+		{ClassIndex: 2, ClassID: 54, Level: 8, Exp: 1_234_567_990_123, SP: 4400},
+	}
+	c.BaseLevel, c.BaseExp, c.BaseSP = 0, 0, 0
 	return c
 }
 
@@ -304,6 +336,20 @@ func diffFields(got, want storage.Character) string {
 	}
 	if len(want.ItemReuse) == 0 {
 		want.ItemReuse = nil
+	}
+	if got.Hennas != nil && len(got.Hennas) == 0 {
+		diffs = append(diffs, "Hennas is empty, want nil")
+	}
+	want.Hennas = storage.CloneHennas(want.Hennas) // classes without dyes are not stored
+	if !reflect.DeepEqual(got.Recipes, got.Recipes.Clone()) {
+		diffs = append(diffs, fmt.Sprintf("Recipes = %+v, not in their stored form", got.Recipes))
+	}
+	want.Recipes = want.Recipes.Clone() // empty books are not stored
+	if got.Subclasses != nil && len(got.Subclasses) == 0 {
+		diffs = append(diffs, "Subclasses is empty, want nil")
+	}
+	if len(want.Subclasses) == 0 {
+		want.Subclasses = nil
 	}
 	if !reflect.DeepEqual(got, want) {
 		diffs = append(diffs, fmt.Sprintf("other fields = %+v, want %+v", got, want))

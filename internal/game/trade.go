@@ -218,7 +218,7 @@ func tradeAvailable(it *inventory.Item) bool {
 	t := it.Template()
 	return !it.Equipped() && t.Type2 != typeQuest &&
 		(t.Type2 != itemType2Money || t.Type1 != itemType1ShieldArmor) &&
-		t.Tradable
+		t.Tradable && !augmentLocked(it)
 }
 
 // handleAddTradeItem handles AddTradeItem (0x16) in Mobius's order: a count
@@ -279,7 +279,7 @@ func (l *tradeList) addItem(owner *Player, objectID int32, count int64) *tradeIt
 		return nil
 	}
 	t := it.Template()
-	if !t.Tradable || t.QuestItem {
+	if !t.Tradable || t.QuestItem || augmentLocked(it) {
 		return nil
 	}
 	if count <= 0 || count > it.Count() || (!it.Stackable() && count > 1) {

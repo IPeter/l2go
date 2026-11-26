@@ -457,6 +457,9 @@ func (s *Server) SetNewClanLeader(c *Clan, m *ClanMember) {
 	var b storage.Batch
 	if old != nil {
 		if q := old.Player(); q != nil {
+			if q.mount.flying { // mount.go: Mobius gets the old lord off a wyvern
+				s.dismount(q)
+			}
 			q.clan.privs = 0
 			s.refreshPledgeClass(q)
 			q.BroadcastUserInfo()

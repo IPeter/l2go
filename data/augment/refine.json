@@ -1,0 +1,311 @@
+{
+  "source": ["java/org/l2jmobius/gameserver/network/clientpackets/AbstractRefinePacket.java","java/org/l2jmobius/gameserver/network/clientpackets/RequestConfirmCancelItem.java","java/org/l2jmobius/gameserver/network/clientpackets/RequestRefineCancel.java"],
+  "lifeStones": [
+    {
+      "itemId": 8723,
+      "grade": 0,
+      "level": 0,
+      "playerLevel": 46
+    },
+    {
+      "itemId": 8724,
+      "grade": 0,
+      "level": 1,
+      "playerLevel": 49
+    },
+    {
+      "itemId": 8725,
+      "grade": 0,
+      "level": 2,
+      "playerLevel": 52
+    },
+    {
+      "itemId": 8726,
+      "grade": 0,
+      "level": 3,
+      "playerLevel": 55
+    },
+    {
+      "itemId": 8727,
+      "grade": 0,
+      "level": 4,
+      "playerLevel": 58
+    },
+    {
+      "itemId": 8728,
+      "grade": 0,
+      "level": 5,
+      "playerLevel": 61
+    },
+    {
+      "itemId": 8729,
+      "grade": 0,
+      "level": 6,
+      "playerLevel": 64
+    },
+    {
+      "itemId": 8730,
+      "grade": 0,
+      "level": 7,
+      "playerLevel": 67
+    },
+    {
+      "itemId": 8731,
+      "grade": 0,
+      "level": 8,
+      "playerLevel": 70
+    },
+    {
+      "itemId": 8732,
+      "grade": 0,
+      "level": 9,
+      "playerLevel": 76
+    },
+    {
+      "itemId": 8733,
+      "grade": 1,
+      "level": 0,
+      "playerLevel": 46
+    },
+    {
+      "itemId": 8734,
+      "grade": 1,
+      "level": 1,
+      "playerLevel": 49
+    },
+    {
+      "itemId": 8735,
+      "grade": 1,
+      "level": 2,
+      "playerLevel": 52
+    },
+    {
+      "itemId": 8736,
+      "grade": 1,
+      "level": 3,
+      "playerLevel": 55
+    },
+    {
+      "itemId": 8737,
+      "grade": 1,
+      "level": 4,
+      "playerLevel": 58
+    },
+    {
+      "itemId": 8738,
+      "grade": 1,
+      "level": 5,
+      "playerLevel": 61
+    },
+    {
+      "itemId": 8739,
+      "grade": 1,
+      "level": 6,
+      "playerLevel": 64
+    },
+    {
+      "itemId": 8740,
+      "grade": 1,
+      "level": 7,
+      "playerLevel": 67
+    },
+    {
+      "itemId": 8741,
+      "grade": 1,
+      "level": 8,
+      "playerLevel": 70
+    },
+    {
+      "itemId": 8742,
+      "grade": 1,
+      "level": 9,
+      "playerLevel": 76
+    },
+    {
+      "itemId": 8743,
+      "grade": 2,
+      "level": 0,
+      "playerLevel": 46
+    },
+    {
+      "itemId": 8744,
+      "grade": 2,
+      "level": 1,
+      "playerLevel": 49
+    },
+    {
+      "itemId": 8745,
+      "grade": 2,
+      "level": 2,
+      "playerLevel": 52
+    },
+    {
+      "itemId": 8746,
+      "grade": 2,
+      "level": 3,
+      "playerLevel": 55
+    },
+    {
+      "itemId": 8747,
+      "grade": 2,
+      "level": 4,
+      "playerLevel": 58
+    },
+    {
+      "itemId": 8748,
+      "grade": 2,
+      "level": 5,
+      "playerLevel": 61
+    },
+    {
+      "itemId": 8749,
+      "grade": 2,
+      "level": 6,
+      "playerLevel": 64
+    },
+    {
+      "itemId": 8750,
+      "grade": 2,
+      "level": 7,
+      "playerLevel": 67
+    },
+    {
+      "itemId": 8751,
+      "grade": 2,
+      "level": 8,
+      "playerLevel": 70
+    },
+    {
+      "itemId": 8752,
+      "grade": 2,
+      "level": 9,
+      "playerLevel": 76
+    },
+    {
+      "itemId": 8753,
+      "grade": 3,
+      "level": 0,
+      "playerLevel": 46
+    },
+    {
+      "itemId": 8754,
+      "grade": 3,
+      "level": 1,
+      "playerLevel": 49
+    },
+    {
+      "itemId": 8755,
+      "grade": 3,
+      "level": 2,
+      "playerLevel": 52
+    },
+    {
+      "itemId": 8756,
+      "grade": 3,
+      "level": 3,
+      "playerLevel": 55
+    },
+    {
+      "itemId": 8757,
+      "grade": 3,
+      "level": 4,
+      "playerLevel": 58
+    },
+    {
+      "itemId": 8758,
+      "grade": 3,
+      "level": 5,
+      "playerLevel": 61
+    },
+    {
+      "itemId": 8759,
+      "grade": 3,
+      "level": 6,
+      "playerLevel": 64
+    },
+    {
+      "itemId": 8760,
+      "grade": 3,
+      "level": 7,
+      "playerLevel": 67
+    },
+    {
+      "itemId": 8761,
+      "grade": 3,
+      "level": 8,
+      "playerLevel": 70
+    },
+    {
+      "itemId": 8762,
+      "grade": 3,
+      "level": 9,
+      "playerLevel": 76
+    }
+  ],
+  "gemstones": [
+    {
+      "grade": "C",
+      "itemId": 2130,
+      "count": 20
+    },
+    {
+      "grade": "B",
+      "itemId": 2130,
+      "count": 30
+    },
+    {
+      "grade": "A",
+      "itemId": 2131,
+      "count": 20
+    },
+    {
+      "grade": "S",
+      "itemId": 2131,
+      "count": 25
+    }
+  ],
+  "cancelFees": [
+    {
+      "grade": "C",
+      "below": 1720,
+      "fee": 95000
+    },
+    {
+      "grade": "C",
+      "below": 2452,
+      "fee": 150000
+    },
+    {
+      "grade": "C",
+      "fee": 210000
+    },
+    {
+      "grade": "B",
+      "below": 1746,
+      "fee": 240000
+    },
+    {
+      "grade": "B",
+      "fee": 270000
+    },
+    {
+      "grade": "A",
+      "below": 2160,
+      "fee": 330000
+    },
+    {
+      "grade": "A",
+      "below": 2824,
+      "fee": 390000
+    },
+    {
+      "grade": "A",
+      "fee": 420000
+    },
+    {
+      "grade": "S",
+      "fee": 480000
+    }
+  ],
+  "npcs": [30298,30300,30458,30471,30678,30688,30846,30898,31271,31316,31583,31960]
+}

@@ -1129,15 +1129,44 @@ function Player:is_clan_leader() end
 ---@return boolean
 function Player:is_online() end
 
+---Opens the symbol maker's "draw a symbol" window (Mobius
+---player.sendPacket(new HennaEquipList(player))).
+function Player:show_henna_equip_list() end
+
+---Opens the symbol maker's "delete a symbol" window (Mobius
+---player.sendPacket(new HennaRemoveList(player))).
+function Player:show_henna_remove_list() end
+
+---Whether the player holds a clan privilege, by Mobius's ClanAccess name
+---("CASTLE_VAULT", "CASTLE_OPEN_DOOR", ...; Mobius hasAccess). The clan
+---leader holds all of them; a player without a clan none. An unknown name
+---is an error.
+---@param name string
+---@return boolean
+function Player:has_clan_privilege(name) end
+
+---The player's clan ID, 0 without a clan (Mobius getClanId).
+---@return integer
+function Player:clan_id() end
+
 ---true when the player has an effect of the abnormal type (an AbnormalType
 ---value), else nil (Mobius getEffectList().getBuffInfoByAbnormalType).
 ---@param abnormal_type string
 ---@return true|nil
 function Player:buff_info_by_abnormal_type(abnormal_type) end
 
----Always false until subclasses exist.
+---Whether the player plays a subclass (Mobius isSubClassActive).
 ---@return boolean
 function Player:is_sub_class_active() end
+
+---The active class index: 0 for the base class, 1-3 for a subclass (Mobius
+---getClassIndex).
+---@return integer
+function Player:class_index() end
+
+---How many subclasses the player has (Mobius getTotalSubClasses).
+---@return integer
+function Player:total_sub_classes() end
 
 ---Whether the player is a noble.
 ---@return boolean
@@ -1291,7 +1320,7 @@ function Player:die(killer) end
 function Player:teleport_to_town() end
 
 ---Whether the player holds a cursed weapon (Mobius
----isCursedWeaponEquipped); always false until cursed weapons exist.
+---isCursedWeaponEquipped): Demonic Sword Zariche or Blood Sword Akamanah.
 ---@return boolean
 function Player:is_cursed_weapon_equipped() end
 
@@ -1303,6 +1332,37 @@ function Player:is_player() end
 ---Whether the player is in its attack stance (Mobius isInCombat).
 ---@return boolean
 function Player:is_in_combat() end
+
+---Whether the player rides a strider or a wyvern (Mobius isMounted).
+---@return boolean
+function Player:is_mounted() end
+
+---What the player rides (Mobius getMountType().ordinal()): 0 nothing, 1 a
+---strider, 2 a wyvern.
+---@return integer
+function Player:mount_type() end
+
+---The NPC ID of what the player rides, 0 on foot (Mobius getMountNpcId).
+---@return integer
+function Player:mount_npc_id() end
+
+---The level of what the player rides, 0 on foot (Mobius getMountLevel).
+---@return integer
+function Player:mount_level() end
+
+---Gets the player off its mount (Mobius dismount): false where it may not
+---(over a no-landing zone, too high).
+---@return boolean
+function Player:dismount() end
+
+---Mounts the player on an NPC at the player's level (Mobius mount(npcId,
+---controlItemObjId, useFood)): the weapon and shield come off; with use_food
+---the mount eats. false when the weapon cannot come off.
+---@param npc_id integer
+---@param control_item? integer the collar's object ID, 0 for none
+---@param use_food? boolean
+---@return boolean
+function Player:mount(npc_id, control_item, use_food) end
 
 ---An NPC handle, as handlers receive it. It may be kept across handlers:
 ---while the NPC is in the world it is the same value. Once the NPC is gone
@@ -1339,6 +1399,91 @@ function Npc:say(text) end
 ---@param chat_type integer a ChatType value
 ---@param text string
 function Npc:broadcast_say(chat_type, text) end
+
+---Sends text in a chat channel to every player in the NPC's map region
+---(Mobius: NpcSay to the players whose getMapRegionLocId is the NPC's).
+---@param chat_type integer a ChatType value
+---@param text string
+function Npc:broadcast_say_to_region(chat_type, text) end
+
+---A rented castle function (Mobius Castle.CastleFunction): its level, fee,
+---the ms between two payments, and the end of the paid time (ms, and its
+---day, month 1-12 and year in server time).
+---@class CastleFunction
+---@field level integer
+---@field lease integer
+---@field rate integer
+---@field end_time integer
+---@field end_day integer
+---@field end_month integer
+---@field end_year integer
+
+---A castle (Mobius Castle and its Siege), called with ":". It is valid while
+---the handler runs.
+---
+---* `id()`, `name()`, `owner_id()` (0 without an owner), `owner()` (a Clan or nil)
+---* `tax_percent()`, `set_tax_percent(n)` (saved; 0-100), `max_tax()` (the
+---  chamberlain's limit for the Seal of Strife's owner: 15, Dawn 25, Dusk 5)
+---* `treasury()`, `deposit(player, n)` and `withdraw(player, n)`: adena
+---  between the player and the treasury, saved together; false when nothing
+---  moved (too little adena, or no owner)
+---* `siege_date()` (seconds since the epoch, 0 for none),
+---  `is_siege_in_progress()`, `is_registration_over()`, `is_zone_active()`,
+---  `control_tower_count()`, `show_siege_info(player)` (the SiegeInfo window)
+---* `get_function(type)`: a CastleFunction or nil (1 teleport, 2 HP, 3 MP,
+---  4 exp, 5 support)
+---* `seal_owner(seal)` (1 avarice, 2 gnosis, 3 strife; 0 none, 1 Dusk, 2
+---  Dawn) and `seven_signs_period()` (0 recruiting, 1 competition, 2
+---  results, 3 seal validation): Mobius SevenSigns, for the castle NPCs
+---* `open_close_door(player, door_id, open)` (only for the owner clan),
+---  `banish_foreigners()`, `oust_all_players()`
+---* `door_upgrade_level(door_id)` (the castle door's HP ratio, 1 without an
+---  upgrade; nil for another door) and `set_door_upgrade(door_id, level)`
+---  (Mobius Castle.setDoorUpgrade: the ratio and full HP, saved)
+---@class Castle
+---@field id fun(self: Castle): integer
+---@field name fun(self: Castle): string
+---@field owner_id fun(self: Castle): integer
+---@field owner fun(self: Castle): Clan|nil
+---@field tax_percent fun(self: Castle): integer
+---@field set_tax_percent fun(self: Castle, percent: integer)
+---@field max_tax fun(self: Castle): integer
+---@field treasury fun(self: Castle): integer
+---@field deposit fun(self: Castle, player: Player, amount: integer): boolean
+---@field withdraw fun(self: Castle, player: Player, amount: integer): boolean
+---@field siege_date fun(self: Castle): integer
+---@field is_siege_in_progress fun(self: Castle): boolean
+---@field is_registration_over fun(self: Castle): boolean
+---@field is_zone_active fun(self: Castle): boolean
+---@field control_tower_count fun(self: Castle): integer
+---@field get_function fun(self: Castle, type: integer): CastleFunction|nil
+---@field seal_owner fun(self: Castle, seal: integer): integer
+---@field seven_signs_period fun(self: Castle): integer
+---@field open_close_door fun(self: Castle, player: Player, door_id: integer, open: boolean)
+---@field door_upgrade_level fun(self: Castle, door_id: integer): integer|nil
+---@field set_door_upgrade fun(self: Castle, door_id: integer, level: integer)
+---@field banish_foreigners fun(self: Castle)
+---@field oust_all_players fun(self: Castle)
+---@field show_siege_info fun(self: Castle, player: Player)
+
+---The castle the NPC belongs to (Mobius Npc.getCastle: its town's castle,
+---else the nearest), nil without castles.
+---@return Castle|nil
+function Npc:castle() end
+
+---Whether the player leads the clan that owns the NPC's castle (Mobius
+---Npc.isMyLord).
+---@param player Player
+---@return boolean
+function Npc:is_my_lord(player) end
+
+---Opens a buylist of this merchant NPC (Mobius Merchant.showBuyWindow);
+---apply_tax (default true) only changes the tax the window shows. Nothing
+---happens for an NPC that is not a merchant or a list that does not name it.
+---@param player Player
+---@param list_id integer
+---@param apply_tax? boolean
+function Npc:show_buy_window(player, list_id, apply_tax) end
 
 ---@return boolean
 function Npc:is_dead() end
@@ -2165,6 +2310,241 @@ function grandboss.boss(boss_id) end
 ---addBoss).
 ---@param npc Npc
 function grandboss.add_boss(npc) end
+
+---The server side of the seasonal events (Mobius LongTimeEvent), by script
+---name: their data from config.xml with the config's dates, the event
+---drops, the login notice and the item cleanup. scripts/lib/long_time_event.lua
+---drives them; event scripts use that library instead.
+long_events = {}
+
+---One NPC of an event's spawn list.
+---@class LongEventSpawn
+---@field npc integer
+---@field x integer
+---@field y integer
+---@field z integer
+---@field heading integer
+---@field respawn_ms integer 0: no respawn
+
+---An event's data, its periods in Unix milliseconds.
+---@class LongEventConfig
+---@field name string
+---@field start_ms integer
+---@field end_ms integer
+---@field drop_start_ms integer
+---@field drop_end_ms integer may be before drop_start_ms: no drops
+---@field on_enter string
+---@field on_end string
+---@field spawns LongEventSpawn[]
+
+---The event's data, or nil and why (no such event, bad dates).
+---@param name string
+---@return LongEventConfig?
+---@return string? error
+function long_events.config(name) end
+
+---Marks the event running or not (Mobius _active).
+---@param name string
+---@param active boolean
+function long_events.set_active(name, active) end
+
+---@param name string
+---@return boolean
+function long_events.is_active(name) end
+
+---Starts or stops the event's monster drops (Mobius EventDropManager).
+---@param name string
+---@param on boolean
+function long_events.set_drops(name, on) end
+
+---Shows text to players entering the world from start_ms to end_ms (nil: no
+---end); nil text removes it (Mobius EventAnnouncement).
+---@param name string
+---@param text string?
+---@param start_ms? integer
+---@param end_ms? integer
+function long_events.set_notice(name, text, start_ms, end_ms) end
+
+---Announces text to every player in the game.
+---@param text string
+function long_events.announce(text) end
+
+---Takes the event's destroyItemsOnEnd items from every character.
+---@param name string
+function long_events.destroy_items(name) end
+
+---Puts the event's NPCs into the world, each leaving after despawn_ms (0
+---or nil: never). The server does it right after the running handler.
+---@param name string
+---@param despawn_ms? integer
+function long_events.spawn(name, despawn_ms) end
+
+---Removes the NPCs long_events.spawn put into the world.
+---@param name string
+function long_events.despawn(name) end
+
+---The heroes of the Olympiad (Mobius Hero), for the Monument of Heroes.
+hero = {}
+
+---Mobius Hero.isHero: a hero of the running cycle that claimed the status.
+---@param player Player
+---@return boolean
+function hero.is_hero(player) end
+
+---Mobius Hero.isUnclaimedHero: a hero of the last period's end that has
+---not claimed the status yet.
+---@param player Player
+---@return boolean
+function hero.is_unclaimed(player) end
+
+---Mobius Hero.claimHero: the player takes the hero status (the hero skills
+---and aura, the clan reputation, the animation).
+---@param player Player
+function hero.claim(player) end
+
+---The castle manor (Mobius CastleManorManager), for the manor managers and
+---the chamberlains. The manor's windows (the manor_menu_select links) are
+---the game's.
+manor = {}
+
+---Mobius GeneralConfig.ALLOW_MANOR (the config's manor.allowManor).
+---@return boolean
+function manor.is_enabled() end
+
+---The NPC's manor_id template parameter: the castle whose manor it serves
+---(or -1 without one).
+---@param npc Npc
+---@return integer
+function manor.manor_id(npc) end
+
+---ManorManager.onFirstTalk's lord test: the player is no GM, leads its clan,
+---and the clan owns the castle of the NPC's manor_id.
+---@param npc Npc
+---@param player Player
+---@return boolean
+function manor.is_lord(npc, player) end
+
+---What the castle's seeds of the running period brought so far (the
+---chamberlain's vault page).
+---@param castle_id integer
+---@return integer
+function manor.seed_income(castle_id) end
+
+---The Seven Signs (Mobius SevenSigns), for the priests' dialogs and the
+---castle chamberlain. Cabals are 0 none, 1 Dusk, 2 Dawn; seals 1 avarice,
+---2 gnosis, 3 strife; periods 0 recruiting, 1 competition, 2 results, 3
+---seal validation. Changes are saved at once.
+sevensigns = {}
+
+---The current period.
+---@return integer
+function sevensigns.period() end
+
+---The current cycle (1 for a new server).
+---@return integer
+function sevensigns.cycle() end
+
+---A seal's owner (Mobius getSealOwner).
+---@param seal integer
+---@return integer
+function sevensigns.seal_owner(seal) end
+
+---The leading cabal, 0 on a tie (Mobius getCabalHighestScore).
+---@return integer
+function sevensigns.highest_cabal() end
+
+---The player's cabal (Mobius getPlayerCabal).
+---@param player Player
+---@return integer
+function sevensigns.cabal(player) end
+
+---The seal the player fights for, 0 for none.
+---@param player Player
+---@return integer
+function sevensigns.seal(player) end
+
+---The player's contribution score.
+---@param player Player
+---@return integer
+function sevensigns.contribution(player) end
+
+---The player joins the cabal for the seal (Mobius setPlayerInfo).
+---@param player Player
+---@param cabal integer
+---@param seal integer
+function sevensigns.join(player, cabal, seal) end
+
+---The stones count for the player's cabal (Mobius addPlayerStoneContrib):
+---the contribution they are worth, -1 (nothing changes) above the limit.
+---@param player Player
+---@param blue integer
+---@param green integer
+---@param red integer
+---@return integer
+function sevensigns.contribute(player, blue, green, red) end
+
+---The ancient adena the player may collect; its stones and ancient adena
+---are cleared (Mobius getAncientAdenaReward(id, true)).
+---@param player Player
+---@return integer
+function sevensigns.take_reward(player) end
+
+---The castle ID of the player's clan, 0 for none.
+---@param player Player
+---@return integer
+function sevensigns.clan_castle(player) end
+
+---The dialogs' settings: max_player_contrib, join_dawn_fee,
+---manors_agreement_id, dawn_ticket_quantity, dawn_ticket_price,
+---dawn_ticket_bundle, castle_for_dawn, castle_for_dusk.
+---@return table
+function sevensigns.config() end
+
+---Mobius Player.destroyItemByItemId: takes count items, with the
+---"disappeared" message when send_message is set.
+---@param player Player
+---@param item_id integer
+---@param count integer
+---@param send_message boolean
+---@return boolean
+function sevensigns.destroy_item(player, item_id, count, send_message) end
+
+---Mobius Player.addItem (addAdena, addAncientAdena): gives count items,
+---with the "You have earned" message when send_message is set.
+---@param player Player
+---@param item_id integer
+---@param count integer
+---@param send_message boolean
+---@return boolean
+function sevensigns.add_item(player, item_id, count, send_message) end
+
+---Mobius Player.reduceAdena(..., true).
+---@param player Player
+---@param count integer
+---@return boolean
+function sevensigns.reduce_adena(player, count) end
+
+---Sends "$s2 $s1 has disappeared." with the item's name and the count.
+---@param player Player
+---@param item_id integer
+---@param count integer
+function sevensigns.send_disappeared(player, item_id, count) end
+
+---Whether the inventory has room for slots more items (validateCapacity).
+---@param player Player
+---@param slots integer
+---@return boolean
+function sevensigns.has_room(player, slots) end
+
+---A castle's Dawn ticket sales this competition (Castle.getTicketBuyCount).
+---@param castle_id integer
+---@return integer
+function sevensigns.ticket_count(castle_id) end
+
+---Sets a castle's Dawn ticket sales (saved).
+---@param castle_id integer
+---@param n integer
+function sevensigns.set_ticket_count(castle_id, n) end
 
 ---What boss fights show. `to` is who sees it: a Player (that player), an
 ---Npc (the players around it) or a zone ID (the players inside). Skill

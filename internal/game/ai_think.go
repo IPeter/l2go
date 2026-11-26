@@ -207,6 +207,8 @@ func (s *Server) isAggressiveTowards(n *Npc, target Creature) bool {
 	}
 	c := s.aiClassOf(n)
 	switch {
+	case c.defender:
+		return s.defenderAggressiveTowards(n, p) // siege_ai.go
 	case c.guard, c.friendly:
 		return p.Karma() > 0 && s.canSee(n, p)
 	case !s.settings.NPCs.MobAggroInPeaceZone && p.Zones.Inside(ZonePeace) && p.Zones.Inside(ZoneNoPvP):

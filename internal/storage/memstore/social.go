@@ -77,6 +77,10 @@ func (s *Characters) writeBatch(b *storage.Batch) error {
 			s.byID[p.ObjectID] = c
 		}
 	}
+	s.applyCursedWeapons(b) // cursedweapons.go
+	s.applyCastles(b)       // residence.go
+	s.applyClanHalls(b)     // clanhalls.go
+	s.applyManor(b)         // manor.go
 	return nil
 }
 

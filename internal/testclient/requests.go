@@ -124,6 +124,10 @@ var clientPacketNames = map[byte]string{
 	OpBypassUserCmd:             "BypassUserCmd",
 	OpRequestShowMiniMap:        "RequestShowMiniMap",
 
+	// Enchanting and crystallization (M11a, enchant.go).
+	OpRequestEnchantItem:     "RequestEnchantItem",
+	OpRequestCrystallizeItem: "RequestCrystallizeItem",
+
 	// Party, friends and block list (M9, party.go).
 	OpRequestJoinParty:          "RequestJoinParty",
 	OpRequestAnswerJoinParty:    "RequestAnswerJoinParty",

@@ -316,6 +316,23 @@ func (s *Server) runItemHandler(p *Player, it *inventory.Item, ctrl bool) (used,
 		return s.useItemSkills(p, it, ctrl), true
 	case handlerCharmOfCourage:
 		return s.useCharmOfCourage(p, it), true
+	case handlerEnchantScrolls:
+		return s.useEnchantScroll(p, it), true // enchant.go
+	case handlerRecipes:
+		return s.useRecipe(p, it), true // craft.go
+	case handlerFishShots:
+		return s.useFishShot(p, it), true // fishing_shot.go
+	case handlerMercTicket:
+		return s.useMercTicket(p, it), true // castle_merc.go
+	case handlerSeed:
+		return s.useSeed(p, it), true // manor_sow.go
+	case handlerHarvester:
+		return s.useHarvester(p, it), true // manor_sow.go
+	case handlerSevenSignsRecord:
+		return s.useSevenSignsRecord(p), true // sevensigns.go
+	}
+	if used, known := s.runSummonItemHandler(p, it, ctrl); known { // pet_shots.go
+		return used, true
 	}
 	return false, false
 }

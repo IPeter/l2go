@@ -193,6 +193,12 @@ func patchUpdate(p storage.CharacterPatch) bson.D {
 	if p.Fields&storage.PatchTitle != 0 {
 		set = append(set, bson.E{Key: "title", Value: doc.Title})
 	}
+	if p.Fields&storage.PatchKarma != 0 {
+		set = append(set, bson.E{Key: "karma", Value: doc.Karma})
+	}
+	if p.Fields&storage.PatchPKKills != 0 {
+		set = append(set, bson.E{Key: "pk_kills", Value: doc.PKKills})
+	}
 	for _, f := range clanFieldValues(&doc) {
 		switch {
 		case p.Fields&f.patch == 0:
@@ -315,7 +321,16 @@ func (s *Characters) WriteBatch(ctx context.Context, b storage.Batch) error {
 				return err
 			}
 		}
-		return nil
+		if err := s.applyCursedWeapons(ctx, &b); err != nil { // cursedweapons.go
+			return err
+		}
+		if err := s.applyCastles(ctx, &b); err != nil { // residence.go
+			return err
+		}
+		if err := s.applyClanHalls(ctx, &b); err != nil { // clanhalls.go
+			return err
+		}
+		return s.applyManor(ctx, &b) // manor.go
 	})
 	if mongo.IsDuplicateKeyError(err) {
 		return storage.ErrExists

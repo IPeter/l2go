@@ -66,6 +66,9 @@ func (s *Server) handleRequestActionUse(p *Player, body []byte) {
 // sits down and a sitting one stands up; a walking player sits down when
 // the walk arrives.
 func (s *Server) actionSitStand(p *Player, _ clientpackets.RequestActionUse) {
+	if s.mounted(p) { // mount.go: useSit refuses a rider, now or on arrival
+		return
+	}
 	if p.Sitting || p.Move == nil {
 		s.useSit(p)
 		return
@@ -80,8 +83,11 @@ func (s *Server) actionWalkRun(p *Player, _ clientpackets.RequestActionUse) {
 }
 
 // useSit sits p down, or stands it up when it sits (Mobius
-// RequestActionUse.useSit, without chairs).
+// RequestActionUse.useSit, without chairs); a rider does neither (mount.go).
 func (s *Server) useSit(p *Player) {
+	if s.mounted(p) {
+		return
+	}
 	if p.Sitting {
 		s.standUp(p)
 	} else {
@@ -178,6 +184,9 @@ func (s *Server) handleChangeWaitType2(p *Player, body []byte) {
 	stand, err := readFlagPacket(body)
 	if err != nil {
 		s.log.Debug("game: bad ChangeWaitType2", append(p.logArgs(), "err", err)...)
+		return
+	}
+	if s.mounted(p) { // mount.go
 		return
 	}
 	if stand {

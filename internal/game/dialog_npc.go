@@ -102,9 +102,11 @@ func (s *Server) showFirstPage(p *Player, n *Npc) {
 	id := n.ID()
 	switch {
 	case s.npcIs(n, "Teleporter"):
+		if s.castleTeleporterPage(p, n) { // castle_npc.go: the owner clan only
+			return
+		}
 		if s.onCastleGround(n.Position()) {
-			// A castle gatekeeper: only the clan owning the castle may use
-			// it, and nobody owns a castle yet.
+			// A castle gatekeeper without castle data: nobody owns a castle.
 			s.sendPage(p, s.pageFile(p, id, "teleporter/castleteleporter-no.htm").replaceObjectID(id).replace("%npcname%", t.Name))
 			return
 		}
@@ -112,19 +114,16 @@ func (s *Server) showFirstPage(p *Player, n *Npc) {
 	case s.npcIs(n, "PetManager"):
 		s.sendPage(p, s.pageFile(p, id, "petmanager/"+strconv.Itoa(t.ID)+".htm").replaceObjectID(id).replace("%npcname%", t.Name))
 	case s.npcIs(n, "ClanHallDoorman"):
-		// Mobius shows nothing without the clan hall's data.
-		p.SendActionFailed()
+		s.showHallDoormanPage(p, n) // clanhall_npc.go
 	case s.npcIs(n, "CastleDoorman"):
-		p.SendActionFailed()
-		s.sendPage(p, s.pageFile(p, id, "doorman/"+strconv.Itoa(t.ID)+"-no.htm").replaceObjectID(id))
+		s.castleDoormanPage(p, n) // castle_npc.go
 	case s.npcIs(n, "Doorman"):
 		p.SendActionFailed()
 		s.sendPage(p, s.pageFile(p, id, "doorman/"+strconv.Itoa(t.ID)+".htm").replaceObjectID(id))
 	case s.npcIs(n, "ClanHallManager"):
-		p.SendActionFailed()
-		s.sendPage(p, s.pageFile(p, id, "clanHallManager/chamberlain-no.htm").replaceObjectID(id).replace("%npcId%", strconv.Itoa(t.ID)))
+		s.showHallManagerPage(p, n) // clanhall_npc.go
 	case s.npcIs(n, "Auctioneer"):
-		s.sendPage(p, s.pageFile(p, id, "auction/auction.htm").replaceObjectID(id).replace("%npcId%", strconv.Itoa(t.ID)).replace("%npcname%", t.Name))
+		s.showAuctioneerPage(p, n) // auction_npc.go
 	case s.npcIs(n, "DawnPriest"):
 		p.SendActionFailed()
 		s.sendPage(p, s.pageFile(p, id, sevenSignsHTML+"dawn_priest_1a.htm").replaceObjectID(id))
@@ -193,10 +192,13 @@ func (s *Server) showNpcPage(p *Player, n *Npc, value int) {
 	case npcID >= 31093 && npcID <= 31094, npcID >= 31172 && npcID <= 31201, npcID >= 31239 && npcID <= 31254:
 		// Mobius shows these NPCs nothing.
 		return
+	case olympiadFirstPage(p, npcID) != "":
+		// The Olympiad manager's noble page, the monuments' hero page
+		// (olympiad_npc.go).
+		file = olympiadFirstPage(p, npcID)
 	default:
-		// The Olympiad managers show their noble and hero pages, and
-		// Blacksmith Pinter (30298) his academy page, only to nobles,
-		// heroes and academy members, who do not exist yet.
+		// Blacksmith Pinter (30298) shows his academy page only to academy
+		// members, who do not exist yet.
 		file = npcPagePath(s.worldData, t, value, s.dialog.html.exists)
 	}
 	s.sendPage(p, s.pageFile(p, n.ID(), file).replace("%npcname%", t.Name).replaceObjectID(n.ID()))

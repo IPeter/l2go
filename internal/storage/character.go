@@ -89,6 +89,10 @@ type Item struct {
 	Mana        int32
 	CustomType1 int32 // Mobius custom_type1, usually 0
 	CustomType2 int32 // Mobius custom_type2, usually 0
+	// Augmentation is the item's augmentation (Mobius
+	// item_attributes.augAttributes): option 1 in the low 16 bits, option 2
+	// in the high 16; 0 for none.
+	Augmentation int32
 }
 
 // Carried reports whether the character carries the item, in the inventory
@@ -223,6 +227,45 @@ type Character struct {
 	// character_item_reuse_save). The stores keep them in the character
 	// document, in this order, and return nil when there are none.
 	ItemReuse []ItemReuse
+	// Hennas are the dyes drawn on the character, by class index (decision
+	// X3; henna.go). The stores keep them in the character document and
+	// return nil when there are none.
+	Hennas map[int32]HennaSlots
+	// Recipes are the recipe books (recipes.go). The stores keep them in the
+	// character document and return them as RecipeBook.Clone does.
+	Recipes RecipeBook
+
+	// The subclass fields (M11e; Mobius characters.base_class,
+	// characters.nobless and character_subclasses). ClassID, Level, Exp and
+	// SP are always those of the active class, BaseClassID is the base
+	// class.
+	//
+	// ClassIndex is the active class: 0 for the base class, 1 to 3 for a
+	// subclass (decision X3). The rows of Skills, SavedSkills and Shortcuts
+	// with another class index belong to the inactive classes.
+	ClassIndex int32
+	// Noble is the noblesse (Mobius nobless).
+	Noble bool
+	// Subclasses are the subclasses with their progress, in the order the
+	// game gives them (by class index). The entry of the active subclass is
+	// as of the last save. The stores return nil when there are none.
+	Subclasses []Subclass
+	// BaseLevel, BaseExp and BaseSP are the base class's level, exp and SP
+	// while a subclass is active; while the base class is active they are 0
+	// and Level, Exp and SP are the base class's.
+	BaseLevel int32
+	BaseExp   int64
+	BaseSP    int32
+}
+
+// Subclass is one subclass of a character (a row of Mobius
+// character_subclasses).
+type Subclass struct {
+	ClassIndex int32 // 1-3
+	ClassID    int32
+	Level      int32
+	Exp        int64
+	SP         int32
 }
 
 // Shortcut types of a Shortcut (the ordinals of Mobius ShortcutType).
@@ -408,7 +451,8 @@ type CharacterStore interface {
 	// heading, HP/MP/CP, level, exp and SP, class, sex and appearance, karma
 	// and kill counts, title and recommendations, death penalty level and exp
 	// before death, clan and the clan fields, delete
-	// time, last access, access level, variables, skills and saved skills. The
+	// time, last access, access level, variables, skills and saved skills,
+	// and the subclass fields (class index, noblesse, subclasses). The
 	// identity fields (account, name, race and creation time) and the newbie
 	// flag are kept as stored. c.Items replaces the character's items: those it owned that
 	// c.Items does not list are deleted, and the listed ones are stored with

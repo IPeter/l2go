@@ -143,7 +143,7 @@ func (s *Server) storeBuy(buyer, owner *Player, l *storeList, items []storeReque
 			return storeDealCanceled
 		}
 		it := storeCheckItem(owner, r.objectID, r.count)
-		if it == nil || !it.Template().Tradable {
+		if it == nil || !it.Template().Tradable || augmentLocked(it) {
 			l.locked = true
 			return storeDealFailed
 		}
@@ -289,7 +289,7 @@ func (s *Server) storeSell(seller, owner *Player, l *storeList, items []storeReq
 			s.finishStoreDeal(owner, seller)
 			return false
 		}
-		if !it.Template().Tradable {
+		if !it.Template().Tradable || augmentLocked(it) {
 			continue
 		}
 		moved, err := seller.inv.Transfer(objectID, r.count, &owner.inv.Container)

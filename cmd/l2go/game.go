@@ -10,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	_ "time/tzdata" // world.timeZone works without the system's zone files
 
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
@@ -80,6 +81,40 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 	}
 	if err := bosses.CheckWorld(worldData); err != nil {
 		return err
+	}
+	// Pets, pet and servitor skills, cubics.
+	summons, err := data.LoadSummons(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	if err := summons.CheckWorld(worldData); err != nil {
+		return err
+	}
+	// The seasonal events' config.xml (dates, drops, spawns, messages).
+	longEvents, err := data.LoadLongTimeEvents(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	// Fish, rods, fishing monsters and lures.
+	fishingData, err := data.LoadFishing(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	// Castles: schedules, towers, siege guards, mercenary tickets.
+	castleData, err := data.LoadCastles(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	// The Seven Signs: the rift's rooms, the festival's spawns, the Mammon NPCs.
+	sevenSignsData, err := data.LoadSevenSigns(gs.DataDir)
+	if err != nil {
+		return err
+	}
+	// The time zone of the wall-clock systems (the fishing championship);
+	// world.timeZone, the machine's zone when empty.
+	timeZone, err := gs.World.Location()
+	if err != nil {
+		return fmt.Errorf("world.timeZone: %w", err)
 	}
 
 	// Geodata (ground heights, walls) from the L2J tiles in geodata.dir. An
@@ -175,8 +210,21 @@ func runGame(ctx context.Context, cfg config.Config, opts options, logger *slog.
 		Geo:             geoEngine,
 		Objects:         objects, // doors, static objects, fences
 		Bosses:          bosses,
+		Summons:         summons,
+		SummonStore:     store.Summons(),
 		BossStore:       store.Bosses(), // raid and grand boss state, raid points
+		LongTimeEvents:  longEvents,     // the seasonal events
 		Accounts:        loginLink,      // account bans of the admin panel
+		Fishing:         fishingData,
+		FishingStore:    store.Fishing(),  // the fishing championship
+		OlympiadStore:   store.Olympiad(), // the Olympiad and the heroes
+		Castles:         castleData,
+		CastleStore:     store.Characters(),
+		ManorStore:      store.Characters(), // the castle manor
+		TimeZone:        timeZone,
+		BBS:             store.BBS(), // the community board's mails and favorites
+		SevenSigns:      sevenSignsData,
+		SevenSignsStore: store.SevenSigns(), // the Seven Signs and the festival
 		Logger:          gsLogger,
 	})
 	if err != nil {

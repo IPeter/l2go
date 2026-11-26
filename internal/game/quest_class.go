@@ -55,11 +55,14 @@ func (s *Server) ChangeClass(p *Player, id int) {
 	}
 	p.char.ClassID = int32(id) //nolint:gosec // class IDs are small
 	p.class = class
+	// subclass_switch.go: the subclass entry, or the base class.
+	s.subclassClassChanged(p)
 	if data.PlayerClass(id).Level() == 3 { //nolint:gosec // class IDs are small
 		p.SendSystemMessage(sysMsgThirdClassTransfer)
 	} else {
 		p.SendSystemMessage(sysMsgClassTransfer)
 	}
+	s.hennaClassChanged(p) // henna.go: the dyes the new class may not wear come off
 	s.partyClassChanged(p) // party_window.go
 	s.clanClassChanged(p)  // clan_members.go
 	p.BroadcastUserInfo()

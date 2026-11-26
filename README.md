@@ -48,8 +48,14 @@ Playing together (Milestone 9, Plan 12):
 |---|---|
 | Parties | Up to 9 players. The invitation carries one of the five loot modes (finders keepers, random, random including spoil, by turn, by turn including spoil). The party window shows live CP/HP/MP and buff icons; member positions go to the map every 12 s. Party chat, `/partyinfo`, leader change, kick and leave; a party of two disperses when one leaves, and a leader who logs out hands over to the next member. Exp and SP are shared among the living members within 1,500 units with Mobius's party bonus and level cutoff (`party`, `rates.partyXp`); drops and adena go to members in range by the loot mode. Party skills reach the members; Summon Friend asks the target first. Parties are not saved: a restart clears them. |
 | Friends and block list | Friend list with online notices at login and logout, and friend messages. Deleting a friend removes both sides, also for an offline friend. The ignore list stops whispers, party and clan chat, and party, friend and trade requests; "refuse all" turns on message refusal with its status icon. GMs cannot be blocked. |
+| Community board | Alt+B opens Mobius's standard board (`communityBoard`): the home page, favorites (the tab's "add" button bookmarks the page you are on), the region list of the nine castles with owner, alliance and tax, and each region with its lord, next siege and clan halls; the clan list with search, a clan's home (clan level 2), the clan notice the leader edits and switches on or off, and the leader's clan mail; mail with inbox, sent box and archive, search, read, reply, archive and delete (up to 5 recipients and 10 mails a day, 100 in an inbox), with "You've got mail" and the mail icon at once or at the next login; the friend and block lists with selection, delete and "New Mail"; the memo and homepage pages. Writing memos and the friends board's mail button do nothing, as in Mobius; the custom board and the drop search are off. Mails and favorites survive a restart. |
 | Trade | Direct trade within 150 units. When both confirm, weight and slots are checked on both sides, then the items move both ways and are written in one database transaction. Cancel, distance, a partner who leaves, and the 15 s request timeout work as in Mobius. Items cannot be used, dropped, destroyed or enchanted during a trade. |
 | Private stores | Sell stores, package sales (bought whole) and buy stores, with a message. The owner sits; others see the message, click twice and buy. Slot limits per race (`stores`); no stores in no-store zones, within 50 units of a sitting player or within 100 of an NPC; no restart or item use in store mode. Each purchase is one transaction. No offline trade: a store closes when its owner leaves. |
+| Crafting and workshops | Using a recipe item registers it in the dwarven (Create Item, 172) or common (Create Common Item, 1320) book when the skill level is high enough; 50 recipes per book (`crafting`). The dwarven book belongs to the active class, the common book is shared. Crafting is instant: MP cost, all materials checked first, then Mobius's success rate; a failure loses the materials. A private workshop (actions 37 and 51) offers recipes for a fee: the customer pays first, gets the fee back if his materials run short, and loses it when the craft fails. Each workshop order is one transaction. |
+| Enchanting and crystallization | Enchant scrolls raise weapons, armor and accessories of their grade at Mobius's rates: +0 to +2 (full armor +3) always succeed, then 66 % up to +16. A failed normal scroll crystallizes the item (the crystals of its grade, fewer than crystallizing gives), a blessed scroll resets it to +0, a crystal scroll never fails. +7 and +15 weapons and +6 armor are announced to the players around with a firework. Dwarves crystallize items with Crystallize (248): level 2 for C grade, 3 for B, 4 for A, 5 for S. Over-enchanted equipment is destroyed (`enchant`). GM: `//enchant` and its `//sete*` commands (`//setew` for the weapon), `//create_item <id> 1 <level>`, `//setskill 248 <level>`. |
+| Castles and sieges | The nine castles with their owner clan, tax and treasury, saved in one transaction with the clans a siege changes. Sieges every two weeks on Sunday at 16:00 or 20:00 by castle (`siege`); clans of level 4 register as attackers, or as defenders waiting for the lord's approval, in the siege window; registration closes 24 hours before, and a siege without attackers is cancelled. At the start everyone but the owner clan leaves the castle zone, which becomes a battlefield (PvP, siege relation colours); 3 control towers, 2 flame towers and the siege guards of `castle_siege_guards` (or the lord's hired mercenaries) appear and the doors close. Attackers build a headquarters (Build Headquarters, 247) and restart at it or at the castle; the Seal of Ruler (246) on the artefact gives the castle to the leader's clan (mid victory: the sides change, the towers come back), and after 120 minutes the siege ends with Mobius's reputation changes. The castle's tax goes into its town's shop prices and the treasury. Mercenary tickets place guards for the next siege, in the seal validation period, within the Seal of Strife's limits. GM: `//siege [castle]`, `//startsiege`, `//endsiege`, `//setcastle`, `//removecastle`, `//add_attacker`, `//add_defender`, `//setsiegetime <castle> now <minutes>` (and Mobius's `month`, `day`, `hour`, `min`), `//list_siege_clans`, `//clear_siege_list`, `//spawn_doors`, `//add_guard`. |
+| Seven Signs, festival, rift | Mobius's weekly Seven Signs (`sevenSigns`): on Monday at 18:00 (in `world.timeZone`) the 15-minute recruiting starts, then the competition until the next Monday 18:00, 15 minutes of results and the seal validation until the Monday after. At the Priests of Dawn and Dusk Priestesses (`scripts/npcs/seven_signs`) a first-class character joins a cabal for a seal (Dawn after the second class needs a castle, the Lord of the Manor's Certificate of Approval or 50,000 adena; castle clans may not join Dusk), turns in blue, green and red seal stones (3, 5 and 10 points), exchanges them for ancient adena, buys the Record of the Seven Signs and, in the winners' seal validation, collects the stones' ancient adena. The scores (the stones' share of 500 points plus the festival's), the record (the client's Seven Signs window and item 5707: the four pages of SSQStatus), the results (35 % of a cabal's members to take a seal, 10 % to keep one), the enter-world notices and the Seal of Strife's skills (The Victor/Vanquished of War) follow Mobius. The seals' effects: the castles' tax limit (25 % Dawn, 5 % Dusk), gate defence (`SevenSignsGateDefence` for the door combat), mercenary tickets, the Dawn respawn of siege clans, the castle chamberlain's certificate sale, the necropolis (Seal of Avarice) and catacomb (Seal of Gnosis) gatekeepers, and the Mammon NPCs, orators, preachers, crests, Lilith and Anakim of `random_spawn`. The Festival of Darkness: a party of 5 signs up at a festival guide with its seal stones (the festival's bonus), fights 18 minutes in its arena every 38 minutes, and its leader registers the Blood Offerings; the best party of each festival brings its cabal 60-150 points and, at the competition's end, its members' clans 200 reputation each. The Dimensional Rift: a party of 2 or more pays 18-33 dimension fragments each and jumps between rooms every 480-600 s (the boss room 1.5 times longer), at most 4 rooms. Everything is saved at every change and survives restarts. GM: `//ssq_info`, `//ssq_change` (the next period now; L2Go), `//mammon_find`, `//mammon_respawn`. |
+| Olympiad and heroes | Mobius's Grand Olympiad (`olympiad`): monthly periods ending on the first at 12:00, a daily competition from 18:00 for 6 hours, 3 points a week, then 24 hours of validation. Nobles on their base class register at a Grand Olympiad Manager for class-free (5 points, 9 waiting) or class matches (3 points, 5 of a class waiting), not in the last 10 minutes, without a cursed weapon or a full bag. The manager pairs them every 30 s into the 22 stadiums; after 120 s both stand in the arena without buffs, clan and hero skills, healed; after 60 s the fight lasts up to 6 minutes. The winner takes a fifth (class matches: a third) of the lower points, at most 10, and 30 (50) Noblesse Gate Passes; the fights are kept. Spectators watch through the manager. At the period's end the best noble of each third class with 9 matches and a win becomes a hero; at a Monument of Heroes (`scripts/npcs/monument_of_heroes`) it claims the hero aura, the 5 hero skills, hero voice, hero items to wear (one Infinity weapon, the Wings of Destiny Circlet) and 1,000 clan reputation; the hero list, words, diary and fights show at the monuments. Everything survives restarts. GM: `//checkolympiad`, `//saveolymp`, `//endolympiad`, `//givehero`, `//sethero`; the admin panel's class page sets the hero status for good. |
 | Clans | Created at a village master from character level 10. Clan levels 0–8 with Mobius's SP, adena, item, reputation and member costs. Members with their online state, ranks and privileges, titles (clan level 3), the clan crest and the large crest, the academy (clan level 5) with graduation reputation and the Academy Circlet, Royal Guard and Knight units with captains, clan skills learned for reputation (disabled while the reputation is below 0), the clan warehouse (clan level 1, 200 slots, only the leader withdraws unless `clan.membersCanWithdrawFromWarehouse`), clan chat. Join, leave, dismiss and create penalties, `/clanpenalty`, dissolution after 7 days, the leader change at the Wednesday 06:30 reset (`clan.leaderInstantActivation` makes it immediate). Clan members and leaders cannot be deleted. The clan quests (Q501, Q503, Q508–Q510) are open. |
 | Alliances | Created at a village master by a clan of level 5. Up to 3 clans (`ally.maxClans`): invite, leave, dismiss and dissolve with Mobius's penalties, the alliance window, alliance chat and the alliance crest. |
 | Clan wars | One-sided declarations as in Mobius; both clans need level 3 and 15 members (`clan.membersForWar`). When both sides have declared, the members see the double fist and attack each other without Ctrl; a kill counts as PvP, moves reputation (`clan.reputationPerKill`) and costs the victim a quarter of the usual exp. War lists in the clan window and as user commands 88–90; stop and surrender. |
@@ -74,7 +80,7 @@ What does not work yet:
 
 - Without geodata tiles in `geodata.dir` (the default: L2Go ships none, see [Geodata](#geodata)) there is no pathfinding: heights come from the client and the spawn data, and every place is walkable and visible, except through closed doors.
 - No mounts, pets or summons yet. The grand bosses' skills against striders are left out, and a pet's or summon's kill gives no raid points.
-- Later milestones: Frintezza (it needs command channels), the FeedableBeasts, Tunatun and Venom scripts, castles, sieges, clan halls, the Olympiad, the Seven Signs, command channels, party matching rooms (the window opens empty), duels, crafting and recipe shops, offline trade.
+- Later milestones: Frintezza (it needs command channels), the FeedableBeasts, Tunatun and Venom scripts, castles, sieges, clan halls, the Olympiad, command channels, party matching rooms (the window opens empty), duels, offline trade.
 - Core's teleport cube (NPC 899099) is missing from the NPC data, so no cube appears after Core dies.
 - Clan skills that are disabled because the reputation fell below 0 keep their passive stats, as in Mobius.
 - `refdiff` has no scenario for alliances and clan wars yet.
@@ -263,7 +269,7 @@ The "Default" column is what a key gets when it is left out of the file. Keys wi
 | `scripts.devReload` | | `true` reloads the scripts when a file changes. |
 | `scripts.eventTimeout` | `"50ms"` | Time limit for the script handlers of one event. |
 
-The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `geodata`, `items`, `economy`, `rates`, `combat`, `pvp`, `party`, `stores`, `clan`, `ally` and `grandBosses`. A section or key left out keeps its default, the L2J Mobius value. Most keys are L2J Mobius settings with the same name in camel case; the tables name the Mobius key where it differs. Durations are strings such as `"1s"` or `"10m"`. Some keys are read only once the feature using them is built.
+The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `geodata`, `items`, `economy`, `rates`, `combat`, `pvp`, `party`, `stores`, `crafting`, `enchant`, `siege`, `sevenSigns`, `clan`, `ally`, `grandBosses`, `events` and `communityBoard`. A section or key left out keeps its default, the L2J Mobius value. Most keys are L2J Mobius settings with the same name in camel case; the tables name the Mobius key where it differs. Durations are strings such as `"1s"` or `"10m"`. Some keys are read only once the feature using them is built.
 
 `world`:
 
@@ -281,6 +287,7 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `minMonsterAnimation`, `maxMonsterAnimation` | `"5s"`, `"60s"` | The same for monsters. |
 | `allowBoat` | `true` | Runs the ferries. |
 | `boatBroadcastRadius` | `20000` | Players this close to a ferry's docks, in game units, hear its calls and see it. |
+| `timeZone` | `""` | IANA time zone (for example `"Europe/Budapest"` or `"UTC"`) of the systems that run on wall-clock time: the weekly fishing championship, later sieges, the Olympiad and Seven Signs. Empty uses the machine's zone, as Mobius uses the JVM's; in the Docker image that is UTC. |
 
 `chat`:
 
@@ -412,6 +419,106 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `buySlotsDwarf`, `buySlotsOther` | `5`, `4` | The same for private buy stores (Mobius `MaxPvtStoreBuySlots*`). |
 | `minRangeFromPlayer`, `minRangeFromNpc` | `50`, `100` | How far from a sitting player and from an NPC a store must be opened; `0` turns the check off (Mobius `Custom/PrivateStoreRange.ini` `ShopMinRangeFromPlayer`, `ShopMinRangeFromNpc`). |
 
+`crafting` (recipe books, crafting and private workshops; Mobius `Player.ini` Crafting). Crafting is instant: Mobius's `AltGameCreation` is not supported, and a workshop's list is not saved (`StoreRecipeShopList = False`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Crafting and registering recipes (Mobius `CraftingEnabled`). |
+| `craftingInCombat` | `false` | Crafting from the recipe book in combat stance. |
+| `dwarfRecipeLimit`, `commonRecipeLimit` | `50`, `50` | Recipes the dwarven and the common book hold, before stat bonuses. |
+| `floodManufacture` | `"300ms"` | Shortest time between two crafts or workshop orders; `"0s"` turns the limit off (Mobius `FloodProtectorManufactureInterval`, 3 ticks). |
+
+`enchant` (Mobius `Player.ini` Enchanting; the rates are in `data/enchant/enchant.json`, made by datagen from `EnchantItemData.xml` and `EnchantItemGroups.xml`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enchantBlackList` | the 19 Mobius IDs (7816–7831, 13293, 13294, 13296) | Items that cannot be enchanted. |
+| `disableOverEnchanting` | `true` | A scroll is refused on an item at the scroll's maximum level. |
+| `overEnchantProtection` | `true` | Equipment above +16 (the maximum the enchant data allows) is destroyed when a player who is no GM logs in or puts it on, and the `//sete*` commands of `//enchant` and `//create_item` cap the level for players. |
+| `overEnchantPunishment` | `"JAIL"` | What then happens to the player: `NONE`, `BROADCAST` (the GMs online are told), `KICK`, `KICKBAN` or `JAIL`. There is no jail or ban yet: `KICKBAN` and `JAIL` kick. |
+| `floodEnchantItem` | `"1.5s"` | Shortest time between two enchant requests; faster ones are ignored (Mobius `FloodProtectorEnchantItemInterval`, 15 ticks). |
+
+`siege` (Mobius `Siege.ini` and the castle points of `Feature.ini`; the castles, their schedule from `SiegeSchedule.xml`, towers, mercenary limits, siege guards and mercenary tickets are in `data/castles`, made by datagen from `castle.sql`, `castle_siege_guards.sql`, `Siege.ini`, `SiegeSchedule.xml` and `MercTicketManager.java`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `siegeCycle` | `2` | Weeks between a castle's sieges. |
+| `siegeLength` | `120` | Minutes a siege lasts. |
+| `maxFlags` | `1` | Headquarters a clan may build in a siege (`MaxFlags`). |
+| `siegeClanMinLevel` | `4` | Clan level needed to register. |
+| `attackerMaxClans`, `defenderMaxClans` | `500` | Clans per side. |
+| `attackerRespawn` | `0` | Milliseconds an attacker who died on the battlefield waits before restarting. |
+| `takeCastlePoints`, `looseCastlePoints`, `castleDefendedPoints` | `1500`, `3000`, `750` | Clan reputation at the end of a siege: taking a castle (at most the former owner's score), losing it, defending it. |
+
+`sevenSigns` (Mobius `Feature.ini` Seven Signs and `FestivalOfDarknessWin`, with `General.ini` Dimension Rift in `rift`). The status and the players are saved at every change, so `AltSevenSignsLazyUpdate` is not read:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `openCatacombs`, `openNecropolis` | `false` | Anyone may enter the catacombs or necropolises, whatever the seals and the period (`AltOpenCatacumbs`, `AltOpenNecropolis`). |
+| `castleForDawn` | `true` | Characters after their second class change whose clan owns no castle pay to join Dawn (`AltCastleForDawn`). |
+| `castleForDusk` | `true` | Members of a clan that owns a castle cannot join Dusk (`AltCastleForDusk`). |
+| `festivalMinPlayers` | `5` | Party size for the Festival of Darkness (`AltFestivalMinPlayer`). |
+| `maxPlayerContrib` | `1000000` | Highest seal stone contribution score of a player (`AltMaxPlayerContrib`). |
+| `festivalManagerStart`, `festivalLength`, `festivalCycleLength` | `120000`, `1080000`, `2280000` | Milliseconds from the competition's start to the first festival cycle, a festival's length and a cycle's length (`AltFestival...`). |
+| `festivalFirstSpawn`, `festivalFirstSwarm`, `festivalSecondSpawn`, `festivalSecondSwarm`, `festivalChestSpawn` | `120000`, `300000`, `540000`, `720000`, `900000` | Milliseconds into a festival of its monster spawns, swarms and chests (`AltFestival...`). |
+| `dawnGatesPDefMult`, `duskGatesPDefMult`, `dawnGatesMDefMult`, `duskGatesMDefMult` | `1.1`, `0.8`, `1.1`, `0.8` | Castle gate P.Def and M.Def multipliers while Dawn or Dusk owns the Seal of Strife (`AltDawnGatesPdefMult`, ...). |
+| `strictSevenSigns` | `false` | Only the seal owners may use the Merchant and Blacksmith of Mammon. |
+| `dawnTicketQuantity`, `dawnTicketPrice`, `dawnTicketBundle`, `manorsAgreementId` | `300`, `1000`, `10`, `6388` | The chamberlain's Lord of the Manor's Certificates of Approval: per castle and competition, the price of one, the bundle, the item (`SevenSignsDawnTicket...`, `SevenSignsManorsAgreementId`). |
+| `joinDawnFee` | `50000` | Adena to join Dawn without a certificate (`SevenSignsJoinDawnFee`). |
+| `festivalOfDarknessWin` | `200` | Clan reputation per clan member of a winning festival party. |
+| `rift.minPartySize` | `2` | Party size to enter the Dimensional Rift, 2-9 (`RiftMinPartySize`). |
+| `rift.maxJumps` | `4` | Room changes before the party goes back (`MaxRiftJumps`). |
+| `rift.spawnDelay` | `10000` | Milliseconds after entering a room before its monsters come (`RiftSpawnDelay`). |
+| `rift.autoJumpsDelayMin`, `rift.autoJumpsDelayMax` | `480`, `600` | Seconds between automatic jumps. |
+| `rift.bossRoomTimeMultiply` | `1.5` | How much longer the boss room lasts. |
+| `rift.recruitCost`, `rift.soldierCost`, `rift.officerCost`, `rift.captainCost`, `rift.commanderCost`, `rift.heroCost` | `18`, `21`, `24`, `27`, `30`, `33` | Dimension fragments each member pays to enter each rift. |
+
+`augment` (Mobius `Player.ini` Augmenting; the options and life stones are in `data/augment`). Only the retail-like augmentation is supported, so the keys of the classic one (`AugmentationNGSkillChance` and the like) are not read:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `retailLikeAugmentation` | `true` | Must be `true`. |
+| `retailLikeAugmentationNoGradeChance`, `retailLikeAugmentationMidGradeChance`, `retailLikeAugmentationHighGradeChance`, `retailLikeAugmentationTopGradeChance` | `[55, 35, 7, 3]` each | Per life stone grade, the percent chances of a yellow, blue, purple and red option. The four numbers add up to 100. |
+| `augmentationBlackList` | `[6656, 6657, 6658, 6659, 6660, 6661, 6662, 8191]` | Items that cannot be augmented (the grand boss jewels and 8191). |
+| `altAllowAugmentPvPItems` | `false` | PvP items may be augmented and their augmentation removed. |
+| `altAllowAugmentTrade` | `false` | Must be `false` for now: augmented items cannot be traded, sold, dropped or put in the clan warehouse. |
+| `altAllowAugmentDestroy` | `true` | Augmented items may be destroyed and crystallized. |
+
+`fishing` (Mobius `General.ini` `AllowFishing` and Fishing Tournament):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `allowFishing` | `true` | Players may fish; GMs fish anyway. |
+| `altFishChampionshipEnabled` | `true` | Runs the weekly fishing championship, which ends on Tuesdays at 19:00 in `world.timeZone`. |
+| `altFishChampionshipRewardItemId` | `57` (adena) | The item the winners get. |
+| `altFishChampionshipReward1` … `altFishChampionshipReward5` | `800000`, `500000`, `300000`, `200000`, `100000` | How many of it the first five get. |
+
+`olympiad` (Mobius `Olympiad.ini`, the keys without the `Olympiad` prefix, and `Feature.ini` `HeroPoints`; the calendar runs in `world.timeZone`; the stadiums are `data/olympiad/stadiums.json`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | Runs the Olympiad and the heroes. |
+| `startTime`, `min` | `18`, `0` | When the daily competition starts. |
+| `cPeriod` | `"6h0m0s"` | How long the daily competition lasts; registration closes 10 minutes before its end. |
+| `battle` | `"6m0s"` | The longest fight; it is checked every 10 seconds for a fallen noble. |
+| `wPeriod` | `"168h0m0s"` | Time between two weekly point gifts. |
+| `vPeriod` | `"24h0m0s"` | The validation period after a period's end, when the heroes are chosen. |
+| `startPoints`, `weeklyPoints` | `18`, `3` | A new noble's points, and the weekly gift (both clamped to 10 per match done + 12, as Mobius does). |
+| `classedParticipants`, `nonClassedParticipants` | `5`, `9` | Waiting nobles (of one class, or of any) before matches start. The demo lowers them to 2. |
+| `registrationDisplayNumber` | `0` | Above 0, the manager shows "Fewer than N" or "More than N" instead of the waiting counts. |
+| `battleRewItem`, `classedRewItemCount`, `nonClassedRewItemCount` | `6651`, `50`, `30` | The winner's reward: Noblesse Gate Passes, 50 after a classed match, 30 after a non-classed one. |
+| `compRewItem`, `gpPerPoint`, `heroPoints` | `6651`, `1000`, `100` | The passes a hero's points are settled in at the manager (with Mobius's arithmetic). |
+| `maxPoints` | `10` | The most points one match moves. |
+| `showMonthlyWinners` | `true` | The managers' class rankings show the last period's end instead of the running period. |
+| `announceGames` | `true` | The managers shout each match. |
+| `restrictedItems` | `[]` | Items that cannot be used in a match (not enforced yet). |
+| `disableBlessedSpiritShots` | `true` | Blessed spiritshots do not work in a match. |
+| `enchantLimit` | `-1` | Caps the enchant level in a match (not enforced yet); -1 is no cap. |
+| `logFights` | `false` | Logs each match's result. |
+| `waitTime` | `120` | Seconds from the pairing to the stadium. |
+| `useCustomPeriodSettings`, `period`, `periodMultiplier`, `competitionDays` | `false`, `"MONTH"`, `1`, `[1, 2, 3, 4, 5, 6, 7]` | Instead of a month ending on the first at 12:00: a period of `periodMultiplier` days, weeks or months (less the validation day), with competitions on the listed days (1 Sunday to 7 Saturday). |
+| `clanHeroPoints` | `1000` | Reputation a new hero brings to a clan of level 5 or more (Mobius `HeroPoints`). |
+
 `clan` (Mobius `Player.ini`, the reputation costs of `Feature.ini`, and `Server.ini` `ClanNameTemplate`):
 
 | Key | Default | Meaning |
@@ -452,6 +559,24 @@ The game rules of a game server are in more sections: `world`, `chat`, `npcs`, `
 | `intervalOfZakenSpawn`, `randomOfZakenSpawn` | `"60h"`, `"8h"` | Zaken's respawn. |
 | `antharasWaitTime`, `valakasWaitTime` | `"20m"`, `"20m"` | How long Antharas and Valakas wait after the first player entered their lair (Mobius minutes there). |
 | `antharasRecognizeHero`, `valakasRecognizeHero`, `baiumRecognizeHero` | `true` | The boss greets heroes who enter. |
+
+`events`: the seasonal events Christmas, L2 Day and Heavy Medal (Mobius `scripts/events/`, run by `scripts/events/` and `scripts/lib/long_time_event.lua`). Their own dates (from their `config.xml`, in `data/events/`) all lie in 2006–2016, so none runs unless `dates` moves it:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `eventItemMaxLevelDifference` | `9` | A player more levels above a monster than this gets no event drops from it (Mobius `Rates.ini` `EventItemMaxLevelDifference`). |
+| `dates` | none | New dates by script name: `{"L2Day": {"active": "26 11 2026-10 12 2026", "dropPeriod": "27 11 2026-05 12 2026"}}`. `active` is `dd MM yyyy-dd MM yyyy`, or `dd MM-dd MM` for this year; each date starts at 00:00 server time, and the event ends when its end date begins. `dropPeriod` (optional, within `active`) is when monsters drop the event items; it defaults to the whole period. |
+
+While an event runs, its NPCs stand in the towns, monsters drop its items, its message is announced at the start and shown to everyone entering the world, and at the end the NPCs leave and its end message is announced. GM: `//event_menu` lists the events; `//event_start <name>` and `//event_stop <name>` run or end one now, whatever its dates.
+
+`communityBoard` (the community board, Alt+B; Mobius `General.ini` and two keys of `Custom/CommunityBoard.ini`, whose custom board is not built). The pages are `data/html/CommunityBoard/`; mails and favorites are kept in the `bbs_mail` and `bbs_favorites` collections:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enableCommunityBoard` | `true` | The board works; off, every board request answers "The community server is currently offline." |
+| `bbsDefault` | `"_bbshome"` | The page Alt+B opens (Mobius `BBSDefault`). |
+| `communityBoardPeaceOnly` | `false` | The home page opens only in a peace zone. |
+| `communityKarmaDisabled` | `true` | Players with karma cannot open the home page. |
 
 Geodata
 ----

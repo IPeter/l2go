@@ -2,10 +2,11 @@
 --
 -- Every Symbol Maker greets with symbol_maker.htm, whose links go to this
 -- script ("Script SymbolMaker <event>"):
---   * a page name (the explanations) shows that page, as in Mobius;
---   * "Draw" and "Remove" open the symbol (henna) windows in Mobius. Symbols
---     come in a later milestone; until then they answer that the service is
---     not available yet.
+--   * a page name (the explanations) shows that page;
+--   * "Draw" opens the window of the dyes the player can draw
+--     (HennaEquipList), "Remove" the window of the dyes it wears
+--     (HennaRemoveList). Drawing and removing then go through the henna
+--     packets, which the game allows only next to a Symbol Maker.
 
 local symbol_maker = script.new("SymbolMaker")
 
@@ -31,11 +32,6 @@ local PAGES = {
   ["symbol_maker-3.htm"] = true,
 }
 
-local NOT_YET = [[<html><body>Symbol Maker:<br>
-I am sorry, drawing and removing symbols is not available yet.<br><br>
-<a action="bypass Script SymbolMaker symbol_maker.htm">Back</a>
-</body></html>]]
-
 symbol_maker:on_first_talk(SYMBOL_MAKERS, function(npc, player)
   return "symbol_maker.htm"
 end)
@@ -43,8 +39,10 @@ end)
 symbol_maker:on_event(function(event, npc, player)
   if PAGES[event] then
     return event
-  elseif event == "Draw" or event == "Remove" then
-    return NOT_YET
+  elseif event == "Draw" then
+    player:show_henna_equip_list()
+  elseif event == "Remove" then
+    player:show_henna_remove_list()
   end
   return nil
 end)

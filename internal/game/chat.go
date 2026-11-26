@@ -69,6 +69,10 @@ func (s *Server) handleSay2(p *Player, body []byte) {
 		p.SendSystemMessage(serverpackets.SysMsgChatTooLong)
 		return
 	}
+	if p.CursedWeaponEquipped() && (typ == serverpackets.ChatTrade || typ == serverpackets.ChatShout) {
+		p.SendMessage(cwChatRefusal) // cursedweapon.go
+		return
+	}
 	if s.chatPunished(p, typ, text) { // admin_char.go: chat ban and jail
 		return
 	}

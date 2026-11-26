@@ -125,7 +125,7 @@ func (s *Server) warehouseManagerOK(p *Player) bool {
 	if p.LastNpc != 0 {
 		n = s.Npc(p.LastNpc)
 	}
-	if n == nil || !s.npcIs(n, "Warehouse") || !s.npcCanInteract(p, n) {
+	if n == nil || (!s.npcIs(n, "Warehouse") && !s.npcIs(n, "ClanHallManager")) || !s.npcCanInteract(p, n) {
 		p.SendSystemMessage(warehouseMsgTooFar)
 		return false
 	}
@@ -156,6 +156,9 @@ func (s *Server) handleWarehouseDeposit(p *Player, body []byte) {
 	}
 	wh := p.Warehouse()
 	if wh == nil || !s.warehouse.active[p] || s.Trading(p) || !s.warehouseManagerOK(p) { // trade.go
+		return
+	}
+	if s.cancelEnchant(p) { // enchant.go
 		return
 	}
 	if !s.gs.Economy.AltKarmaPlayerCanUseWarehouse && p.Karma() > 0 {
@@ -233,6 +236,9 @@ func (s *Server) handleWarehouseWithdraw(p *Player, body []byte) {
 	if wh == nil || !s.warehouse.active[p] || !s.warehouseManagerOK(p) {
 		return
 	}
+	if s.cancelEnchant(p) { // enchant.go
+		return
+	}
 	if !s.gs.Economy.AltKarmaPlayerCanUseWarehouse && p.Karma() > 0 {
 		return
 	}
@@ -291,11 +297,14 @@ func hasDuplicateWarehouseItems(items []clientpackets.WarehouseItem) bool {
 // depositCheckItem returns p's carried item with the object ID if p may
 // move count of it (Mobius Player.checkItemManipulation): it must exist,
 // count must be at least 0, at most 1 for an item that does not stack, and
-// at most what it has. Pets, mounts, enchanting and augmentations come
-// later.
+// at most what it has, and not the collar of the pet out or ridden
+// (mount.go). Enchanting and augmentations come later.
 func depositCheckItem(p *Player, objectID int32, count int64) *inventory.Item {
 	it := p.inv.ByObjectID(objectID)
 	if it == nil || count < 0 || (count > 1 && !it.Stackable()) || count > it.Count() || count > math.MaxInt32 {
+		return nil
+	}
+	if p.srv != nil && p.srv.collarInUse(p, objectID) {
 		return nil
 	}
 	return it

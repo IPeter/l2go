@@ -122,8 +122,8 @@ var clanWarehouseCommands = map[string]bool{"depositc": true, "withdrawc": true}
 // or higher. DepositC lists what p may store; WithdrawC needs the warehouse
 // privilege and lists the stored items, or tells p nothing is stored.
 func (s *Server) bypassClanWarehouse(p *Player, n *Npc, word string) {
-	if !s.npcIs(n, "Warehouse") {
-		return // Mobius: only warehouse keepers (and clan hall managers, M11)
+	if !s.npcIs(n, "Warehouse") && !s.npcIs(n, "ClanHallManager") {
+		return // Mobius: only warehouse keepers and clan hall managers (isWarehouse)
 	}
 	c := p.clan.clan
 	switch {

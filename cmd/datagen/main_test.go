@@ -160,9 +160,10 @@ func TestRunWritesLoadableData(t *testing.T) {
 		t.Errorf("stale %s: %v, want it removed", stale, err)
 	}
 
-	d, err := data.Load(out)
+	// Only the domains the run wrote: the others' files are not there.
+	d, err := data.LoadDomains(os.DirFS(out), "players", "items")
 	if err != nil {
-		t.Fatalf("data.Load: %v", err)
+		t.Fatalf("data.LoadDomains: %v", err)
 	}
 	if len(d.Classes) != 3 || len(d.Templates) != 2 || len(d.Items) != 17 {
 		t.Errorf("loaded %d classes, %d starting templates, %d items; want 3, 2, 17", len(d.Classes), len(d.Templates), len(d.Items))

@@ -28,8 +28,9 @@ const raidCurseLevelGap = 8
 //     player 9 levels above it.
 //   - Negative skills (but hate effects) tell the targets' AI of the attack.
 //
-// Over-hit (a skill marks the attackable), the weapon's and the option
-// trigger skills, events and the skill-see scripts are not ported here.
+// The option trigger skills of augmentations fire per target (augment.go).
+// Over-hit (a skill marks the attackable), the weapon's trigger skills,
+// events and the skill-see scripts are not ported here.
 func (s *Server) callSkill(c Creature, b *skillBase, sk *skills.Skill, targets []skills.Creature) {
 	if sk.IsToggle() && b.el.IsAffectedBySkill(sk.ID) {
 		return
@@ -45,6 +46,7 @@ func (s *Server) callSkill(c Creature, b *skillBase, sk *skills.Skill, targets [
 		if s.castRaidCurse(c, b, sk, gt) {
 			return
 		}
+		s.augmentSkillTriggers(c, sk, gt) // augment.go: the option trigger skills
 	}
 	env := s.skills.env
 	sk.Activate(env, b.self, targets)

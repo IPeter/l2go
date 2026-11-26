@@ -106,6 +106,10 @@ func (s *Server) shutdown() {
 	}
 	s.saveGlobals(true) // quest.go: the scripts' global variables
 	s.saveBossesAtShutdown()
+	s.saveFishingAtShutdown()  // fishing_champ.go
+	s.saveOlympiadAtShutdown() // olympiad.go
+	s.waitBoardWrites()        // bbs_store.go
+	s.saveSevenSignsAtShutdown() // sevensigns_store.go
 	s.log.Info("game world: players saved for shutdown", "players", len(players))
 }
 

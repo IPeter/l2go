@@ -223,11 +223,16 @@ func (s *Server) SetKarma(p *Player, karma int32) {
 // in a siege zone); a flagged victim (killer and victim without karma)
 // counts as PvP; a victim with karma counts as PvP only with
 // AwardPKKillPVPPoint; an unflagged victim without karma is a PK unless the
-// clans are at mutual war (a PvP kill, clanwar.go). Duels, the Olympiad and
-// cursed weapons do not exist yet.
+// clans are at mutual war (a PvP kill, clanwar.go). A cursed weapon holder's
+// kill counts for the weapon only (cursedweapon.go). Duels and the Olympiad
+// do not exist yet.
 func (s *Server) onKillUpdatePvPKarma(killer, victim *Player) {
 	switch {
 	case victim == killer:
+		return
+	case s.cursedKilled(killer):
+		return
+	case killer.InOlympiadMode() || victim.InOlympiadMode(): // olympiad.go
 		return
 	case killer.Zones.Inside(ZoneSiege) && victim.Zones.Inside(ZoneSiege):
 		return

@@ -176,6 +176,62 @@ type Options struct {
 	Bosses    *data.Bosses
 	BossStore storage.BossStore
 
+	// LongTimeEvents are the seasonal events (data.LoadLongTimeEvents), run
+	// by their scripts (long_time_event.go); nil has none.
+	LongTimeEvents *data.LongTimeEvents
+
+	// Summons are the pet, pet skill and cubic data (data.LoadSummons); nil
+	// leaves pets and cubics out (servitors still come out of their
+	// skills). SummonStore keeps the pets and the summons to restore; nil
+	// keeps them in memory only (summon_store.go).
+	Summons     *data.Summons
+	SummonStore storage.SummonStore
+
+	// Fishing is the fish, rod, fishing monster and lure data
+	// (data.LoadFishing); nil leaves fishing out (fishing.go). FishingStore
+	// keeps the fishing championship; nil keeps it in memory only.
+	Fishing      *data.Fishing
+	FishingStore storage.FishingStore
+
+	// OlympiadStore keeps the Olympiad and the heroes (olympiad.go); nil
+	// keeps them in memory only.
+	OlympiadStore storage.OlympiadStore
+
+	// Castles are the castles, their towers, siege guards and mercenary
+	// tickets (data.LoadCastles); nil leaves castles and sieges out
+	// (residence.go). CastleStore keeps the castles; nil keeps them in
+	// memory only.
+	Castles     *data.Castles
+	CastleStore storage.CastleStore
+
+	// ClanHalls are the clan halls, their siege guards and NPC auctions
+	// (data.LoadClanHalls); nil leaves clan halls out (clanhall.go).
+	// ClanHallStore keeps the halls and auctions; nil keeps them in memory
+	// only.
+	ClanHalls     *data.ClanHalls
+	ClanHallStore storage.ClanHallStore
+
+	// ManorStore keeps the castle manor's lists and mode (manor.go), written
+	// with the character store's storage.BatchWriter; nil keeps them in
+	// memory only. The seeds are Data.Seeds.
+	ManorStore storage.ManorStore
+
+	// SevenSigns is the rift's rooms, the festival's spawns and the Seven
+	// Signs NPC spawns (data.LoadSevenSigns); nil leaves the festival's
+	// arenas, the rift and the Mammon NPCs out (sevensigns.go).
+	// SevenSignsStore keeps the Seven Signs; nil keeps them in memory only.
+	SevenSigns      *data.SevenSigns
+	SevenSignsStore storage.SevenSignsStore
+
+	// BBS keeps the community board's mails and favorites (bbs.go), loaded
+	// by New; nil keeps them in memory only.
+	BBS storage.BBSStore
+
+	// TimeZone is the zone of the calendars (Server.Calendar, decision X5):
+	// the weekly fishing championship and later the sieges, the Olympiad and
+	// Seven Signs. Nil means time.Local, as Mobius uses the JVM's zone.
+	TimeZone *time.Location
+
 	// Accounts changes access levels of accounts on the login server (the
 	// account bans of the admin panel, admin_char.go); the login link
 	// (*link.Client) is one. Nil leaves account bans unavailable.

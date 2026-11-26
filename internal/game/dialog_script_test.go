@@ -168,10 +168,15 @@ func TestPortedNpcScripts(t *testing.T) {
 				t.Errorf("event %s: %+v, %v", event, reply, ok)
 			}
 		}
+		// Draw and Remove open the symbol windows and show no page (henna_test.go
+		// runs them in a game server).
 		for _, event := range []string{"Draw", "Remove"} {
-			if reply, ok := h.Event("SymbolMaker", event, hero, npc); !ok || reply.Kind != scripting.ReplyHTML {
-				t.Errorf("event %s: %+v, %v; want the not-yet page", event, reply, ok)
+			if reply, ok := h.Event("SymbolMaker", event, hero, npc); ok {
+				t.Errorf("event %s: %+v; want no page", event, reply)
 			}
+		}
+		if !slices.Equal(hero.HennaWindows, []string{"equip", "remove"}) {
+			t.Errorf("symbol windows %q, want equip, remove", hero.HennaWindows)
 		}
 		if _, ok := h.Event("SymbolMaker", "nonsense", hero, npc); ok {
 			t.Error("an unknown event answered")

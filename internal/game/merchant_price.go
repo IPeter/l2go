@@ -177,11 +177,14 @@ func orientation(a, b, c data.Point) int64 {
 }
 
 // merchantTaxRate returns the tax rate a merchant adds to its prices (Mobius
-// MerchantPriceConfig.getTotalTaxRate): the base tax of its price config,
-// the castle's share being 0 while castles have no owner.
+// MerchantPriceConfig.getTotalTaxRate): the base tax of its price config
+// plus its castle's tax (merchant_tax.go).
 func merchantTaxRate(n *Npc) float64 {
 	if n == nil || n.priceConfig == nil {
 		return 0
+	}
+	if n.srv != nil {
+		return n.srv.priceConfigTaxRate(n.priceConfig)
 	}
 	return n.priceConfig.BaseTaxRate()
 }

@@ -19,8 +19,9 @@ import (
 // invites. Then p gets "You have invited $s1 to your party." and the
 // target AskJoinParty: with the loot mode p chose when the invitation
 // creates the party, else with the party's (a full party, a pending
-// invitation and a busy target are refused). Party bans (M12), events,
-// cursed weapons, the Olympiad and the Dimensional Rift do not exist yet.
+// invitation and a busy target are refused). A cursed weapon holder on
+// either side is an invalid target. Party bans (M12), events, the Olympiad
+// and the Dimensional Rift do not exist yet.
 func (s *Server) handleJoinParty(p *Player, body []byte) {
 	req, err := clientpackets.ParseRequestJoinParty(body)
 	if err != nil {
@@ -50,6 +51,9 @@ func (s *Server) handleJoinParty(p *Player, body []byte) {
 		return
 	case target == p:
 		p.SendSystemMessage(partyMsgWrongTarget)
+		return
+	case target.CursedWeaponEquipped() || p.CursedWeaponEquipped(): // cursedweapon.go
+		p.SendSystemMessage(gmSysMsgInvalidTarget)
 		return
 	case target.jailed() || p.jailed():
 		p.SendMessage("You cannot invite a player while is in Jail.")

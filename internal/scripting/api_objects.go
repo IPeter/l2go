@@ -132,10 +132,16 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 			return 1
 		}
 	}
-	solo := func(method string, val lua.LValue) lua.LGFunction {
+	// sub reads the subclass state; a player without it is on its base
+	// class with no subclass.
+	sub := func(method string, get func(PlayerSubclass) lua.LValue, none lua.LValue) lua.LGFunction {
 		return func(L *lua.LState) int {
-			checkPlayer(L, method)
-			L.Push(val)
+			p := checkPlayer(L, method)
+			if s, ok := p.(PlayerSubclass); ok {
+				L.Push(get(s))
+			} else {
+				L.Push(none)
+			}
 			return 1
 		}
 	}
@@ -208,11 +214,14 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 			return 0
 		},
 		// The clan methods are in api_clan.go, the party methods in
-		// party.go; subclasses come in a later milestone.
-		"clan":                v.playerClanMethod,
-		"is_clan_leader":      playerIsClanLeader,
-		"is_online":           playerIsOnline,
-		"is_sub_class_active": solo("is_sub_class_active", lua.LFalse),
+		// party.go.
+		"clan":           v.playerClanMethod,
+		"is_clan_leader": playerIsClanLeader,
+		"is_online":      playerIsOnline,
+		// The subclasses (M11e).
+		"is_sub_class_active": sub("is_sub_class_active", func(s PlayerSubclass) lua.LValue { return lua.LBool(s.IsSubClassActive()) }, lua.LFalse),
+		"class_index":         sub("class_index", func(s PlayerSubclass) lua.LValue { return lua.LNumber(s.ClassIndex()) }, lua.LNumber(0)),
+		"total_sub_classes":   sub("total_sub_classes", func(s PlayerSubclass) lua.LValue { return lua.LNumber(s.TotalSubClasses()) }, lua.LNumber(0)),
 
 		"buff_info_by_abnormal_type": v.playerBuffInfoByAbnormalType, // api_clan.go
 		"social_action": func(L *lua.LState) int {
@@ -267,6 +276,15 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 		m[name] = fn
 	}
 	for name, fn := range playerMonsterMethods() { // api_monsters.go
+		m[name] = fn
+	}
+	for name, fn := range playerHennaMethods() { // api_henna.go
+		m[name] = fn
+	}
+	for name, fn := range playerCastleMethods() { // api_castle.go
+		m[name] = fn
+	}
+	for name, fn := range playerMountMethods() { // api_mount.go
 		m[name] = fn
 	}
 	return m
@@ -341,6 +359,9 @@ func (v *vm) npcQuestMethods() map[string]lua.LGFunction {
 		m[name] = fn
 	}
 	for name, fn := range v.npcAreaMethods() { // api_area_ai.go
+		m[name] = fn
+	}
+	for name, fn := range v.npcCastleMethods() { // api_castle.go
 		m[name] = fn
 	}
 	return m

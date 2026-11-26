@@ -198,10 +198,10 @@ func (w skillWorld) CanSee(from, to skills.Creature) bool {
 }
 
 // Party returns the members of c's party in party order, nil when c is not
-// a player in a party (party.go).
+// a player in a party (party.go). A summon answers with its owner's party.
 func (w skillWorld) Party(c skills.Creature) []skills.Creature {
-	p, ok := w.s.gameCreature(c).(*Player)
-	if !ok || p.party.party == nil {
+	p := w.s.actingPlayer(w.s.gameCreature(c))
+	if p == nil || p.party.party == nil {
 		return nil
 	}
 	out := make([]skills.Creature, 0, len(p.party.party.members))
@@ -211,15 +211,13 @@ func (w skillWorld) Party(c skills.Creature) []skills.Creature {
 	return out
 }
 
-// SameParty reports whether a and b are players of the same party.
+// SameParty reports whether a and b are players of the same party; summons
+// count as their owners. Summon is in summon_world.go.
 func (w skillWorld) SameParty(a, b skills.Creature) bool {
-	pa, okA := w.s.gameCreature(a).(*Player)
-	pb, okB := w.s.gameCreature(b).(*Player)
-	return okA && okB && w.s.SameParty(pa, pb)
+	pa := w.s.actingPlayer(w.s.gameCreature(a))
+	pb := w.s.actingPlayer(w.s.gameCreature(b))
+	return pa != nil && pb != nil && w.s.SameParty(pa, pb)
 }
-
-// Summon returns nil: summons come with Milestone 11.
-func (skillWorld) Summon(skills.Creature) skills.Creature { return nil }
 
 // OldCorpse reports a corpse that decays within the time corpse skills
 // leave (Mobius Attackable.isOldCorpse with

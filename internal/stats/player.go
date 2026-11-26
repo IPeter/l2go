@@ -64,6 +64,7 @@ type Player struct {
 	gm       bool
 	gmSpeed  float64
 	motion   Motion
+	mount    *Mount // the ride (player_mount.go), nil on foot
 	henna    BaseStats
 	armorSet BaseStats
 	slots    [NumSlots]slotState
@@ -499,7 +500,8 @@ func (p *Player) moveSpeed(base float64) float64 {
 
 // limitSpeed adds what PlayableStat and PlayerStat put on top of the
 // creature speed: the swamp bonus, Config.RunSpeedBoost and, for non-GMs,
-// the Config.MaxRunSpeed cap. Mounts are not supported yet.
+// the Config.MaxRunSpeed cap; below the cap, the halvings of a mount
+// (player_mount.go).
 func (p *Player) limitSpeed(v float64) float64 {
 	if p.motion.Swamp > 0 {
 		v = mul(v, p.motion.Swamp)
@@ -508,14 +510,14 @@ func (p *Player) limitSpeed(v float64) float64 {
 	if limit := float64(p.rules.cfg.MaxRunSpeed); v > limit && !p.gm {
 		return limit
 	}
-	return v
+	return p.mountPenalty(v)
 }
 
 // RunSpeed returns the run speed (PlayerStat.getRunSpeed). In water Mobius
 // starts from the swim run speed, which already went through the runSpd
 // chain, and runs the chain again; that is kept.
 func (p *Player) RunSpeed() float64 {
-	base := p.tmpl.RunSpeed
+	base := p.baseRun()
 	if p.motion.InWater {
 		base = p.SwimRunSpeed()
 	}
@@ -524,7 +526,7 @@ func (p *Player) RunSpeed() float64 {
 
 // WalkSpeed returns the walk speed, like RunSpeed.
 func (p *Player) WalkSpeed() float64 {
-	base := p.tmpl.WalkSpeed
+	base := p.baseWalk()
 	if p.motion.InWater {
 		base = p.SwimWalkSpeed()
 	}
@@ -533,10 +535,10 @@ func (p *Player) WalkSpeed() float64 {
 
 // SwimRunSpeed returns the fast swim speed (CreatureStat.getSwimRunSpeed;
 // no cap).
-func (p *Player) SwimRunSpeed() float64 { return p.moveSpeed(p.tmpl.swimRunSpeed()) }
+func (p *Player) SwimRunSpeed() float64 { return p.moveSpeed(p.baseSwimRun()) }
 
 // SwimWalkSpeed returns the slow swim speed.
-func (p *Player) SwimWalkSpeed() float64 { return p.moveSpeed(p.tmpl.swimWalkSpeed()) }
+func (p *Player) SwimWalkSpeed() float64 { return p.moveSpeed(p.baseSwimWalk()) }
 
 // MoveSpeed returns the current speed in game units per second, for the
 // movement simulation (CreatureStat.getMoveSpeed).
@@ -556,13 +558,13 @@ func (p *Player) MoveSpeed() float64 {
 func (p *Player) baseMoveSpeed() float64 {
 	switch {
 	case p.motion.InWater && p.motion.Running:
-		return p.tmpl.swimRunSpeed()
+		return p.baseSwimRun()
 	case p.motion.InWater:
-		return p.tmpl.swimWalkSpeed()
+		return p.baseSwimWalk()
 	case p.motion.Running:
-		return p.tmpl.RunSpeed
+		return p.baseRun()
 	}
-	return p.tmpl.WalkSpeed
+	return p.baseWalk()
 }
 
 // MoveMultiplier returns the current speed over the template speed of the
@@ -587,10 +589,22 @@ func (p *Player) collision() Collision {
 }
 
 // CollisionRadius returns the collision radius at Java float precision.
-func (p *Player) CollisionRadius() float64 { return f32(p.collision().Radius) }
+// A mounted player has its mount NPC's (Player.getCollisionRadius).
+func (p *Player) CollisionRadius() float64 {
+	if p.mount != nil {
+		return p.mount.CollisionRadius
+	}
+	return f32(p.collision().Radius)
+}
 
-// CollisionHeight returns the collision height at Java float precision.
-func (p *Player) CollisionHeight() float64 { return f32(p.collision().Height) }
+// CollisionHeight returns the collision height at Java float precision, a
+// mount's when mounted.
+func (p *Player) CollisionHeight() float64 {
+	if p.mount != nil {
+		return p.mount.CollisionHeight
+	}
+	return f32(p.collision().Height)
+}
 
 // View returns every stat number UserInfo and CharInfo show, computed as
 // those Mobius packets compute them.

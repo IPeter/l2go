@@ -90,6 +90,11 @@ type Data struct {
 	HitConditionBonus HitConditionBonus
 	// Items are all item templates, sorted by item ID.
 	Items []Item
+	// CursedWeapons are the cursed weapons in the order of
+	// CursedWeapons.xml (cursedweapons.go).
+	CursedWeapons []CursedWeapon
+	// Seeds are the manor's seeds in the order of Seeds.xml (manor.go).
+	Seeds []Seed
 
 	loaded    map[string]bool
 	classes   map[int]int // class ID -> index in Classes

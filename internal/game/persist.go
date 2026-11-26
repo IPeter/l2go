@@ -44,7 +44,8 @@ func (p *Player) Snapshot() storage.Character {
 	c.CurHP, c.CurMP, c.CurCP = p.CurHP, p.CurMP, p.CurCP
 	c.LastAccess = p.srv.loop.Now()
 	c.Items = p.storageItems()
-	p.storeSkills(&c) // skill_persist.go
+	p.storeSkills(&c)   // skill_persist.go
+	p.storeSubclass(&c) // subclass.go: the active subclass's progress
 	if p.itemSkill.loaded {
 		p.storeShortcuts(&c) // shortcut.go
 		p.storeItemReuse(&c) // item_skill.go
@@ -203,6 +204,9 @@ type saveKey int64
 
 // crestKey is the key of a crest: crest IDs have their own counter.
 func crestKey(id int32) saveKey { return saveKey(int64(id) | 1<<40) }
+
+// cursedWeaponKey is the key of a cursed weapon row, by its item ID.
+func cursedWeaponKey(itemID int32) saveKey { return saveKey(int64(itemID) | 2<<40) }
 
 // saver writes character snapshots and joint saves in the background, one
 // job at a time, in the order they arrive (decisions I2, T5 and T6). A
@@ -594,6 +598,17 @@ func (j *saveJob) touches() []saveKey {
 	for _, p := range b.Patches {
 		add(saveKey(p.ObjectID))
 	}
+	for _, id := range b.DeletedCursedWeapons {
+		add(cursedWeaponKey(id))
+	}
+	for _, w := range b.CursedWeapons {
+		add(cursedWeaponKey(w.ItemID))
+	}
+	for _, c := range b.Castles {
+		add(castleKey(c.ID)) // residence_store.go
+	}
+	hallTouches(b, add)  // clanhall_store.go
+	manorTouches(b, add) // manor_store.go
 	return keys
 }
 
@@ -701,6 +716,10 @@ func mergeBatch(a, b *storage.Batch) {
 		}
 	}
 	a.Patches = append(a.Patches, b.Patches...)
+	mergeCursedWeapons(a, b) // cursedweapon_store.go
+	mergeCastles(a, b)       // residence_store.go
+	mergeClanHalls(a, b)     // clanhall_store.go
+	mergeManor(a, b)         // manor_store.go
 }
 
 func itemChangesOf(oc storage.OwnerItemChanges) storage.ItemChanges {

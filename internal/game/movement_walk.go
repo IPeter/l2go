@@ -116,10 +116,10 @@ func walkCollision(p *Player) float64 {
 	return float64(int(p.stats.Template().Male.Radius))
 }
 
-// walkFloating reports whether p swims: in water outside a castle (Mobius;
-// flying comes later).
+// walkFloating reports whether p swims or flies: on a wyvern (mount.go), or
+// in water outside a castle (Mobius isFloating).
 func walkFloating(p *Player) bool {
-	return p.Zones.Inside(ZoneWater) && !p.Zones.Inside(ZoneCastle)
+	return p.mount.flying || (p.Zones.Inside(ZoneWater) && !p.Zones.Inside(ZoneCastle))
 }
 
 // canWalk reports whether p may start a walk: it is in the game and in the

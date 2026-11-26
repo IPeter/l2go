@@ -170,6 +170,9 @@ type npcAI struct {
 // aiClass is what the AI needs from a template, worked out once.
 type aiClass struct {
 	monster, guard, friendly, attackable bool
+	// defender is a siege guard (Mobius Defender with SiegeGuardAI,
+	// siege_ai.go).
+	defender bool
 	// aggressive is Monster.isAggressive: the template's flag, for monsters.
 	aggressive bool
 	// aggroRange is the template's, capped for the Monster type.
@@ -268,6 +271,10 @@ func (s *Server) aiClassOf(n *Npc) *aiClass {
 		}
 		if s.worldData != nil {
 			c.guard = s.worldData.NpcTypeIs(t.Type, "Guard")
+			c.defender = s.worldData.NpcTypeIs(t.Type, "Defender")
+		}
+		if c.defender {
+			c.randomWalk = false // Mobius Defender: no random animation or walk
 		}
 		c.aggressive = c.monster && t.AI.IsAggressive
 		if t.Type == "Monster" && c.aggroRange > s.settings.NPCs.MaxAggroRange {
@@ -537,6 +544,10 @@ func canHandleAction(n *Npc) bool { return n.InWorld() && n.ai.attached }
 // walk up to an object ends with StopMove), MOVE_TO turns ACTIVE, and the
 // NPC thinks.
 func (s *Server) npcArrived(n *Npc) {
+	if n.summon != nil {
+		s.summonArrived(n.summon) // summon_ai.go
+		return
+	}
 	if n.class == nil || !n.class.attackable {
 		n.Move = nil
 		s.walkerArrived(n)   // walker.go: Mobius WalkingManager.onArrived
@@ -569,6 +580,10 @@ func (s *Server) notifyArrivedRevalidate(n *Npc) {
 // notifyActionAttacked), as the attack code does after a hit landed.
 // Npc.ReduceHP already did so before the damage. Loop-only.
 func (s *Server) NotifyAttacked(target, attacker Creature) {
+	if d, ok := target.(*Door); ok {
+		s.doorAttacked(d, attacker) // door_combat.go: DoorAI
+		return
+	}
 	if n, ok := target.(*Npc); ok && n.class != nil && n.class.attackable && n.InWorld() {
 		s.notifyAttacked(n, attacker)
 	}
@@ -717,8 +732,8 @@ func (s *Server) npcSpawned(n *Npc, aiData map[string]int, home *world.Position)
 	n.ClearAggroList()
 	s.SetNpcRunning(n, false)
 	switch {
-	case c.guard:
-		s.npcSetActive(n) // Mobius Guard.onSpawn
+	case c.guard, c.defender:
+		s.npcSetActive(n) // Mobius Guard.onSpawn; SiegeGuardAI starts active
 	case ai.attached:
 		s.rollGlobalAggro(n)
 		s.npcSetActive(n)
@@ -749,7 +764,7 @@ func (s *Server) npcSeen(n *Npc) {
 	if n.ai.seen || n.class == nil || !n.class.attackable || n.Dead {
 		return
 	}
-	if !n.class.monster && !s.aiClassOf(n).guard {
+	if c := s.aiClassOf(n); !n.class.monster && !c.guard && !c.defender {
 		return
 	}
 	n.ai.seen = true

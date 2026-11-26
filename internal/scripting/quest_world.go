@@ -326,6 +326,19 @@ type PlayerNoble interface {
 	SetNoble(noble bool)
 }
 
+// PlayerSubclass is the part of a PlayerRef behind
+// player:is_sub_class_active(), player:class_index() and
+// player:total_sub_classes() (M11e). A ref without it is on its base class
+// with no subclass.
+type PlayerSubclass interface {
+	// IsSubClassActive is Mobius isSubClassActive: the class index is not 0.
+	IsSubClassActive() bool
+	// ClassIndex is Mobius getClassIndex: 0 for the base class, 1-3.
+	ClassIndex() int
+	// TotalSubClasses is Mobius getTotalSubClasses.
+	TotalSubClasses() int
+}
+
 // Item is an item as on_item_talk sees it.
 type Item struct {
 	ObjectID int32

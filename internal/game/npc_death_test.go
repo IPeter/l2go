@@ -93,16 +93,18 @@ func wolfKillRand() *dropRand {
 		// adena: gap, drop; 13: gap, drop; 1786: gap, drop; 1865: gap, drop.
 		floats:   []float64{0.5, 0.1, 0.99, 0.99, 0.99, 0.99, 0.99, 0.001},
 		betweens: []int{25},
-		gets:     []int{10, 120, 70, 0},
+		// The two cursed weapon rolls (no drop), then x and y of each drop.
+		gets: []int{50000, 50000, 10, 120, 70, 0},
 	}
 }
 
-// wolfKillDraws are the draws of wolfKillRand's kill: two Float64 (level
-// gap, drop) per item rolled in the nine groups (one item each in the first
-// two and the last, two of the third's four, three or two in the others),
-// the adena amount, then x and y of each drop.
+// wolfKillDraws are the draws of wolfKillRand's kill: the two cursed weapon
+// rolls (cursedweapon.go), two Float64 (level gap, drop) per item rolled in
+// the nine groups (one item each in the first two and the last, two of the
+// third's four, three or two in the others), the adena amount, then x and y
+// of each drop.
 func wolfKillDraws() []string {
-	var want []string
+	want := []string{"Get(100000)", "Get(100000)"}
 	f := func(n int) {
 		for range n {
 			want = append(want, "Float64")

@@ -45,7 +45,7 @@
       },
 
       "world": {
-        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off). autoLearnSkills gives players every skill of their class up to their level at login and level-up, without SP or spellbooks (true on this test server; Mobius default false). World regions become active when a player comes near (neighbours after gridTurnOnTime) and inactive gridTurnOffTime after the last one left; gridsAlwaysOn keeps them all active. Idle NPCs and monsters play an animation every min*Animation to max*Animation (0 = never). allowBoat runs the ferries; players within boatBroadcastRadius of a dock hear their calls.",
+        "_comment": "tickInterval is the world loop tick. Players in the world are saved every autosaveInterval (0 = only when they leave) and when they leave. A deleted character can be restored for deleteCharAfterDays days (0 = deleted at once). maxRunSpeed caps the run speed. A player that entered the world is safe from aggressive monsters for spawnProtection, until its first action (0 = off). autoLearnSkills gives players every skill of their class up to their level at login and level-up, without SP or spellbooks (true on this test server; Mobius default false). World regions become active when a player comes near (neighbours after gridTurnOnTime) and inactive gridTurnOffTime after the last one left; gridsAlwaysOn keeps them all active. Idle NPCs and monsters play an animation every min*Animation to max*Animation (0 = never). allowBoat runs the ferries; players within boatBroadcastRadius of a dock hear their calls. timeZone is the IANA time zone of the wall-clock systems (the weekly fishing championship, later sieges and the Olympiad), for example Europe/Budapest; empty uses the machine's zone (UTC in the container).",
         "tickInterval": "100ms",
         "autosaveInterval": "15m",
         "deleteCharAfterDays": 7,
@@ -60,7 +60,8 @@
         "minMonsterAnimation": "5s",
         "maxMonsterAnimation": "60s",
         "allowBoat": true,
-        "boatBroadcastRadius": 20000
+        "boatBroadcastRadius": 20000,
+        "timeZone": ""
       },
 
       "chat": {
@@ -226,6 +227,84 @@
         "minRangeFromNpc": 100
       },
 
+      "crafting": {
+        "_comment": "L2J Mobius Player.ini Crafting: crafting and recipe registration on/off, crafting in combat stance, the size of the dwarven and common recipe books, and FloodProtector.ini Manufacture (the shortest time between two crafts or workshop orders). AltGameCreation is not supported: crafting is instant.",
+        "enabled": true,
+        "craftingInCombat": false,
+        "dwarfRecipeLimit": 50,
+        "commonRecipeLimit": 50,
+        "floodManufacture": "300ms"
+      },
+
+      "enchant": {
+        "_comment": "L2J Mobius Player.ini Enchanting and FloodProtector.ini EnchantItem: items that cannot be enchanted, no scroll on an item at the scroll's maximum, over-enchanted equipment destroyed at log-in and when put on (above the +16 the enchant data allows; GMs are exempt), the punishment then (NONE, BROADCAST, KICK, KICKBAN, JAIL; there is no jail or ban yet, so KICKBAN and JAIL kick), and the shortest time between two enchant requests.",
+        "enchantBlackList": [7816, 7817, 7818, 7819, 7820, 7821, 7822, 7823, 7824, 7825, 7826, 7827, 7828, 7829, 7830, 7831, 13293, 13294, 13296],
+        "disableOverEnchanting": true,
+        "overEnchantProtection": true,
+        "overEnchantPunishment": "JAIL",
+        "floodEnchantItem": "1.5s"
+      },
+
+      "augment": {
+        "_comment": "L2J Mobius Player.ini Augmenting: only the retail-like augmentation (retailLikeAugmentation must be true); per life stone grade the percent chances of yellow, blue, purple and red options (they add up to 100); items that cannot be augmented; PvP items augmentable; augmented items tradeable (must be false for now); augmented items destroyable and crystallizable.",
+        "retailLikeAugmentation": true,
+        "retailLikeAugmentationNoGradeChance": [55, 35, 7, 3],
+        "retailLikeAugmentationMidGradeChance": [55, 35, 7, 3],
+        "retailLikeAugmentationHighGradeChance": [55, 35, 7, 3],
+        "retailLikeAugmentationTopGradeChance": [55, 35, 7, 3],
+        "augmentationBlackList": [6656, 6657, 6658, 6659, 6660, 6661, 6662, 8191],
+        "altAllowAugmentPvPItems": false,
+        "altAllowAugmentTrade": false,
+        "altAllowAugmentDestroy": true
+      },
+
+      "fishing": {
+        "_comment": "L2J Mobius General.ini AllowFishing (GMs fish anyway) and Fishing Tournament: the weekly fishing championship (it ends on Tuesdays at 19:00 in world.timeZone), the reward item and how many of it the first five get.",
+        "allowFishing": true,
+        "altFishChampionshipEnabled": true,
+        "altFishChampionshipRewardItemId": 57,
+        "altFishChampionshipReward1": 800000,
+        "altFishChampionshipReward2": 500000,
+        "altFishChampionshipReward3": 300000,
+        "altFishChampionshipReward4": 200000,
+        "altFishChampionshipReward5": 100000
+      },
+
+      "olympiad": {
+        "_comment": "L2J Mobius Olympiad.ini (the keys without the Olympiad prefix, times as durations, waitTime in seconds) and Feature.ini HeroPoints as clanHeroPoints. The calendar runs in world.timeZone.",
+        "enabled": true,
+        "startTime": 18,
+        "min": 0,
+        "cPeriod": "6h0m0s",
+        "battle": "6m0s",
+        "wPeriod": "168h0m0s",
+        "vPeriod": "24h0m0s",
+        "startPoints": 18,
+        "weeklyPoints": 3,
+        "classedParticipants": 5,
+        "nonClassedParticipants": 9,
+        "registrationDisplayNumber": 0,
+        "battleRewItem": 6651,
+        "classedRewItemCount": 50,
+        "nonClassedRewItemCount": 30,
+        "compRewItem": 6651,
+        "gpPerPoint": 1000,
+        "heroPoints": 100,
+        "maxPoints": 10,
+        "showMonthlyWinners": true,
+        "announceGames": true,
+        "restrictedItems": [],
+        "disableBlessedSpiritShots": true,
+        "enchantLimit": -1,
+        "logFights": false,
+        "waitTime": 120,
+        "useCustomPeriodSettings": false,
+        "period": "MONTH",
+        "periodMultiplier": 1,
+        "competitionDays": [1, 2, 3, 4, 5, 6, 7],
+        "clanHeroPoints": 1000
+      },
+
       "clan": {
         "_comment": "L2J Mobius Player.ini clan settings, Feature.ini reputation costs and Server.ini ClanNameTemplate (a Go regular expression the whole name must match). Days are wall-clock days.",
         "daysBeforeJoin": 1,
@@ -258,6 +337,102 @@
         "daysBeforeCreateWhenDissolved": 10
       },
 
+      "siege": {
+        "_comment": "L2J Mobius Siege.ini and the castle reputation points of Feature.ini: weeks between sieges, minutes a siege lasts, headquarters per clan, the clan level to register, clans per side, the attacker restart delay in ms.",
+        "siegeCycle": 2,
+        "siegeLength": 120,
+        "maxFlags": 1,
+        "siegeClanMinLevel": 4,
+        "attackerMaxClans": 500,
+        "defenderMaxClans": 500,
+        "attackerRespawn": 0,
+        "takeCastlePoints": 1500,
+        "looseCastlePoints": 3000,
+        "castleDefendedPoints": 750
+      },
+
+      "sevenSigns": {
+        "_comment": "L2J Mobius Feature.ini Seven Signs (festival times in ms, the Seal of Strife's gate multipliers, the chamberlain's Dawn certificates, the Dawn fee, FestivalOfDarknessWin) and General.ini Dimension Rift (spawn delay in ms, jump delays in seconds, the fragments per member of each rift type).",
+        "openCatacombs": false,
+        "openNecropolis": false,
+        "castleForDawn": true,
+        "castleForDusk": true,
+        "festivalMinPlayers": 5,
+        "maxPlayerContrib": 1000000,
+        "festivalManagerStart": 120000,
+        "festivalLength": 1080000,
+        "festivalCycleLength": 2280000,
+        "festivalFirstSpawn": 120000,
+        "festivalFirstSwarm": 300000,
+        "festivalSecondSpawn": 540000,
+        "festivalSecondSwarm": 720000,
+        "festivalChestSpawn": 900000,
+        "dawnGatesPDefMult": 1.1,
+        "duskGatesPDefMult": 0.8,
+        "dawnGatesMDefMult": 1.1,
+        "duskGatesMDefMult": 0.8,
+        "strictSevenSigns": false,
+        "dawnTicketQuantity": 300,
+        "dawnTicketPrice": 1000,
+        "dawnTicketBundle": 10,
+        "manorsAgreementId": 6388,
+        "joinDawnFee": 50000,
+        "festivalOfDarknessWin": 200,
+        "rift": {
+          "minPartySize": 2,
+          "maxJumps": 4,
+          "spawnDelay": 10000,
+          "autoJumpsDelayMin": 480,
+          "autoJumpsDelayMax": 600,
+          "bossRoomTimeMultiply": 1.5,
+          "recruitCost": 18,
+          "soldierCost": 21,
+          "officerCost": 24,
+          "captainCost": 27,
+          "commanderCost": 30,
+          "heroCost": 33
+        }
+      },
+
+      "clanHalls": {
+        "_comment": "L2J Mobius Feature.ini ClanHall*: each function's payment period in ms and its fee per level (a level past the list costs the last fee), and AltClanHallMpBuffFree.",
+        "teleportFeeRatio": 604800000,
+        "teleportFees": [7000, 14000],
+        "supportFeeRatio": 86400000,
+        "supportFees": [2500, 5000, 7000, 11000, 21000, 36000, 37000, 364000],
+        "mpRegenerationFeeRatio": 86400000,
+        "mpRegenerationFees": [2000, 3750, 6500, 13750, 20000],
+        "hpRegenerationFeeRatio": 86400000,
+        "hpRegenerationFees": [700, 800, 1000, 1166, 1500, 1750, 2000, 2250, 2500, 3250, 3750, 4250, 5166],
+        "expRegenerationFeeRatio": 86400000,
+        "expRegenerationFees": [3000, 6000, 9000, 15000, 21000, 23330, 30000],
+        "itemCreationFeeRatio": 86400000,
+        "itemCreationFees": [30000, 70000, 140000],
+        "curtainFeeRatio": 604800000,
+        "curtainFees": [2000, 2500],
+        "frontPlatformFeeRatio": 259200000,
+        "frontPlatformFees": [1300, 4000],
+        "mpBuffFree": true
+      },
+
+      "hallSiege": {
+        "_comment": "L2J Mobius ConquerableHallSiege.ini: the clan level to register for a contestable hall's siege, the clans that may register, headquarters per clan.",
+        "minClanLevel": 4,
+        "maxAttackers": 500,
+        "maxFlagsPerClan": 1
+      },
+
+      "manor": {
+        "_comment": "L2J Mobius General.ini Manor: the daily maintenance (20:00, 6 minutes) when the bought crops reach the castles, the lords' modifiable period until 06:00; Rates.ini RateDropManor multiplies harvests and the lords' limits. Every manor change is saved at once.",
+        "allowManor": true,
+        "altManorRefreshTime": 20,
+        "altManorRefreshMin": 0,
+        "altManorApproveTime": 6,
+        "altManorApproveMin": 0,
+        "altManorMaintenanceMin": 6,
+        "rateDropManor": 1
+      },
+
       "grandBosses": {
         "_comment": "L2J Mobius GrandBoss.ini: a grand boss respawns intervalOf<Boss>Spawn plus or minus up to randomOf<Boss>Spawn (whole hours) after it died. Antharas and Valakas wait *WaitTime after the first player entered; *RecognizeHero greets heroes.",
         "antharasWaitTime": "20m",
@@ -279,6 +454,19 @@
         "randomOfQueenAntSpawn": "8h",
         "intervalOfZakenSpawn": "60h",
         "randomOfZakenSpawn": "8h"
+      },
+
+      "events": {
+        "_comment": "The seasonal events Christmas, L2Day and HeavyMedal (L2J Mobius scripts/events). Their own dates are all past, so none runs. To run one, give it dates by script name: \"dates\": {\"L2Day\": {\"active\": \"26 11 2026-10 12 2026\"}} (dd MM yyyy-dd MM yyyy, or dd MM-dd MM for every year, from 00:00 server time; optional dropPeriod within it). eventItemMaxLevelDifference is Rates.ini EventItemMaxLevelDifference.",
+        "eventItemMaxLevelDifference": 9
+      },
+
+      "communityBoard": {
+        "_comment": "The community board (Alt+B): home, favorites, region, clan, memo, mail and friends (L2J Mobius General.ini EnableCommunityBoard, BBSDefault; Custom/CommunityBoard.ini CommunityBoardPeaceOnly, CommunityKarmaDisabled). The custom board (buffer, teleports, shops) is not built.",
+        "enableCommunityBoard": true,
+        "bbsDefault": "_bbshome",
+        "communityBoardPeaceOnly": false,
+        "communityKarmaDisabled": true
       }
     }
   ]

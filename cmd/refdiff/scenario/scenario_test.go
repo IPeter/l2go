@@ -27,6 +27,8 @@ func TestScenariosAreRegistered(t *testing.T) {
 		"kill-monster", "pvp-death-restart", "sample-sword", "sample-unarmed",
 		"cast-wind-strike", "learn-skill", "buff-stack", "potion", "soulshot", "newbie-buffs",
 		"private-store", "party-hunt", "trade", "friends", "clan-create",
+		// Milestone 11 (bbs.go), registered before worldai.go by file order.
+		"bbs-home",
 		// Milestone 10 (worldai.go), after the others.
 		"door-open-close", "static-object-click", "raid-spawn", "raid-kill", "ferry-departure", "cruma-heights",
 	}

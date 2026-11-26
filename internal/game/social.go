@@ -1,6 +1,7 @@
 package game
 
 import (
+	"errors"
 	"time"
 
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
@@ -12,9 +13,41 @@ import (
 // seconds later).
 const socialKickDelay = 5 * time.Second
 
-// setupSocial registers RequestSocialAction.
+// socialActionUses are the social actions of the action window's
+// RequestActionUse: action ID to SocialAction ID (Mobius RequestActionUse
+// cases 12-66).
+var socialActionUses = map[int32]int32{
+	12: 2, 13: 3, 14: 4, 24: 6, 25: 5, 26: 7, 29: 8, 30: 9, 31: 10, 33: 11, 34: 12, 35: 13, 62: 14, 66: 15,
+}
+
+// setupSocial registers RequestSocialAction and the social actions of
+// RequestActionUse.
 func (s *Server) setupSocial() error {
-	return s.Register(clientpackets.OpRequestSocialAction, s.handleSocialAction)
+	errs := []error{s.Register(clientpackets.OpRequestSocialAction, s.handleSocialAction)}
+	for actionID, social := range socialActionUses {
+		errs = append(errs, s.RegisterActionUse(actionID, func(p *Player, _ clientpackets.RequestActionUse) {
+			s.actionUseSocial(p, social)
+		}))
+	}
+	return errors.Join(errs...)
+}
+
+// actionUseSocial is a social action of RequestActionUse (Mobius
+// tryBroadcastSocial after RequestActionUse's dead check): a dead player
+// gets ActionFailed, a fishing one "You cannot do that while fishing."
+// (1471); an idle player and the players around see SocialAction.
+func (s *Server) actionUseSocial(p *Player, social int32) {
+	if p.IsDead() {
+		p.SendActionFailed()
+		return
+	}
+	if s.fishingRefusesSocial(p) { // fishing.go
+		return
+	}
+	if !s.socialIdle(p) {
+		return
+	}
+	s.world.Broadcast(p, serverpackets.NewSocialActionPacket(serverpackets.SocialAction{ObjectID: p.ObjectID(), ActionID: social}), true)
 }
 
 // handleSocialAction handles RequestSocialAction (0x1B), a greeting, bow or
@@ -25,6 +58,9 @@ func (s *Server) handleSocialAction(p *Player, body []byte) {
 	req, err := clientpackets.ParseRequestSocialAction(body)
 	if err != nil {
 		s.log.Debug("game: bad RequestSocialAction", append(p.logArgs(), "err", err)...)
+		return
+	}
+	if s.fishingRefusesSocial(p) { // fishing.go
 		return
 	}
 	if !req.Allowed() {

@@ -429,18 +429,19 @@ func (s *Server) bossNpcDied(n *Npc, killer Creature) {
 	if n.class == nil || !n.class.raid {
 		return
 	}
-	if p, ok := killer.(*Player); ok && p != nil {
+	if p := s.actingPlayer(killer); p != nil { // a summon's kill counts (Mobius killer.asPlayer())
 		msg := sysMsgPacket(sysMsgRaidSuccessful)
 		if pt := p.Party(); pt != nil {
 			pt.Broadcast(msg)
 			for _, m := range pt.Members() {
 				s.AddRaidPoints(m, n.Template.ID, n.Level()/2+s.rnd.Between(-5, 5))
+				s.heroRaidKilled(m, n.Template.ID) // hero.go: Hero.setRBkilled for nobles
 			}
 		} else {
 			p.Send(msg)
 			s.AddRaidPoints(p, n.Template.ID, n.Level()/2+s.rnd.Between(-5, 5))
+			s.heroRaidKilled(p, n.Template.ID)
 		}
-		// Hero.setRBkilled for nobles comes with the Olympiad.
 	}
 	s.raidBossDied(n)
 }

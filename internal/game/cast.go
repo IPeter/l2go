@@ -454,7 +454,8 @@ func (s *Server) castBegin(c Creature, sk *skills.Skill, sim bool) {
 	var target skills.Creature
 	switch sk.TargetType {
 	case data.TargetAreaSummon:
-		// The caster's summon: summons come with Milestone 11.
+		// The caster's summon (summon_world.go).
+		target = s.skills.env.World.Summon(b.self)
 	case data.TargetAura, data.TargetAuraCorpseMob, data.TargetFrontAura, data.TargetBehindAura,
 		data.TargetGround, data.TargetAuraFriendly:
 		target = b.self

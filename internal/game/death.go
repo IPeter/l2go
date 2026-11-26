@@ -126,11 +126,15 @@ func (s *Server) deathEnter(p *Player) {
 // "Fixed" for GMs (their access level allows a fixed resurrection; there
 // are no self-resurrection items yet). Clans come later.
 func diePacket(p *Player) []byte {
-	return serverpackets.NewDiePacket(serverpackets.Die{
+	d := serverpackets.Die{
 		ObjectID:    p.ObjectID(),
 		CanTeleport: true,
 		FixedRes:    p.IsGM(),
-	})
+	}
+	if p.srv != nil {
+		p.srv.residenceDieOptions(p, &d) // siege_zone.go
+	}
+	return serverpackets.NewDiePacket(d)
 }
 
 // killerKind is what killed a player, for the death penalties.
@@ -184,11 +188,15 @@ func (s *Server) onDeath(victim, killer Creature) {
 
 	if killer != nil {
 		p.char.ExpBeforeDeath = 0
-		s.dropOnDeath(p, killer)
-		s.clanWarKill(p, killer) // clanwar.go
-		pvp, siege := p.Zones.Inside(ZonePvP), p.Zones.Inside(ZoneSiege)
-		if s.combatSettings().Delevel && !isLucky(p) && (siege || !pvp) {
-			s.deathExpPenalty(p, killer)
+		// cursedweapon.go: a holder drops its weapon instead, and a holder's
+		// victim loses nothing.
+		if !s.cursedHolderDied(p) && !cursedKillerOf(killer) {
+			s.dropOnDeath(p, killer)
+			s.clanWarKill(p, killer) // clanwar.go
+			pvp, siege := p.Zones.Inside(ZonePvP), p.Zones.Inside(ZoneSiege)
+			if s.combatSettings().Delevel && !isLucky(p) && (siege || !pvp) {
+				s.deathExpPenalty(p, killer)
+			}
 		}
 		s.deathPenaltyRoll(p, killer)
 	}

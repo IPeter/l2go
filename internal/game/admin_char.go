@@ -115,7 +115,8 @@ type adminCharFeature struct {
 // in the game.
 type adminCharState struct {
 	entered time.Time // when it entered the world (Mobius uptime)
-	// hero is //sethero's hero status, not stored, as in Mobius.
+	// hero is the hero status (Mobius _hero): set at selection for a
+	// claimed hero (hero.go) and by //sethero, which is not stored.
 	hero bool
 	// nameColor and titleColor are //setcolor's and //settcolor's colors
 	// while set.
@@ -142,7 +143,8 @@ func (s *Server) adminState(p *Player) *adminCharState {
 	return st
 }
 
-// IsHero reports whether //sethero made the player a hero.
+// IsHero reports whether the player is a hero (Mobius isHero): a claimed
+// hero of the Olympiad (hero.go), or one //sethero made.
 func (p *Player) IsHero() bool {
 	st := p.srv.adminChar.players[p]
 	return st != nil && st.hero
@@ -171,12 +173,6 @@ func (p *Player) rawVar(name string) (string, bool) {
 	}
 	v, ok := p.char.Vars[name]
 	return v, ok
-}
-
-// nobleFlag is IsNoble for the info packets.
-func (p *Player) nobleFlag() bool {
-	v, _ := p.rawVar(nobleVar)
-	return v == "true"
 }
 
 // punishmentEnd reads a punishment variable: when it ends (0 for never) and
@@ -975,12 +971,12 @@ func (s *Server) gmSetHero(p *Player, _ []string) {
 	t.BroadcastUserInfo()
 }
 
-// setHero is Mobius setHero: the hero skills are given (not stored) or
-// taken, and the skill list sent.
+// setHero is Mobius setHero: the hero skills are given (not stored) on the
+// base class, or taken, and the skill list sent.
 func (s *Server) setHero(p *Player, hero bool) {
 	if d, c := s.skills.data, s.skills.catalog; d != nil && c != nil {
 		for _, l := range d.OtherSkillTree(data.TreeHero) {
-			if !hero {
+			if !hero || p.BaseClassID() != p.ClassID() {
 				s.RemoveSkill(p, l.SkillID, false, true)
 				continue
 			}

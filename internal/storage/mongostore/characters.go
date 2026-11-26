@@ -161,6 +161,12 @@ type characterDoc struct {
 
 	Shortcuts []shortcutDoc  `bson:"shortcuts,omitempty"`       // the shortcut bar, absent if empty
 	ItemReuse []itemReuseDoc `bson:"item_reuse_save,omitempty"` // item reuse, absent if none
+
+	Hennas []hennaDoc `bson:"hennas,omitempty"` // the dyes, absent if none (henna.go)
+
+	Recipes *recipeBookDoc `bson:"recipes,omitempty"` // the recipe books, absent if empty (recipes.go)
+
+	subclassFields `bson:",inline"` // class index, noblesse, subclasses (subclass.go)
 }
 
 // shortcutDoc is the stored form of storage.Shortcut, with the column names
@@ -348,6 +354,9 @@ type itemDoc struct {
 	CustomType1 int32  `bson:"custom_type1"`
 	CustomType2 int32  `bson:"custom_type2"`
 	ManaLeft    int32  `bson:"mana_left"` // storage.NoMana if none
+	// Aug is the augmentation (Mobius item_attributes.augAttributes), left
+	// out when the item has none.
+	Aug int32 `bson:"aug,omitempty"`
 }
 
 func toCharacterDoc(c *storage.Character) characterDoc {
@@ -408,6 +417,12 @@ func toCharacterDoc(c *storage.Character) characterDoc {
 
 		Shortcuts: convertList(c.Shortcuts, func(s storage.Shortcut) shortcutDoc { return shortcutDoc(s) }),
 		ItemReuse: convertList(c.ItemReuse, func(r storage.ItemReuse) itemReuseDoc { return itemReuseDoc(r) }),
+
+		Hennas: toHennaDocs(c.Hennas),
+
+		Recipes: toRecipeBookDoc(c.Recipes),
+
+		subclassFields: toSubclassFields(c),
 	}
 }
 
@@ -481,6 +496,17 @@ func (d *characterDoc) character(items []storage.Item, quests []storage.Quest) s
 
 		Shortcuts: convertList(d.Shortcuts, func(s shortcutDoc) storage.Shortcut { return storage.Shortcut(s) }),
 		ItemReuse: convertList(d.ItemReuse, func(r itemReuseDoc) storage.ItemReuse { return storage.ItemReuse(r) }),
+
+		Hennas: fromHennaDocs(d.Hennas),
+
+		Recipes: d.Recipes.recipeBook(),
+
+		ClassIndex: d.ClassIndex,
+		Noble:      d.Noble,
+		Subclasses: fromSubclassDocs(d.Subclasses),
+		BaseLevel:  d.BaseLevel,
+		BaseExp:    d.BaseExp,
+		BaseSP:     d.BaseSP,
 	}
 }
 
@@ -497,6 +523,7 @@ func toItemDoc(owner int32, it storage.Item) itemDoc {
 		CustomType1: it.CustomType1,
 		CustomType2: it.CustomType2,
 		ManaLeft:    it.Mana,
+		Aug:         it.Augmentation,
 	}
 	if it.Loc == storage.LocPaperdoll {
 		d.LocData = int32(it.Slot)
@@ -508,15 +535,16 @@ func toItemDoc(owner int32, it storage.Item) itemDoc {
 // item; a slot out of range, which L2Go never writes, makes it a carried one.
 func (d *itemDoc) item() storage.Item {
 	it := storage.Item{
-		ObjectID:    d.ObjectID,
-		ItemID:      d.ItemID,
-		Count:       d.Count,
-		Enchant:     d.Enchant,
-		Slot:        storage.PaperdollNone,
-		Loc:         storage.ItemLocation(d.Loc),
-		Mana:        d.ManaLeft,
-		CustomType1: d.CustomType1,
-		CustomType2: d.CustomType2,
+		ObjectID:     d.ObjectID,
+		ItemID:       d.ItemID,
+		Count:        d.Count,
+		Enchant:      d.Enchant,
+		Slot:         storage.PaperdollNone,
+		Loc:          storage.ItemLocation(d.Loc),
+		Mana:         d.ManaLeft,
+		CustomType1:  d.CustomType1,
+		CustomType2:  d.CustomType2,
+		Augmentation: d.Aug,
 	}
 	if it.Loc == storage.LocPaperdoll && d.LocData >= 0 && d.LocData < storage.PaperdollTotalSlots {
 		it.Slot = storage.PaperdollSlot(d.LocData) //nolint:gosec // range checked above
@@ -823,6 +851,17 @@ func characterUpdate(c *storage.Character) bson.D {
 	} else {
 		unset = append(unset, bson.E{Key: "item_reuse_save", Value: ""})
 	}
+	if doc.Hennas != nil {
+		set = append(set, bson.E{Key: "hennas", Value: doc.Hennas})
+	} else {
+		unset = append(unset, bson.E{Key: "hennas", Value: ""})
+	}
+	if doc.Recipes != nil {
+		set = append(set, bson.E{Key: "recipes", Value: doc.Recipes})
+	} else {
+		unset = append(unset, bson.E{Key: "recipes", Value: ""})
+	}
+	set, unset = subclassUpdate(&doc.subclassFields, set, unset) // subclass.go
 	for _, f := range []struct {
 		key string
 		t   *time.Time

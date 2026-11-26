@@ -92,6 +92,7 @@ func (s *Server) addWornSkill(p *Player, sk *skills.Skill, equipDelay int) bool 
 // wornItemSkillsOn is ItemSkillsListener.notifyEquiped: the +4 skill from
 // enchant 4, then each NORMAL skill.
 func (s *Server) wornItemSkillsOn(p *Player, it *inventory.Item, quiet bool) {
+	s.augmentOn(p, it, quiet) // augment.go: the augmentation's bonuses come first
 	t := it.Template()
 	update, stamps := false, false
 	if it.Enchant() >= 4 {
@@ -119,6 +120,7 @@ func (s *Server) wornItemSkillsOn(p *Player, it *inventory.Item, quiet bool) {
 // skills of the other worn items that are now missing come back; the
 // item's unequip skill is used on the player.
 func (s *Server) wornItemSkillsOff(p *Player, it *inventory.Item) {
+	s.augmentOff(p, it, false) // augment.go: the augmentation's bonuses go first
 	t := it.Template()
 	update, stamps := false, false
 	if it.Enchant() >= 4 {

@@ -68,7 +68,7 @@ func activeIndex(chars []storage.Character) int {
 
 func writeCharacter(w *packets.Writer, account string, sessionID int32, c storage.Character, active bool, now time.Time) {
 	var objectIDs, itemIDs [storage.PaperdollTotalSlots]int32
-	var enchant int32
+	var enchant, augmentation int32
 	for _, it := range c.Items {
 		if !it.Slot.Equipped() {
 			continue
@@ -76,7 +76,7 @@ func writeCharacter(w *packets.Writer, account string, sessionID int32, c storag
 		objectIDs[it.Slot] = it.ObjectID
 		itemIDs[it.Slot] = it.ItemID
 		if it.Slot == storage.PaperdollRHand {
-			enchant = it.Enchant
+			enchant, augmentation = it.Enchant, it.Augmentation
 		}
 	}
 	baseClass := c.BaseClassID
@@ -125,7 +125,7 @@ func writeCharacter(w *packets.Writer, account string, sessionID int32, c storag
 		w.WriteInt32(0)
 	}
 	w.WriteUint8(uint8(min(max(enchant, 0), maxEnchantEffect))) //nolint:gosec // clamped to 0-127
-	w.WriteInt32(0)                                             // augmentation ID: augmentations are not stored yet
+	w.WriteInt32(augmentation)                                  // the weapon's augmentation (Mobius getPaperdollAugmentationId)
 }
 
 // deleteTimer returns the delete timer field: -1 for a banned character,

@@ -1,10 +1,15 @@
 package game
 
-import "github.com/IPeter/l2go/internal/stats"
+import (
+	"slices"
+
+	"github.com/IPeter/l2go/internal/stats"
+)
 
 // Kill rewards (decision F9): Mobius Attackable.calculateRewards, the
-// party branch in party_reward.go (Plan 12 T8, T9). Summons, overhit (M7),
-// champions, vitality and premium are left out.
+// party branch in party_reward.go (Plan 12 T8, T9). A summon's damage counts
+// as its owner's (M11f); overhit (M7), champions, vitality and premium are
+// left out.
 
 // rewardShare is one player's share of a kill: the damage it did.
 type rewardShare struct {
@@ -32,17 +37,23 @@ func (s *Server) npcRewards(n *Npc, killer Creature) {
 	var total, maxDamage int64
 	var maxDealer *Player
 	for _, a := range hate {
-		p, ok := a.Attacker.(*Player)
-		if !ok || p == nil || a.Damage <= 1 {
+		// A summon's damage counts as its owner's (Mobius asPlayer, summon.go).
+		p := s.actingPlayer(a.Attacker)
+		if p == nil || a.Damage <= 1 {
 			continue
 		}
 		if pos.Distance3D(p.Position()) > partyRange {
 			continue
 		}
 		total += a.Damage
-		shares = append(shares, rewardShare{p: p, damage: a.Damage})
-		if a.Damage > maxDamage {
-			maxDealer, maxDamage = p, a.Damage
+		i := slices.IndexFunc(shares, func(sh rewardShare) bool { return sh.p == p })
+		if i < 0 {
+			i = len(shares)
+			shares = append(shares, rewardShare{p: p})
+		}
+		shares[i].damage += a.Damage
+		if shares[i].damage > maxDamage {
+			maxDealer, maxDamage = p, shares[i].damage
 		}
 	}
 
@@ -54,10 +65,14 @@ func (s *Server) npcRewards(n *Npc, killer Creature) {
 	}
 	if pt, damage := s.mostDamageParty(n); pt != nil && damage > maxDamage {
 		s.npcDropItems(n, pt.Leader())
-	} else if maxDealer != nil && maxDealer.InGame() {
-		s.npcDropItems(n, maxDealer)
+		s.extraDrops(n, pt.Leader()) // npc_reward_extra.go: Mobius doEventDrop
 	} else {
-		s.npcDropItems(n, lastAttacker)
+		if maxDealer != nil && maxDealer.InGame() {
+			s.npcDropItems(n, maxDealer)
+		} else {
+			s.npcDropItems(n, lastAttacker)
+		}
+		s.extraDrops(n, lastAttacker)
 	}
 
 	m := stats.MonsterReward{Level: n.Level(), Exp: n.Template.Acquire.Exp, SP: n.Template.Acquire.SP}
@@ -75,7 +90,7 @@ func (s *Server) npcRewards(n *Npc, killer Creature) {
 			continue
 		}
 		level := p.Level()
-		s.AddExpAndSP(p, s.combat.SoloReward(p.stats, m, sh.damage, total))
+		s.AddExpAndSP(p, s.servitorExpPenalty(p, s.combat.SoloReward(p.stats, m, sh.damage, total))) // summon.go
 		if p.Level() != level {
 			s.RequestSave(p)
 		}

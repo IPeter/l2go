@@ -229,7 +229,7 @@ func newZoneRule(z *data.Zone) zoneRule {
 		r.flags = []ZoneFlag{ZonePvP}
 	case "CastleZone":
 		r.flags = []ZoneFlag{ZoneCastle}
-	case "ClanHallZone":
+	case "ClanHallZone", "SiegableHallZone":
 		r.flags = []ZoneFlag{ZoneClanHall}
 	case "JailZone":
 		r.flags = []ZoneFlag{ZoneJail, ZoneNoSummonFriend}
@@ -419,6 +419,10 @@ func (s *Server) enterZone(p *Player, r *zoneRule) {
 	}
 	s.questZone(p, r.zone.ID, r.zone.Type, true) // quest_events.go
 	s.bossZoneEntered(p, r.zone.ID)              // bosszone.go
+	s.residenceZoneEntered(p, r.zone)            // siege_zone.go
+	s.hallZoneEntered(p, r.zone)                 // clanhall.go
+	s.olympiadZoneEntered(p, r.zone.Type)        // olympiad_rules.go
+	s.mountZoneEntered(p, r.zone)                // mount.go
 }
 
 // exitZone records that p left the zone id and does what the zone does on
@@ -447,6 +451,8 @@ func (s *Server) exitZone(p *Player, id int) {
 	}
 	s.questZone(p, id, r.zone.Type, false) // quest_events.go
 	s.bossZoneExited(p, id, false)         // bosszone.go
+	s.residenceZoneExited(p, id)           // siege_zone.go
+	s.mountZoneExited(p, r.zone)           // mount.go
 }
 
 // updateMotion sets the stat set's water and swamp state from p's zones:

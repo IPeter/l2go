@@ -1,0 +1,360 @@
+[
+  {
+    "id": 21,
+    "name": "Fortress of Resistance",
+    "desc": "Contestable Clan Hall",
+    "location": "Dion",
+    "siegable": true,
+    "siegeLength": 3600000,
+    "schedule": [14,0,0,12,0]
+  },
+  {
+    "id": 22,
+    "name": "Moonstone Hall",
+    "desc": "Clan hall located in the Town of Gludio",
+    "location": "Gludio",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 23,
+    "name": "Onyx Hall",
+    "desc": "Clan hall located in the Town of Gludio",
+    "location": "Gludio",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 24,
+    "name": "Topaz Hall",
+    "desc": "Clan hall located in the Town of Gludio",
+    "location": "Gludio",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 25,
+    "name": "Ruby Hall",
+    "desc": "Clan hall located in the Town of Gludio",
+    "location": "Gludio",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 26,
+    "name": "Crystal Hall",
+    "desc": "Clan hall located in Gludin Village",
+    "location": "Gludin",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 27,
+    "name": "Onyx Hall",
+    "desc": "Clan hall located in Gludin Village",
+    "location": "Gludin",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 28,
+    "name": "Sapphire Hall",
+    "desc": "Clan hall located in Gludin Village",
+    "location": "Gludin",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 29,
+    "name": "Moonstone Hall",
+    "desc": "Clan hall located in Gludin Village",
+    "location": "Gludin",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 30,
+    "name": "Emerald Hall",
+    "desc": "Clan hall located in Gludin Village",
+    "location": "Gludin",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 31,
+    "name": "The Atramental Barracks",
+    "desc": "Clan hall located in the Town of Dion",
+    "location": "Dion",
+    "lease": 200000,
+    "grade": 1
+  },
+  {
+    "id": 32,
+    "name": "The Scarlet Barracks",
+    "desc": "Clan hall located in the Town of Dion",
+    "location": "Dion",
+    "lease": 200000,
+    "grade": 1
+  },
+  {
+    "id": 33,
+    "name": "The Viridian Barracks",
+    "desc": "Clan hall located in the Town of Dion",
+    "location": "Dion",
+    "lease": 200000,
+    "grade": 1
+  },
+  {
+    "id": 34,
+    "name": "Devastated Castle",
+    "desc": "Contestable Clan Hall",
+    "location": "Aden",
+    "siegable": true,
+    "siegeLength": 3600000,
+    "schedule": [14,0,0,12,0]
+  },
+  {
+    "id": 35,
+    "name": "Bandit StrongHold",
+    "desc": "Contestable Clan Hall",
+    "location": "Oren",
+    "siegable": true,
+    "siegeLength": 3600000,
+    "schedule": [14,0,0,12,0]
+  },
+  {
+    "id": 36,
+    "name": "The Golden Chamber",
+    "desc": "Clan hall located in the Town of Aden",
+    "location": "Aden",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 37,
+    "name": "The Silver Chamber",
+    "desc": "Clan hall located in the Town of Aden",
+    "location": "Aden",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 38,
+    "name": "The Mithril Chamber",
+    "desc": "Clan hall located in the Town of Aden",
+    "location": "Aden",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 39,
+    "name": "Silver Manor",
+    "desc": "Clan hall located in the Town of Aden",
+    "location": "Aden",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 40,
+    "name": "Gold Manor",
+    "desc": "Clan hall located in the Town of Aden",
+    "location": "Aden",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 41,
+    "name": "The Bronze Chamber",
+    "desc": "Clan hall located in the Town of Aden",
+    "location": "Aden",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 42,
+    "name": "The Golden Chamber",
+    "desc": "Clan hall located in the Town of Giran",
+    "location": "Giran",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 43,
+    "name": "The Silver Chamber",
+    "desc": "Clan hall located in the Town of Giran",
+    "location": "Giran",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 44,
+    "name": "The Mithril Chamber",
+    "desc": "Clan hall located in the Town of Giran",
+    "location": "Giran",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 45,
+    "name": "The Bronze Chamber",
+    "desc": "Clan hall located in the Town of Giran",
+    "location": "Giran",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 46,
+    "name": "Silver Manor",
+    "desc": "Clan hall located in the Town of Giran",
+    "location": "Giran",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 47,
+    "name": "Moonstone Hall",
+    "desc": "Clan hall located in the Town of Goddard",
+    "location": "Goddard",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 48,
+    "name": "Onyx Hall",
+    "desc": "Clan hall located in the Town of Goddard",
+    "location": "Goddard",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 49,
+    "name": "Emerald Hall",
+    "desc": "Clan hall located in the Town of Goddard",
+    "location": "Goddard",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 50,
+    "name": "Sapphire Hall",
+    "desc": "Clan hall located in the Town of Goddard",
+    "location": "Goddard",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 51,
+    "name": "Mont Chamber",
+    "desc": "An upscale Clan hall located in the Rune Township",
+    "location": "Rune",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 52,
+    "name": "Astaire Chamber",
+    "desc": "An upscale Clan hall located in the Rune Township",
+    "location": "Rune",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 53,
+    "name": "Aria Chamber",
+    "desc": "An upscale Clan hall located in the Rune Township",
+    "location": "Rune",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 54,
+    "name": "Yiana Chamber",
+    "desc": "An upscale Clan hall located in the Rune Township",
+    "location": "Rune",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 55,
+    "name": "Roien Chamber",
+    "desc": "An upscale Clan hall located in the Rune Township",
+    "location": "Rune",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 56,
+    "name": "Luna Chamber",
+    "desc": "An upscale Clan hall located in the Rune Township",
+    "location": "Rune",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 57,
+    "name": "Traban Chamber",
+    "desc": "An upscale Clan hall located in the Rune Township",
+    "location": "Rune",
+    "lease": 1000000,
+    "grade": 3
+  },
+  {
+    "id": 58,
+    "name": "Eisen Hall",
+    "desc": "Clan hall located in the Town of Schuttgart",
+    "location": "Schuttgart",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 59,
+    "name": "Heavy Metal Hall",
+    "desc": "Clan hall located in the Town of Schuttgart",
+    "location": "Schuttgart",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 60,
+    "name": "Molten Ore Hall",
+    "desc": "Clan hall located in the Town of Schuttgart",
+    "location": "Schuttgart",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 61,
+    "name": "Titan Hall",
+    "desc": "Clan hall located in the Town of Schuttgart",
+    "location": "Schuttgart",
+    "lease": 500000,
+    "grade": 2
+  },
+  {
+    "id": 62,
+    "name": "Rainbow Springs",
+    "desc": "Contestable Clan Hall",
+    "location": "Goddard",
+    "siegable": true,
+    "siegeLength": 3600000,
+    "schedule": [14,0,0,12,0]
+  },
+  {
+    "id": 63,
+    "name": "Beast Farm",
+    "desc": "Contestable Clan Hall",
+    "location": "Rune",
+    "siegable": true,
+    "siegeLength": 3600000,
+    "schedule": [14,0,0,12,0]
+  },
+  {
+    "id": 64,
+    "name": "Fortress of the Dead",
+    "desc": "Contestable Clan Hall",
+    "location": "Rune",
+    "siegable": true,
+    "siegeLength": 3600000,
+    "schedule": [14,0,0,12,0]
+  }
+]

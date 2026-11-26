@@ -1066,6 +1066,8 @@ func (s *Server) gmReload(p *Player, args []string) {
 	case "quest", "scripts":
 		s.reloadScripts(p, args[1:])
 		return // the warning follows the reload
+	case "henna":
+		s.reloadHennas(p) // henna.go
 	default:
 		known := false
 		for _, c := range adminReloadMenu {

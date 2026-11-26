@@ -26,7 +26,7 @@ const (
 // restarts the 15 s of the stance. NPCs that are not attackable never enter
 // it. Loop-only.
 func (s *Server) StartAutoAttack(c Creature) {
-	if n, ok := c.(*Npc); ok && (n.class == nil || !n.class.attackable) {
+	if n, ok := c.(*Npc); ok && (n.class == nil || !n.class.attackable) && n.summon == nil { // summons are playables (summon.go)
 		return
 	}
 	f := &s.attack
@@ -78,6 +78,7 @@ func (s *Server) InAttackStance(c Creature) bool {
 
 // addStance starts or restarts c's stance (Mobius addAttackStanceTask).
 func (s *Server) addStance(c Creature) {
+	s.cubicsAct(c) // cubic.go: a playable's cubics start acting
 	f := &s.attack
 	if _, ok := f.stance[c]; !ok {
 		f.stanceOrder = append(f.stanceOrder, c)

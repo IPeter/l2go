@@ -1,0 +1,8 @@
+[
+{"id":1,"itemId":6529,"level":20,"name":"Baby Duck Rod","damage":20},
+{"id":2,"itemId":6530,"level":40,"name":"Albatross Rod","damage":23},
+{"id":3,"itemId":6531,"level":50,"name":"Pelican Rod","damage":26},
+{"id":4,"itemId":6532,"level":60,"name":"KingFisher Rod","damage":30},
+{"id":5,"itemId":6533,"level":70,"name":"Cygnus Pole","damage":35},
+{"id":6,"itemId":6534,"level":80,"name":"Triton Pole","damage":39}
+]

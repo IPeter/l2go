@@ -26,9 +26,11 @@ func (s *Server) teleporterCommand(p *Player, n *Npc, command string) bool {
 	}
 	switch tokens[0] {
 	case "showNoblesSelect":
-		// Noblesse comes in Milestone 11: everyone gets the "not a noble"
-		// page.
-		s.teleporterPage(p, n, "teleporter/not_nobles.htm")
+		page := "teleporter/not_nobles.htm"
+		if p.IsNoble() {
+			page = "teleporter/nobles_select.htm"
+		}
+		s.teleporterPage(p, n, page)
 	case "showTeleports":
 		list := data.TeleportNormal
 		if len(tokens) > 1 {
@@ -97,8 +99,8 @@ func (s *Server) showTeleports(p *Player, n *Npc, name string) {
 }
 
 // teleportList returns n's teleport list name, or nil (logged) when there
-// is none or it is closed to p: the noblesse lists stay closed until
-// noblesse exists (decision N7).
+// is none or it is closed to p: the noblesse lists are for nobles only
+// (decision N7, Mobius TeleportHolder.isNoblesse).
 func (s *Server) teleportList(p *Player, n *Npc, name string) *data.TeleportList {
 	if s.worldData == nil {
 		return nil
@@ -108,7 +110,7 @@ func (s *Server) teleportList(p *Player, n *Npc, name string) *data.TeleportList
 		s.log.Warn("game: unknown teleport list", append(p.logArgs(), "npc", n.Template.ID, "list", name)...)
 		return nil
 	}
-	if teleportListNobles(list) {
+	if teleportListNobles(list) && !p.IsNoble() {
 		s.log.Warn("game: noblesse teleport list asked for by a player who is not a noble", append(p.logArgs(), "npc", n.Template.ID, "list", name)...)
 		return nil
 	}

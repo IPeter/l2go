@@ -1,0 +1,407 @@
+[
+  {
+    "id": 1,
+    "name": "Gludio",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 16,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": -18325,
+        "y": 112811,
+        "z": -2377
+      },
+      {
+        "npcId": 13002,
+        "x": -18048,
+        "y": 107098,
+        "z": -2378
+      },
+      {
+        "npcId": 13002,
+        "x": -18113,
+        "y": 108597,
+        "z": -2343
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": -18154,
+        "y": 107591,
+        "z": -2560,
+        "zones": [70017,70019]
+      },
+      {
+        "npcId": 13004,
+        "x": -19329,
+        "y": 108154,
+        "z": -2384,
+        "zones": [70018,70020]
+      }
+    ],
+    "maxMercenaries": 100
+  },
+  {
+    "id": 2,
+    "name": "Dion",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 20,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 22285,
+        "y": 156939,
+        "z": -2571
+      },
+      {
+        "npcId": 13002,
+        "x": 22008,
+        "y": 162652,
+        "z": -2572
+      },
+      {
+        "npcId": 13002,
+        "x": 22073,
+        "y": 161153,
+        "z": -2537
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 22114,
+        "y": 162159,
+        "z": -2754,
+        "zones": [70021,70023]
+      },
+      {
+        "npcId": 13004,
+        "x": 23289,
+        "y": 161596,
+        "z": -2578,
+        "zones": [70022,70024]
+      }
+    ],
+    "maxMercenaries": 150
+  },
+  {
+    "id": 3,
+    "name": "Giran",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 16,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 113115,
+        "y": 144829,
+        "z": -2446
+      },
+      {
+        "npcId": 13002,
+        "x": 118828,
+        "y": 145106,
+        "z": -2447
+      },
+      {
+        "npcId": 13002,
+        "x": 117329,
+        "y": 145041,
+        "z": -2412
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 118331,
+        "y": 145055,
+        "z": -2627,
+        "zones": [70025,70027]
+      },
+      {
+        "npcId": 13004,
+        "x": 117768,
+        "y": 143880,
+        "z": -2451,
+        "zones": [70026,70028]
+      }
+    ],
+    "maxMercenaries": 200
+  },
+  {
+    "id": 4,
+    "name": "Oren",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 20,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 79193,
+        "y": 36977,
+        "z": -2167
+      },
+      {
+        "npcId": 13002,
+        "x": 84906,
+        "y": 37254,
+        "z": -2168
+      },
+      {
+        "npcId": 13002,
+        "x": 83407,
+        "y": 37189,
+        "z": -2133
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 84407,
+        "y": 37150,
+        "z": -2354,
+        "zones": [70029,70031]
+      },
+      {
+        "npcId": 13004,
+        "x": 83844,
+        "y": 35975,
+        "z": -2178,
+        "zones": [70030,70032]
+      }
+    ],
+    "maxMercenaries": 300
+  },
+  {
+    "id": 5,
+    "name": "Aden",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 16,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 148774,
+        "y": 2351,
+        "z": -389
+      },
+      {
+        "npcId": 13002,
+        "x": 147456,
+        "y": 5724,
+        "z": 158
+      },
+      {
+        "npcId": 13002,
+        "x": 146137,
+        "y": 2352,
+        "z": -389
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 149976,
+        "y": 1583,
+        "z": -450,
+        "zones": [70008,70016,70007,70015,70006,70014,70005,70013]
+      },
+      {
+        "npcId": 13004,
+        "x": 144955,
+        "y": 1603,
+        "z": -450,
+        "zones": [70004,70012,70003,70011,70002,70010,70001,70009]
+      }
+    ],
+    "maxMercenaries": 400
+  },
+  {
+    "id": 6,
+    "name": "Innadril",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 20,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 116236,
+        "y": 245718,
+        "z": -667
+      },
+      {
+        "npcId": 13002,
+        "x": 115959,
+        "y": 251431,
+        "z": -667
+      },
+      {
+        "npcId": 13002,
+        "x": 116024,
+        "y": 249932,
+        "z": -633
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 116065,
+        "y": 250938,
+        "z": -850,
+        "zones": [70033,70035]
+      },
+      {
+        "npcId": 13004,
+        "x": 117240,
+        "y": 250375,
+        "z": -674,
+        "zones": [70034,70036]
+      }
+    ],
+    "maxMercenaries": 400
+  },
+  {
+    "id": 7,
+    "name": "Goddard",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 16,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 144672,
+        "y": -48832,
+        "z": -1742
+      },
+      {
+        "npcId": 13002,
+        "x": 150240,
+        "y": -48832,
+        "z": -1742
+      },
+      {
+        "npcId": 13002,
+        "x": 147456,
+        "y": -49200,
+        "z": -1619
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 148144,
+        "y": -46992,
+        "z": -1609,
+        "zones": [70037,70039]
+      },
+      {
+        "npcId": 13004,
+        "x": 146784,
+        "y": -46992,
+        "z": -1609,
+        "zones": [70038,70040]
+      }
+    ],
+    "maxMercenaries": 400
+  },
+  {
+    "id": 8,
+    "name": "Rune",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 20,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 16565,
+        "y": -50318,
+        "z": -641
+      },
+      {
+        "npcId": 13002,
+        "x": 16559,
+        "y": -48000,
+        "z": -641
+      },
+      {
+        "npcId": 13002,
+        "x": 10775,
+        "y": -48481,
+        "z": 83
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 12864,
+        "y": -47440,
+        "z": -1087,
+        "zones": [70041,70043]
+      },
+      {
+        "npcId": 13004,
+        "x": 12225,
+        "y": -50767,
+        "z": 1248,
+        "zones": [70042,70044]
+      }
+    ],
+    "maxMercenaries": 400
+  },
+  {
+    "id": 9,
+    "name": "Schuttgart",
+    "siegeEnabled": true,
+    "siegeDay": 0,
+    "siegeHour": 16,
+    "maxConcurrent": 5,
+    "controlTowers": [
+      {
+        "npcId": 13002,
+        "x": 80334,
+        "y": -152898,
+        "z": -8
+      },
+      {
+        "npcId": 13002,
+        "x": 74775,
+        "y": -152928,
+        "z": -8
+      },
+      {
+        "npcId": 13002,
+        "x": 77547,
+        "y": -153246,
+        "z": 112
+      }
+    ],
+    "flameTowers": [
+      {
+        "npcId": 13004,
+        "x": 76872,
+        "y": -151043,
+        "z": 120,
+        "zones": [70045,70047]
+      },
+      {
+        "npcId": 13004,
+        "x": 78233,
+        "y": -151037,
+        "z": 120,
+        "zones": [70046,70048]
+      }
+    ],
+    "maxMercenaries": 400
+  }
+]

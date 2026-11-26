@@ -1,0 +1,10 @@
+[
+{"minLevel":6,"maxLevel":15,"npcId":18319,"probability":5},
+{"minLevel":16,"maxLevel":25,"npcId":18320,"probability":5},
+{"minLevel":26,"maxLevel":35,"npcId":18321,"probability":5},
+{"minLevel":36,"maxLevel":45,"npcId":18322,"probability":5},
+{"minLevel":46,"maxLevel":55,"npcId":18323,"probability":5},
+{"minLevel":56,"maxLevel":65,"npcId":18324,"probability":5},
+{"minLevel":66,"maxLevel":75,"npcId":18325,"probability":5},
+{"minLevel":76,"maxLevel":85,"npcId":18326,"probability":5}
+]

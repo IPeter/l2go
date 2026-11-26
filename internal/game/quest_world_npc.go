@@ -4,7 +4,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/world"
 )
@@ -23,10 +22,6 @@ var (
 	_ scripting.PlayerNoble  = (*Player)(nil)
 	_ scripting.PlayerStatus = (*Player)(nil)
 )
-
-// nobleVar is the player variable that keeps the noble flag until
-// characters have one (Milestone 11).
-const nobleVar = "l2go_noble"
 
 // creatureOfRef returns the game's creature behind a PlayerRef or NpcRef,
 // or nil.
@@ -310,37 +305,6 @@ func (p *Player) TargetObject() any {
 		return t.ScriptRef()
 	}
 	return nil
-}
-
-// IsNoble reports the noble flag (scripting.PlayerNoble).
-func (p *Player) IsNoble() bool {
-	v, _ := p.Var(nobleVar)
-	return v == "true"
-}
-
-// SetNoble is Mobius setNoble: the noble skill tree is given or taken, the
-// flag set, and the skill list sent. The flag is a player variable until
-// characters have one, and the noble skills are saved with the character
-// (Mobius gives them again at login from its flag).
-func (p *Player) SetNoble(noble bool) {
-	s := p.srv
-	if d, c := s.skills.data, s.skills.catalog; d != nil && c != nil {
-		for _, l := range d.OtherSkillTree(data.TreeNoble) {
-			if !noble {
-				s.RemoveSkill(p, l.SkillID, true, true)
-				continue
-			}
-			if sk, ok := c.Skill(l.SkillID, l.Level); ok {
-				s.AddSkill(p, sk, true)
-			}
-		}
-	}
-	if noble {
-		p.SetVar(nobleVar, "true")
-	} else {
-		p.SetVar(nobleVar, "false")
-	}
-	p.SendSkillList()
 }
 
 // PkKills is the PK count (scripting.PlayerStatus).

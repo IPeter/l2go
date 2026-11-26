@@ -21,7 +21,7 @@ import (
 //   - RequestAcquireSkillInfo answers with the SP and spellbooks a level
 //     takes; RequestAcquireSkill checks the level, SP, prerequisites and
 //     items again, takes them and gives the skill. Clan skills (PLEDGE) are
-//     in clan_skills.go; fishing skills (FISHING) wait for Milestone 11.
+//     in clan_skills.go; fishing skills (FISHING) in fishing_npc.go.
 //   - A new character starts with the level-1 skills of its class tree
 //     (NewCharacterSkills, Mobius CharacterCreate). Login and every level
 //     change give the auto-get skills (RewardSkills); losing levels lowers
@@ -275,8 +275,8 @@ func (s *Server) lastTrainer(p *Player) *Npc {
 // handleRequestAcquireSkillInfo handles RequestAcquireSkillInfo (0x6B), a
 // click on a skill of the trainer's list (Mobius RequestAcquireSkillInfo):
 // for a class skill the trainer teaches, AcquireSkillInfo with the SP and
-// the items the level takes. Fishing and clan skills wait for their
-// milestones.
+// the items the level takes. Clan skills are in clan_skills.go, fishing
+// skills in fishing_npc.go.
 func (s *Server) handleRequestAcquireSkillInfo(p *Player, body []byte) {
 	req, err := clientpackets.ParseRequestAcquireSkillInfo(body)
 	if err != nil {
@@ -299,8 +299,11 @@ func (s *Server) handleRequestAcquireSkillInfo(p *Player, body []byte) {
 		s.clanSkillInfo(p, id, level) // clan_skills.go
 		return
 	}
+	if req.Type == clientpackets.AcquireSkillFishing {
+		s.fishingSkillInfo(p, id, level) // fishing_npc.go
+		return
+	}
 	if req.Type != clientpackets.AcquireSkillClass {
-		s.log.Debug("game: fishing skills are not learned yet", append(p.logArgs(), "skill", id, "type", req.Type)...)
 		return
 	}
 	class := learningClass(p)
@@ -325,7 +328,8 @@ func (s *Server) handleRequestAcquireSkillInfo(p *Player, body []byte) {
 // a level outside 1-1000 is an illegal action; then the trainer must still
 // be in reach and the level must be one of the learning class's tree. A
 // class skill is checked and paid for (checkLearnSkill), then given
-// (giveLearnedSkill). Fishing and clan skills wait for their milestones.
+// (giveLearnedSkill). Clan skills are in clan_skills.go, fishing skills in
+// fishing_npc.go.
 func (s *Server) handleRequestAcquireSkill(p *Player, body []byte) {
 	req, err := clientpackets.ParseRequestAcquireSkill(body)
 	if err != nil {
@@ -350,8 +354,11 @@ func (s *Server) handleRequestAcquireSkill(p *Player, body []byte) {
 		s.learnClanSkill(p, sk) // clan_skills.go
 		return
 	}
+	if req.Type == clientpackets.AcquireSkillFishing {
+		s.learnFishingSkill(p, n, id, level) // fishing_npc.go
+		return
+	}
 	if req.Type != clientpackets.AcquireSkillClass {
-		s.log.Debug("game: fishing skills are not learned yet", append(p.logArgs(), "skill", id, "type", req.Type)...)
 		return
 	}
 	class := learningClass(p)
@@ -379,7 +386,7 @@ func (s *Server) checkLearnSkill(p *Player, n *Npc, l *data.SkillLearn, class da
 	sp := l.SP
 	if sp > 0 && sp > int(p.SP()) {
 		p.SendSystemMessage(sysMsgLearnNotEnoughSP)
-		s.showSkillList(p, n, class)
+		s.showLearnList(p, n, class) // fishing_npc.go: a fisherman's list
 		return false
 	}
 	if !divineSPBookNeeded && l.SkillID == learnDivineInspiration {
@@ -395,7 +402,7 @@ func (s *Server) checkLearnSkill(p *Player, n *Npc, l *data.SkillLearn, class da
 		for _, it := range l.Items {
 			if p.inv.Count(int32(it.ID), -1, true) < it.Count { //nolint:gosec // item IDs are small
 				p.SendSystemMessage(sysMsgLearnNoMaterials)
-				s.showSkillList(p, n, class)
+				s.showLearnList(p, n, class)
 				return false
 			}
 		}
@@ -423,7 +430,7 @@ func (s *Server) giveLearnedSkill(p *Player, n *Npc, sk *skills.Skill, class dat
 	for _, fn := range s.learn.learned {
 		fn(p, sk)
 	}
-	s.showSkillList(p, n, class)
+	s.showLearnList(p, n, class)
 	if sk.ID >= firstStorageSkill && sk.ID <= lastStorageSkill {
 		p.Send(s.storageMaxCount(p))
 	}
@@ -501,7 +508,7 @@ func (s *Server) NewCharacterSkills(classID int) []storage.CharacterSkill {
 			continue
 		}
 		out = append(out, storage.CharacterSkill{
-			ClassIndex: classIndex,
+			ClassIndex: baseClassIndex,
 			ID:         int32(l.SkillID), //nolint:gosec // skill IDs are small
 			Level:      int32(l.Level),   //nolint:gosec // skill levels are small
 		})

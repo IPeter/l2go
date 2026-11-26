@@ -101,8 +101,8 @@ func (s *Server) gmGiveItem(gm, target *Player, id, count, enchant int32, withEn
 		return
 	}
 	if withEnchant {
-		if t.Enchantable && enchant > 0 {
-			it.SetEnchant(enchant)
+		if level, ok := s.createItemEnchant(t, enchant); ok { // enchant_protect.go
+			it.SetEnchant(level)
 		} else {
 			gm.SendMessage("This item is not enchantable, no enchant applied.")
 		}

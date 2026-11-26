@@ -108,6 +108,8 @@ type Player struct {
 
 	store playerStore // the private store (store.go)
 
+	craft playerCraft // the workshop and the craft flood limit (craft.go)
+
 	social playerSocial // the friend and block lists (friends.go)
 
 	party playerParty // the party, the request partner and summon requests (party.go)
@@ -115,6 +117,10 @@ type Player struct {
 	clan playerClan // the clan membership and privileges (clan.go)
 
 	vehicle playerVehicle // the boat the player is on (vehicle.go)
+
+	henna playerHenna // the dyes (henna.go)
+
+	mount playerMount // the strider or wyvern ridden (mount.go)
 }
 
 var (
@@ -324,7 +330,7 @@ func (p *Player) relationTo(v *Player) int32 {
 	if p.char.Karma > 0 {
 		r |= serverpackets.RelationHasKarma
 	}
-	return r | p.srv.clanRelationBits(p, v)
+	return r | p.srv.clanRelationBits(p, v) | p.srv.siegeRelationBits(p, v) // siege_zone.go
 }
 
 // autoAttackableBy reports whether v attacks p with a plain click (Mobius
@@ -340,14 +346,26 @@ func (p *Player) autoAttackableBy(v *Player) bool {
 		// Party members never attack each other with a click (Mobius
 		// Player.java 8383).
 		return false
+	case v.InOlympiadMode():
+		// A fighter attacks only its opponent of a started match
+		// (olympiad_rules.go).
+		attackable, _ := p.srv.olympiadAttack(p, v)
+		return attackable
 	case p.Zones.Inside(ZonePeace) || p.Zones.Inside(ZoneNoPvP):
 		return false
+	}
+	if a, ok := p.srv.siegeAutoAttackable(p, v); ok { // siege_zone.go
+		return a
+	}
+	switch {
 	case warAutoAttackable(p, v): // clanwar.go
 		return true
 	case p.Zones.Inside(ZonePvP) && v.Zones.Inside(ZonePvP) && (!p.Zones.Inside(ZoneSiege) || !v.Zones.Inside(ZoneSiege)):
 		return true
 	case sameClanOrAlly(p, v): // alliance.go
 		return false
+	case p.Zones.Inside(ZonePvP) && v.Zones.Inside(ZonePvP) && p.Zones.Inside(ZoneSiege) && v.Zones.Inside(ZoneSiege):
+		return true // Mobius: the siege battlefield after the clan and alliance checks
 	}
 	return p.char.Karma > 0 || p.PvPFlag > 0
 }

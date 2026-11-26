@@ -279,7 +279,16 @@ func parseSQLTable(script, file, table string) (*sqlTable, error) {
 			if t.name != table {
 				return nil, fmt.Errorf("line %d: creates table %s, want %s", first.line, t.name, table)
 			}
-		case first.is("INSERT"):
+		case first.is("DROP"):
+			// DROP TABLE [IF EXISTS] name: nothing to read (castle_siege_guards).
+			for {
+				tok, ok := p.peek()
+				if !ok || tok.is(";") {
+					break
+				}
+				p.pos++
+			}
+		case first.is("INSERT"), first.is("REPLACE"):
 			if t == nil {
 				return nil, fmt.Errorf("line %d: INSERT before CREATE TABLE", first.line)
 			}
@@ -426,8 +435,11 @@ func (t *sqlTable) column(name string) int {
 // insert reads INSERT [IGNORE] [INTO] name [(columns)] VALUES (row), ...
 // into t.
 func (p *sqlParser) insert(t *sqlTable) error {
-	if err := p.expect("INSERT"); err != nil {
-		return err
+	// REPLACE INTO inserts the same way into an empty table.
+	if !p.accept("REPLACE") {
+		if err := p.expect("INSERT"); err != nil {
+			return err
+		}
 	}
 	p.accept("IGNORE")
 	p.accept("INTO")

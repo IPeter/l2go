@@ -11,9 +11,10 @@
 -- VALAKAS_SPAWN_RANDOM; teleport cubes stand for 15 minutes, then the lair
 -- is emptied.
 --
--- Not ported: the anti-strider skill (the server has no mounts yet) and
--- setCastingNow(true) before a cast. The surrounding-region test of his
--- target is "still among his visible players".
+-- A strider rider hitting him gets Hinder Strider (4258) unless it has it.
+--
+-- Not ported: setCastingNow(true) before a cast. The surrounding-region
+-- test of his target is "still among his visible players".
 
 local boss = require("lib.boss")
 
@@ -24,6 +25,8 @@ local TELEPORT_CUBE = 31759
 
 local SKILL_REGEN = 4691
 local SKILL_LAVA_SKIN = 4680
+local SKILL_ANTI_STRIDER = 4258 -- Hinder Strider
+local MOUNT_STRIDER = 1 -- player:mount_type()
 local SKILLS_REGULAR = { 4681, 4682, 4683, 4689 }
 local SKILLS_LOW_HP = { 4681, 4682, 4683, 4689, 4690 }
 local SKILLS_AOE = { 4683, 4684, 4685, 4686, 4688, 4689, 4690 }
@@ -347,6 +350,10 @@ s:on_attack(function(npc, attacker, damage, is_summon)
   if grandboss.status(VALAKAS) ~= FIGHTING then
     attacker:teleport(EJECT)
     return
+  end
+  if attacker:mount_type() == MOUNT_STRIDER and not attacker:is_affected_by_skill(SKILL_ANTI_STRIDER) then
+    npc:set_target(attacker)
+    npc:cast(skills.get(SKILL_ANTI_STRIDER, 1))
   end
   last_attack = time.now_ms()
 end)

@@ -180,7 +180,8 @@ func (s *Server) flushStatus(time.Time) {
 		p.statusQueued = false
 		if p.state == stateInGame {
 			p.Send(vitalsStatusUpdate(p))
-			s.partyStatusUpdate(p) // party_window.go
+			s.partyStatusUpdate(p)    // party_window.go
+			s.olympiadStatusUpdate(p) // olympiad_game.go
 		}
 	}
 	clear(queue)
@@ -201,11 +202,13 @@ func (s *Server) regionSwitched(_ world.RegionKey, active bool, objects []world.
 	}
 }
 
-// regenZone returns what p's zones add to its regeneration: the Mother Tree
-// bonuses (Mobius calcHpRegen and calcMpRegen read the first MotherTreeZone
-// the player is in). Sieges, festivals and residences do not exist yet.
+// regenZone returns what p's zones add to its regeneration: the clan hall's
+// restore functions and the Mother Tree bonuses (Mobius calcHpRegen and
+// calcMpRegen read the first MotherTreeZone the player is in). Sieges,
+// festivals and castles do not add theirs yet.
 func (s *Server) regenZone(p *Player) stats.RegenZone {
 	var z stats.RegenZone
+	s.hallRegen(p, &z) // clanhall_funcs.go
 	if !p.Zones.Inside(ZoneMotherTree) || s.worldData == nil {
 		return z
 	}

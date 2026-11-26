@@ -22,7 +22,7 @@ import (
 // tradeoff, AdminInvul, AdminSuperHaste, AdminGmChat, AdminEnchant,
 // AdminEffects, the page and clan skill commands of AdminSkill, AdminBuffs,
 // and RequestGmList (/gmlist). The buttons of systems the server does not
-// have yet (mounts, petitions, events, sieges, the Olympiad, ...) answer that
+// have yet (mounts, petitions, sieges, the Olympiad, ...) answer that
 // they are not available yet.
 func init() { registerFeature("admin_gm", setupAdminGM) }
 
@@ -134,30 +134,17 @@ func adminParalyzed(c Creature) bool {
 // adminNotAvailable are the buttons of the admin pages whose systems do not
 // exist yet, with what they answer.
 var adminNotAvailable = map[string]string{
-	// GM menu.
-	"ride_strider":   "Mounts are not available yet.",
-	"ride_wyvern":    "Mounts are not available yet.",
-	"unride":         "Mounts are not available yet.",
-	"unride_strider": "Mounts are not available yet.",
-	"unride_wyvern":  "Mounts are not available yet.",
+	// GM menu (the ride commands are in mount.go).
 	"view_petitions": "Petitions are not available yet.",
-	"event_menu":     "Events are not available yet.",
 	"debug":          "Debugging is not available yet.",
 	"exceptions":     "The exception list is not available yet.",
 	"snoop":          "Snooping is not available yet.",
 	// Effects page.
 	"mobmenu": "Mob groups are not available yet.",
 	// Game page.
-	"siege":          "Sieges are not available yet.",
-	"cw_info_menu":   "Cursed weapons are not available yet.",
-	"cw_add":         "Cursed weapons are not available yet.",
-	"cw_remove":      "Cursed weapons are not available yet.",
-	"mammon_find":    "The Seven Signs are not available yet.",
-	"mammon_respawn": "The Seven Signs are not available yet.",
-	"manor":          "The manor is not available yet.",
-	"checkolympiad":  "The Olympiad is not available yet.",
-	"saveolymp":      "The Olympiad is not available yet.",
-	"givehero":       "The Olympiad is not available yet.",
+	// mammon_find and mammon_respawn are in sevensigns_gm.go, manor in
+	// manor_gm.go.
+	// checkolympiad, saveolymp and givehero are in olympiad_gm.go.
 }
 
 // adminEnchantSlots are the commands of the enchant page (Mobius
@@ -487,9 +474,9 @@ func (s *Server) gmSetEnchant(slot storage.PaperdollSlot) GMCommand {
 
 // adminSetEnchant is AdminEnchant.setEnchant: the item comes off, gets the
 // level and goes on again (its stats follow), the InventoryUpdate and the
-// UserInfo and CharInfo go out, and both are told. Mobius caps the level for
-// players below GM level with the enchant data (OverEnchantProtection),
-// which the server does not have yet.
+// UserInfo and CharInfo go out, and both are told. The level of a player
+// below GM level is capped with the enchant data (OverEnchantProtection,
+// enchant_protect.go).
 func (s *Server) adminSetEnchant(gm *Player, level int32, slot storage.PaperdollSlot) {
 	t := gm
 	if gm.Target != nil {
@@ -505,6 +492,7 @@ func (s *Server) adminSetEnchant(gm *Player, level int32, slot storage.Paperdoll
 		return
 	}
 	cur := it.Enchant()
+	level = s.capGMEnchant(gm, t, it.Template(), level)
 	t.inv.UnequipSlot(slot)
 	it.SetEnchant(level)
 	t.inv.Equip(it, inventory.Wearer{GM: t.IsGM()})

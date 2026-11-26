@@ -227,6 +227,10 @@ const (
 	PatchWantsPeace
 	PatchClanJoinExpiry
 	PatchClanCreateExpiry
+	// PatchKarma and PatchPKKills give back an offline holder's karma and
+	// PK count when its cursed weapon ends (cursedweapons.go).
+	PatchKarma
+	PatchPKKills
 
 	// PatchClanMembership is every clan field and the title: what Mobius
 	// Clan.removeClanMember writes for a member who leaves or is dismissed.
@@ -246,6 +250,8 @@ type PatchValues struct {
 	WantsPeace       bool
 	ClanJoinExpiry   int64
 	ClanCreateExpiry int64
+	Karma            int32
+	PKKills          int32
 }
 
 // CharacterPatch changes some fields of a character that may be offline
@@ -290,6 +296,12 @@ func (p CharacterPatch) Apply(c *Character) {
 	if set(PatchClanCreateExpiry) {
 		c.ClanCreateExpiry = v.ClanCreateExpiry
 	}
+	if set(PatchKarma) {
+		c.Karma = v.Karma
+	}
+	if set(PatchPKKills) {
+		c.PKKills = v.PKKills
+	}
 }
 
 // AllyCrest sets the alliance crest of every clan of an alliance (decision
@@ -314,8 +326,9 @@ type RelationChanges struct {
 // The parts apply in this order: the character saves in their order, the
 // other owners' item changes, the clan deletes and then the clan documents,
 // the alliance crests, the crest deletes and then the crests, the removed
-// and then the added relations, and last the patches in their order, so a
-// patch wins over a save of the same character in the same batch.
+// and then the added relations, the patches in their order, so a patch
+// wins over a save of the same character in the same batch, and last the
+// cursed weapon deletes and rows.
 type Batch struct {
 	Saves []CharacterSave
 	Items []OwnerItemChanges
@@ -336,13 +349,39 @@ type Batch struct {
 
 	// Patches to characters that do not exist are skipped.
 	Patches []CharacterPatch
+
+	// DeletedCursedWeapons are the item IDs of cursed weapon rows to remove;
+	// CursedWeapons are stored whole, replacing the row of the same item ID
+	// (cursedweapons.go). They apply after the patches, deletes first.
+	DeletedCursedWeapons []int32
+	CursedWeapons        []CursedWeapon
+
+	// Castles are stored whole, replacing the castle of the same ID
+	// (residence.go). They apply last.
+	Castles []Castle
+
+	// ClanHalls are stored whole, replacing the hall of the same ID;
+	// DeletedAuctions are removed, then Auctions stored whole, replacing the
+	// auction of the same ID (clanhalls.go). They apply after the castles.
+	ClanHalls       []ClanHall
+	DeletedAuctions []int32
+	Auctions        []Auction
+
+	// ManorCastles are stored whole, replacing the lists of the same castle;
+	// ManorState, when set, replaces the manor's mode (manor.go). They apply
+	// last.
+	ManorCastles []ManorCastle
+	ManorState   *ManorState
 }
 
 // Empty reports whether b writes nothing.
 func (b *Batch) Empty() bool {
 	return len(b.Saves) == 0 && len(b.Items) == 0 && len(b.DeletedClans) == 0 && len(b.Clans) == 0 &&
 		len(b.AllyCrests) == 0 && len(b.DeletedCrests) == 0 && len(b.Crests) == 0 &&
-		len(b.Relations.Added) == 0 && len(b.Relations.Removed) == 0 && len(b.Patches) == 0
+		len(b.Relations.Added) == 0 && len(b.Relations.Removed) == 0 && len(b.Patches) == 0 &&
+		len(b.DeletedCursedWeapons) == 0 && len(b.CursedWeapons) == 0 && len(b.Castles) == 0 &&
+		len(b.ClanHalls) == 0 && len(b.DeletedAuctions) == 0 && len(b.Auctions) == 0 &&
+		len(b.ManorCastles) == 0 && b.ManorState == nil
 }
 
 // BatchWriter writes a Batch in one transaction. Both stores implement it

@@ -17,10 +17,10 @@ import (
 // handleRequestMagicSkillUse handles RequestMagicSkillUse (0x2F), Mobius
 // RequestMagicSkillUse: a dead player gets ActionFailed; one faking death
 // may only use Fake Death again ("You cannot move while sitting." and
-// ActionFailed otherwise); an unknown skill gets ActionFailed. The request
-// ends the spawn protection; a continuous self buff stops the player where
-// it stands; then useMagic. Mounts and the karma teleport rule do not exist
-// yet (AltKarmaPlayerCanTeleport is on).
+// ActionFailed otherwise); an unknown skill gets ActionFailed; a rider's
+// toggle nothing. The request ends the spawn protection; a continuous self
+// buff stops the player where it stands; then useMagic. The karma teleport
+// rule does not exist yet (AltKarmaPlayerCanTeleport is on).
 func (s *Server) handleRequestMagicSkillUse(p *Player, body []byte) {
 	req, err := clientpackets.ParseRequestMagicSkillUse(body)
 	if err != nil {
@@ -45,6 +45,9 @@ func (s *Server) handleRequestMagicSkillUse(p *Player, body []byte) {
 	sk := p.KnownSkill(int(req.SkillID))
 	if sk == nil {
 		p.SendActionFailed()
+		return
+	}
+	if sk.IsToggle() && s.mounted(p) { // mount.go: riders use no toggles
 		return
 	}
 	s.onActionRequest(p)
@@ -156,8 +159,10 @@ func (s *Server) useMagic(p *Player, sk *skills.Skill, ctrl, shift bool) bool {
 //   - No line of sight for a skill with a cast range: "Cannot see target."
 //     and ActionFailed.
 //
-// Mounts, cursed weapons, fishing, observers, doors, duels, the Olympiad and
-// sieges do not exist yet.
+// A cursed weapon holder casts only Void Burst and Void Flow, without a
+// message (cursedweapon.go); a rider its mount's skills (mount.go). Fishing,
+// observers, doors, duels, the
+// Olympiad and sieges do not exist yet.
 func (s *Server) checkUseMagicConditions(p *Player, sk *skills.Skill, ctrl, shift bool) bool {
 	a := p.skill
 	el := a.el
@@ -167,6 +172,15 @@ func (s *Server) checkUseMagicConditions(p *Player, sk *skills.Skill, ctrl, shif
 	}
 	if p.wearsFormalWear() {
 		p.SendSystemMessage(sysMsgFormalWearNoCasting)
+		return false
+	}
+	if !cursedSkillAllowed(p, sk.ID) {
+		return false
+	}
+	if !mountSkillAllowed(p, sk) { // mount.go
+		return false
+	}
+	if s.fishingSkillRefused(p, sk) { // fishing.go
 		return false
 	}
 	if p.Sitting {
@@ -201,6 +215,10 @@ func (s *Server) checkUseMagicConditions(p *Player, sk *skills.Skill, ctrl, shif
 		return false
 	}
 	target, _ := obj.(Creature)
+	if d, ok := obj.(*Door); ok && !s.doorSkillTarget(d, tt == data.TargetUnlockable) { // door_combat.go
+		p.SendSystemMessage(sysMsgInvalidTarget)
+		return false
+	}
 
 	if s.skillDisabled(&a.skillBase, sk) {
 		if left := a.reuseLeft(sk, s.Now()); left > 0 {
@@ -283,6 +301,8 @@ func castAutoAttackable(p *Player, t Creature) bool {
 	case *Npc:
 		return v.autoAttackableBy(p)
 	case *Player:
+		return v.autoAttackableBy(p)
+	case *Door:
 		return v.autoAttackableBy(p)
 	}
 	return false

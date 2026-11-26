@@ -48,8 +48,8 @@ func (p *Player) SendSkillList() {
 
 // skillListPacket builds SkillList (Mobius sendSkillList's task): every
 // known skill in map order with its display ID and level; an active skill
-// is disabled while p wears formal wear. Clans, cursed weapons and mounts do
-// not exist yet.
+// is disabled while p wears formal wear, and a rider's but its mount's
+// (mount.go). Cursed weapons do not disable skills here yet.
 func skillListPacket(p *Player) []byte {
 	known := p.skill.known.all()
 	formal := p.wearsFormalWear()
@@ -59,7 +59,7 @@ func skillListPacket(p *Player) []byte {
 			ID:       int32(sk.DisplayID),    //nolint:gosec // skill IDs are small
 			Level:    int32(sk.DisplayLevel), //nolint:gosec // skill levels are small
 			Passive:  sk.IsPassive(),
-			Disabled: p.clanSkillDisabled(sk) || (!sk.IsPassive() && formal),
+			Disabled: p.clanSkillDisabled(sk) || (!sk.IsPassive() && (formal || !mountSkillAllowed(p, sk))),
 		}
 	}
 	return serverpackets.NewSkillListPacket(entries)

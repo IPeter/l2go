@@ -91,7 +91,7 @@ func dropConfig(gs config.GameServer) stats.DropConfig {
 // order of the feature comment.
 func (s *Server) npcDied(victim, killer Creature) {
 	n, ok := victim.(*Npc)
-	if !ok {
+	if !ok || n.summon != nil { // a summon dies its own way (summon.go)
 		return
 	}
 	attackable := n.class != nil && n.class.attackable
@@ -142,6 +142,7 @@ func (s *Server) npcDropItems(n *Npc, c Creature) {
 	if !ok || p == nil {
 		return
 	}
+	s.cursedCheckDrop(n, p) // cursedweapon.go: before the drop list, as Mobius rolls it
 	list := s.dropListOf(n.Template)
 	if list == nil {
 		return
@@ -153,6 +154,7 @@ func (s *Server) npcDropItems(n *Npc, c Creature) {
 		Raid:        raid,
 		Player:      p.stats,
 	})
+	drops = s.manorFilterDrops(n, drops) // manor_sow.go: a sown monster
 	combat := s.combatSettings()
 	for _, d := range drops {
 		t, ok := s.data.ItemTemplate(d.ItemID)

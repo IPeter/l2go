@@ -18,6 +18,8 @@
 //   - counters: the object ID and crest ID counters (see IDs and Crests).
 //   - raidbosses, grandbosses, grandboss_zone_players and raid_points: the
 //     boss state (see Bosses).
+//   - cursed_weapons: one document per held cursed weapon, written by
+//     storage.Batch (see cursedweapons.go).
 //
 // A character and its items are written in one transaction, and so is a
 // storage.Batch (Characters.WriteBatch), so the

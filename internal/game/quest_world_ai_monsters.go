@@ -8,12 +8,13 @@ import (
 // The monster flags of the AI scripts (scripting's api_monsters.go): lethal
 // strikes (read by skillBase.IsLethalable), Silent Move (read by
 // isAggressiveTowards), the world region and the template's minion lists.
-// Cursed weapons do not exist yet, so the game's players have no
-// PlayerCursedWeapon and the scripts see none equipped.
+// player:is_cursed_weapon_equipped() is Player.CursedWeaponEquipped
+// (cursedweapon.go).
 
 var (
 	_ scripting.MonsterFlags       = (*ScriptOutput)(nil)
 	_ scripting.NpcTemplateMinions = npcRef{}
+	_ scripting.PlayerCursedWeapon = (*Player)(nil)
 )
 
 // NpcSetLethalable is Mobius setLethalable.

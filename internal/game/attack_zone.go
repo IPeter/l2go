@@ -44,5 +44,11 @@ func (s *Server) onForcedAttack(p *Player, o world.Object) {
 		p.SendActionFailed()
 		return
 	}
+	if _, door := t.(*Door); door && !p.IsGM() {
+		// A door's canBeAttacked is false: only GMs (allowPeaceAttack)
+		// force an attack on one (door_combat.go).
+		p.SendActionFailed()
+		return
+	}
 	s.playerIntendAttack(p, t)
 }

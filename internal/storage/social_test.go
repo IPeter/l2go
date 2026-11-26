@@ -10,8 +10,9 @@ func TestCharacterPatchApply(t *testing.T) {
 		LvlJoinedAcademy: 5, WantsPeace: true, ClanJoinExpiry: 6, ClanCreateExpiry: 7}
 	var c Character
 	CharacterPatch{Fields: PatchClanMembership, Values: full}.Apply(&c)
-	got := PatchValues{c.ClanID, c.Title, c.PowerGrade, c.PledgeType, c.Apprentice, c.Sponsor,
-		c.LvlJoinedAcademy, c.WantsPeace, c.ClanJoinExpiry, c.ClanCreateExpiry}
+	got := PatchValues{ClanID: c.ClanID, Title: c.Title, PowerGrade: c.PowerGrade, PledgeType: c.PledgeType,
+		Apprentice: c.Apprentice, Sponsor: c.Sponsor, LvlJoinedAcademy: c.LvlJoinedAcademy, WantsPeace: c.WantsPeace,
+		ClanJoinExpiry: c.ClanJoinExpiry, ClanCreateExpiry: c.ClanCreateExpiry}
 	if got != full {
 		t.Errorf("Apply of every field = %+v, want %+v", got, full)
 	}
@@ -21,6 +22,13 @@ func TestCharacterPatchApply(t *testing.T) {
 	want := Character{Name: "Kept", Title: "old", ClanID: 9, Level: 40, PowerGrade: 2, Sponsor: 4}
 	if !reflect.DeepEqual(c, want) {
 		t.Errorf("Apply of two fields = %+v, want %+v", c, want)
+	}
+
+	// The karma and PK count of a cursed weapon's offline end.
+	c = Character{Karma: 9999999, PKKills: 14, ClanID: 9}
+	CharacterPatch{Fields: PatchKarma | PatchPKKills, Values: PatchValues{Karma: 720, PKKills: 3}}.Apply(&c)
+	if want := (Character{Karma: 720, PKKills: 3, ClanID: 9}); !reflect.DeepEqual(c, want) {
+		t.Errorf("Apply of karma and PKs = %+v, want %+v", c, want)
 	}
 }
 
@@ -39,6 +47,8 @@ func TestBatchEmpty(t *testing.T) {
 		"added":      {Relations: RelationChanges{Added: FriendRelations(1, 2)}},
 		"removed":    {Relations: RelationChanges{Removed: FriendRelations(1, 2)}},
 		"patches":    {Patches: []CharacterPatch{{}}},
+		"cw deleted": {DeletedCursedWeapons: []int32{8190}},
+		"cw rows":    {CursedWeapons: []CursedWeapon{{ItemID: 8190}}},
 	} {
 		if b.Empty() {
 			t.Errorf("%s: Empty() = true", name)

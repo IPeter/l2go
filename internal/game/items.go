@@ -113,7 +113,10 @@ type manaTask struct {
 // playerItems is the item feature's state of a player (Player.items).
 type playerItems struct {
 	warehouse *inventory.Container
-	tracker   *inventory.Tracker
+	// pet is the pet inventory: the player's items at LocPet and LocPetEquip
+	// (pet_items.go).
+	pet     *inventory.Container
+	tracker *inventory.Tracker
 	// unknown are the stored items the data has no template for: kept and
 	// saved as they are, never shown (Mobius skips them).
 	unknown []storage.Item
@@ -224,8 +227,11 @@ func (s *Server) loadItems(p *Player, items []storage.Item) {
 			items[i].Mana = storage.NoMana
 		}
 	}
-	unknown := inv.Load(items, inventory.Wearer{GM: p.char.AccessLevel >= storage.AccessLevelAdmin})
+	unknown := inv.Load(items, inventory.Wearer{GM: p.char.AccessLevel >= storage.AccessLevelAdmin, Hero: s.heroID(p.char.ObjectID)}) // hero.go
 	unknown = append(unknown, wh.Load(items)...)
+	pet := inventory.NewPetInventory(func() int { return petInventoryLimit }, opts) // pet_items.go
+	unknown = append(unknown, pet.LoadPet(items)...)
+	p.items.pet = pet
 	for _, si := range unknown {
 		s.log.Warn("game: item without a template, kept but not shown", append(p.logArgs(), "item", si.ItemID, "itemObjectId", si.ObjectID)...)
 	}
@@ -475,7 +481,7 @@ func (c itemCondition) Female() bool { return c.p.Female() }
 
 func (c itemCondition) PKKills() int { return int(c.p.char.PKKills) }
 
-func (c itemCondition) Hero() bool { return false } // no heroes yet
+func (c itemCondition) Hero() bool { return c.p.IsHero() } // hero.go
 
 func (c itemCondition) PvPFlagged() bool { return c.p.PvPFlag != 0 }
 

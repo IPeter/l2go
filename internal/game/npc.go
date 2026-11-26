@@ -93,6 +93,8 @@ type Npc struct {
 	boss  npcBoss   // leader, minions and boss state (minion.go, raid.go)
 	// script is what the AI scripts set on the NPC (quest_world_ai.go).
 	script npcScriptState
+	// summon is set for a player's servitor or pet (summon.go).
+	summon *Summon
 }
 
 var (
@@ -204,8 +206,14 @@ func (r npcRef) DisplayID() int { return r.n.Template.DisplayID }
 // Name returns the template's name (Mobius Npc.getName).
 func (n *Npc) Name() string { return n.Template.Name }
 
-// Level returns the template's level (Mobius Npc.getLevel).
-func (n *Npc) Level() int { return n.Template.Level }
+// Level returns the template's level (Mobius Npc.getLevel), a pet's own
+// level for a pet (summon.go).
+func (n *Npc) Level() int {
+	if n.summon != nil {
+		return n.summon.level()
+	}
+	return n.Template.Level
+}
 
 // Type returns the Mobius class of the NPC (Folk, Monster, Teleporter, ...).
 func (n *Npc) Type() string { return n.Template.Type }
@@ -244,6 +252,10 @@ func (n *Npc) FlushUpdate(u world.Update) {
 	if u&world.UpdateCharInfo == 0 || !n.InWorld() || n.srv == nil {
 		return
 	}
+	if n.summon != nil {
+		n.srv.summonFlush(n.summon, u) // summon_info.go
+		return
+	}
 	var shared [2][]byte // by the attackable flag
 	for v := range n.srv.world.VisiblePlayers(n) {
 		vp, ok := v.(*Player)
@@ -265,6 +277,9 @@ func (n *Npc) FlushUpdate(u world.Update) {
 // Npc.sendInfo): NpcInfo, or ServerObjectInfo for an NPC whose run speed is
 // 0, and MoveToLocation while it walks (InfoProvider).
 func (n *Npc) InfoFor(viewer *Player) [][]byte {
+	if n.summon != nil && n.srv != nil {
+		return n.srv.summonInfoFor(n.summon, viewer) // summon_info.go
+	}
 	body := n.infoPacket(n.autoAttackableBy(viewer))
 	if m := n.Move; m != nil {
 		return [][]byte{body, moveToLocationPacket(n, m.Destination)}
@@ -370,8 +385,17 @@ func (n *Npc) statView() stats.NpcView {
 // exist yet).
 func (n *Npc) autoAttackableBy(p *Player) bool {
 	switch {
+	case n.summon != nil && n.srv != nil:
+		return n.srv.summonAutoAttackable(n.summon, p) // summon.go
 	case n.class == nil:
 		return false
+	}
+	if n.srv != nil {
+		if a, ok := n.srv.siegeNpcAutoAttackable(n, p); ok { // siege_zone.go
+			return a
+		}
+	}
+	switch {
 	case n.class.friendly:
 		return p != nil && p.Karma() > 0
 	case n.class.monster:
@@ -533,6 +557,7 @@ func (s *Server) DespawnNpc(n *Npc) {
 	comeBack := n.boss.comeBack                     // a dead minion its master brings back (minion.go)
 	s.npcSkillsGone(n, n.spawn == nil && !comeBack) // skill_persist.go
 	s.questNpcGone(n)                               // quest_events.go: its quest timers stop
+	s.manorNpcGone(n)                               // manor_sow.go: its seed
 	switch sp := n.spawn; {
 	case sp != nil:
 		s.scheduleRespawn(sp)

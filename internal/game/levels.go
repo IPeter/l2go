@@ -82,6 +82,7 @@ func (s *Server) levelForExp(exp int64) int {
 // UserInfo. A GM command or quest gives a plain reward:
 // stats.Reward{Exp: e, SP: sp, ShownExp: e, ShownSP: sp}. Loop-only.
 func (s *Server) AddExpAndSP(p *Player, r stats.Reward) {
+	r = s.petExpShare(p, r) // pet.go: a pet nearby takes its share
 	expAdded := s.AddExp(p, r.Exp)
 	spAdded := s.addSP(p, r.SP)
 	switch {
@@ -104,7 +105,7 @@ func (s *Server) AddExpAndSP(p *Player, r stats.Reward) {
 // message and reports whether exp may be gained (always). Loop-only.
 func (s *Server) AddExp(p *Player, amount int64) bool {
 	s.changeExp(p, amount)
-	if p.char.Karma > 0 && !p.Zones.Inside(ZonePvP) {
+	if !p.CursedWeaponEquipped() && p.char.Karma > 0 && !p.Zones.Inside(ZonePvP) {
 		mod, ok := s.data.KarmaLoss.At(p.Level())
 		if ok && mod > 0 {
 			if lost := s.combat.KarmaLost(amount, mod); lost > 0 {
@@ -203,7 +204,7 @@ func (s *Server) AddLevel(p *Player, delta int) bool {
 	if old+delta > maxLevel-1 {
 		return false
 	}
-	level := max(old+delta, 1)
+	level := max(old+delta, s.minPlayerLevel(p)) // subclass.go: a subclass stays at 40 or above
 	increased := level > old
 	p.stats.SetLevel(level)
 	p.char.Level = int32(p.Level()) //nolint:gosec // levels are small

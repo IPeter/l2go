@@ -21,7 +21,7 @@ var nonHTMLBypasses = []string{
 
 // notYetCommands are the bypass commands (lower case) of the Mobius bypass
 // handlers whose features come in later milestones: trying clothes on,
-// multisell, warehouses and freight, skill enchanting, augmenting, the
+// multisell, warehouses and freight, skill enchanting, the
 // blessing of protection, the lottery, festivals, observation, the rift and the rest
 // (decision N6). They answer with the "not available yet" page; so does any
 // other NPC command the server does not know yet, since the link cache
@@ -31,8 +31,7 @@ var notYetCommands = map[string]bool{
 	"depositp": true, "withdrawp": true, "withdrawsortedp": true,
 	"withdrawsortedc": true,
 	"package_deposit": true, "package_withdraw": true,
-	"enchantskilllist": true, "augment": true,
-	"giveblessing": true, "loto": true,
+	"enchantskilllist": true, "giveblessing": true, "loto": true,
 	"festival": true, "festivaldesc": true,
 	"observe": true, "observesiege": true, "observeoracle": true,
 	"enterrift": true, "changeriftroom": true, "exitrift": true,
@@ -93,19 +92,24 @@ func (s *Server) handleBypass(p *Player, body []byte) {
 	switch {
 	case strings.HasPrefix(command, "admin_"):
 		s.RunGMCommand(p, strings.TrimPrefix(command, "admin_"))
+	case isBoardBypass(command):
+		s.boardBypass(p, command) // bbs.go: the community board
 	case strings.HasPrefix(command, "npc_"):
 		s.npcBypass(p, command)
 		p.SendActionFailed()
 	case strings.HasPrefix(command, "item_"):
 		// No item has a dialog yet (Mobius item.onBypassFeedback).
 		p.SendActionFailed()
+	case strings.HasPrefix(command, "_match"), strings.HasPrefix(command, "_diary"):
+		s.heroPageBypass(p, command) // hero_diary.go
+	case strings.HasPrefix(command, "OlympiadArenaChange"):
+		s.olympiadArenaChange(p, command) // olympiad_observe.go
+	case strings.HasPrefix(command, "manor_menu_select"):
+		s.manorMenuSelect(p, command) // manor_npc.go
 	case strings.HasPrefix(command, "_") || strings.HasPrefix(command, "bbs"),
-		strings.HasPrefix(command, "OlympiadArenaChange"),
-		strings.HasPrefix(command, "manor_menu_select"),
 		strings.HasPrefix(command, "report"),
 		command == "come_here":
-		// The community board, the Olympiad, the manor, bot reports and
-		// GM NPC calls come later.
+		// Bot reports and GM NPC calls come later.
 		s.log.Debug("game: bypass not handled yet", append(p.logArgs(), "bypass", command)...)
 	default:
 		var n *Npc
@@ -188,6 +192,32 @@ func (s *Server) npcCommand(p *Player, n *Npc, command string) {
 		if s.villageMasterCommand(p, n, command) { // clan_vm.go
 			return
 		}
+	case s.npcIs(n, "Fisherman"):
+		if s.fishermanCommand(p, n, command) { // fishing_npc.go
+			return
+		}
+	case s.npcIs(n, "OlympiadManager"):
+		if s.olympiadManagerCommand(p, n, command) { // olympiad_npc.go
+			return
+		}
+	case s.npcIs(n, "SignsPriest"):
+		if s.signsPriestCommand(p, n, command) { // sevensigns_script.go
+			return
+		}
+	case s.npcIs(n, "DungeonGatekeeper"):
+		if s.dungeonGatekeeperCommand(p, n, command) { // sevensigns.go
+			return
+		}
+	case s.npcIs(n, "ClanHallManager"):
+		if s.hallManagerCommand(p, n, command) { // clanhall_npc.go
+			return
+		}
+	case s.npcIs(n, "Auctioneer"):
+		if s.auctioneerCommand(p, n, command) { // auction_npc.go
+			return
+		}
+	case s.npcIs(n, "ClanHallDoorman") && s.hallDoormanCommand(p, n, command): // clanhall_npc.go
+		return
 	case s.npcIs(n, "Doorman"):
 		if strings.HasPrefix(command, "Chat") {
 			s.showFirstPage(p, n)
@@ -196,7 +226,10 @@ func (s *Server) npcCommand(p *Player, n *Npc, command string) {
 		if strings.HasPrefix(command, "open_doors") || strings.HasPrefix(command, "close_doors") || strings.HasPrefix(command, "tele") {
 			// Only the owners of a castle or clan hall may use them, and
 			// nobody owns one yet; a plain doorman's doors come with doors.
-			if !s.npcIs(n, "CastleDoorman") && !s.npcIs(n, "ClanHallDoorman") {
+			switch {
+			case s.npcIs(n, "CastleDoorman"):
+				s.castleDoormanBypass(p, n, command) // castle_npc.go
+			case !s.npcIs(n, "ClanHallDoorman"):
 				s.showNotYet(p, n)
 			}
 			return
@@ -233,8 +266,16 @@ func (s *Server) runBypassHandler(p *Player, n *Npc, command string) {
 		s.bypassClanWarehouse(p, n, word) // clan_warehouse.go
 	case n != nil && word == "skilllist":
 		s.bypassSkillList(p, n) // skill_learn.go
+	case n != nil && word == "enchantskilllist":
+		s.bypassEnchantSkillList(p, n) // enchantskill.go
 	case n != nil && word == "supportmagic":
 		s.bypassSupportMagic(p, n) // newbie.go
+	case n != nil && word == "augment":
+		s.bypassAugment(p, command) // augment.go
+	case n != nil && (word == "festival" || word == "festivaldesc") && s.npcIs(n, "FestivalGuide"):
+		s.bypassFestival(p, n, command) // festival_run.go
+	case n != nil && riftCommands[word]:
+		s.bypassRift(p, n, word, command) // rift.go
 	case shopCommands[word]:
 		s.shopBypass(p, n, word, command) // shop.go
 	case n != nil:

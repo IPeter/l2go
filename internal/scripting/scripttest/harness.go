@@ -350,6 +350,10 @@ type Player struct {
 
 	// Noble is player:is_noble(); player:set_noble sets it.
 	Noble bool
+	// ClassIndex is player:class_index(), 0 for the base class; a class
+	// index above 0 makes player:is_sub_class_active() true. SubClasses is
+	// player:total_sub_classes().
+	ClassIndex, SubClasses int
 	// Weapon is the item ID of player:active_weapon(); 0 takes the item in
 	// Equipped[Paperdoll.RHAND], if any.
 	Weapon int
@@ -380,6 +384,8 @@ type Player struct {
 	GM, Invisible, Hero bool
 	// CursedWeapon is player:is_cursed_weapon_equipped().
 	CursedWeapon bool
+	// Mount is what the player rides (mount.go), nil on foot.
+	Mount *Mount
 	// The area scripts' state (areas.go): EffectLevels are the levels of the
 	// skills in Effects (1 when missing); Weight is player:weight_penalty();
 	// Party the party's members, the leader first (MakeParty), nil alone.
@@ -388,6 +394,12 @@ type Player struct {
 	Party        []*Player
 	// InCombat is player:is_in_combat() (areas_b.go).
 	InCombat bool
+	// HennaWindows records the symbol windows the scripts opened, in order:
+	// "equip" (player:show_henna_equip_list()) and "remove" (henna.go).
+	HennaWindows []string
+	// ClanPrivileges are the Mobius ClanAccess names the player holds
+	// (player:has_clan_privilege, castle.go); a clan leader holds all.
+	ClanPrivileges []string
 
 	quests map[string]*QuestState
 }
@@ -432,14 +444,15 @@ func (p *Player) Ref() scripting.PlayerRef {
 type playerRef struct{ p *Player }
 
 var (
-	_ scripting.PlayerItems   = playerRef{}
-	_ scripting.PlayerDetails = playerRef{}
-	_ scripting.PlayerVars    = playerRef{}
-	_ scripting.PlayerClasses = playerRef{}
-	_ scripting.PlayerCombat  = playerRef{}
-	_ scripting.PlayerNoble   = playerRef{}
-	_ scripting.PlayerStatus  = playerRef{}
-	_ scripting.Located       = playerRef{}
+	_ scripting.PlayerItems    = playerRef{}
+	_ scripting.PlayerDetails  = playerRef{}
+	_ scripting.PlayerVars     = playerRef{}
+	_ scripting.PlayerClasses  = playerRef{}
+	_ scripting.PlayerCombat   = playerRef{}
+	_ scripting.PlayerNoble    = playerRef{}
+	_ scripting.PlayerSubclass = playerRef{}
+	_ scripting.PlayerStatus   = playerRef{}
+	_ scripting.Located        = playerRef{}
 )
 
 func (r playerRef) PkKills() int     { return r.p.PkKills }
@@ -489,6 +502,10 @@ func (r playerRef) BroadcastUserInfo() { r.p.UserInfos++ }
 
 func (r playerRef) IsNoble() bool       { return r.p.Noble }
 func (r playerRef) SetNoble(noble bool) { r.p.Noble = noble }
+
+func (r playerRef) IsSubClassActive() bool { return r.p.ClassIndex > 0 }
+func (r playerRef) ClassIndex() int        { return r.p.ClassIndex }
+func (r playerRef) TotalSubClasses() int   { return r.p.SubClasses }
 
 func (r playerRef) ActiveWeaponID() int {
 	if r.p.Weapon != 0 {
@@ -633,6 +650,10 @@ type Npc struct {
 	DisabledSkills            []int
 	AggroRange, ClanHelpRange int
 	ParamSkills               map[string]scripting.Skill
+	// Castle is npc:castle() (castle.go), nil for none.
+	Castle *Castle
+	// Hall is clanhall.of_npc(npc) (clanhall.go), nil for none.
+	Hall *ClanHall
 }
 
 // Hate is one row of a fake NPC's aggro list. Target is a *Player or *Npc.

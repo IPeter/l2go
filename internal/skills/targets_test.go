@@ -69,15 +69,15 @@ func TestTargetOneAndSelf(t *testing.T) {
 
 func TestTargetTypeNotHandled(t *testing.T) {
 	f := newFixture(t)
-	sk := targetSkill(t, f, "HOLY", false, nil)
+	sk := targetSkill(t, f, "FLAGPOLE", false, nil)
 	p := skilltest.NewPlayer(f.env, 1)
 	if got := sk.Targets(f.env, p, false, p); got != nil {
-		t.Fatalf("HOLY = %v, want none until M11", ids(got))
+		t.Fatalf("FLAGPOLE = %v, want none", ids(got))
 	}
 	if !slices.Equal(p.Texts, []string{skills.TextTargetTypeNotHandled}) {
 		t.Fatalf("texts = %v", p.Texts)
 	}
-	if skills.TargetTypePorted(data.TargetHoly) || !skills.TargetTypePorted(data.TargetAura) {
+	if skills.TargetTypePorted(data.TargetFlagpole) || !skills.TargetTypePorted(data.TargetAura) || !skills.TargetTypePorted(data.TargetHoly) {
 		t.Fatalf("TargetTypePorted is wrong")
 	}
 }

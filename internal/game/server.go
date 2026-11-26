@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/IPeter/l2go/internal/calendar"
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
 	"github.com/IPeter/l2go/internal/geo"
@@ -195,6 +196,35 @@ type Server struct {
 	vehicles   vehicleFeature    // vehicle.go
 
 	clanWH clanWarehouseFeature // clan_warehouse.go
+	cursed cursedFeature        // cursedweapon.go
+
+	extraDrop  extraDropFeature  // npc_reward_extra.go
+	longEvents longEventsFeature // long_time_event.go
+
+	henna hennaFeature // henna.go
+
+	summons summonFeature // summon.go
+
+	subclass subclassFeature // subclass.go
+
+	craft craftFeature // craft.go
+
+	enchant enchantFeature // enchant.go
+
+	augment augmentFeature // augment.go
+
+	fishing  fishingFeature    // fishing.go
+	calendar calendar.Calendar // calendar.go: Options.TimeZone
+
+	olympiad olympiadFeature // olympiad.go
+
+	residence residenceFeature // residence.go: castles and sieges
+	halls     hallFeature      // clanhall.go: clan halls, auctions, hall sieges
+	manor     manorFeature     // manor.go: the castle manor
+
+	board boardFeature // bbs.go: the community board
+
+	sevenSigns sevenSignsFeature // sevensigns.go: the Seven Signs, the festival, the rift
 }
 
 var _ Service = (*Server)(nil)
@@ -288,7 +318,18 @@ func New(opts Options) (*Server, error) {
 	s.clan.store = opts.Clans
 	s.crests.store = opts.Crests
 	s.bosses.data, s.bosses.store = opts.Bosses, opts.BossStore
+	s.summons.data, s.summons.store = opts.Summons, opts.SummonStore
 	s.doors.data = opts.Objects
+	s.longEvents.data = opts.LongTimeEvents
+	s.fishing.data, s.fishing.store = opts.Fishing, opts.FishingStore
+	s.olympiad.store = opts.OlympiadStore
+	s.residence.data, s.residence.store = opts.Castles, opts.CastleStore // residence.go
+	s.halls.data, s.halls.store = opts.ClanHalls, opts.ClanHallStore    // clanhall.go
+	s.manor.store = opts.ManorStore                                     // manor.go
+
+	s.board.store = opts.BBS // bbs.go: the community board's mails and favorites
+	s.sevenSigns.data, s.sevenSigns.store = opts.SevenSigns, opts.SevenSignsStore // sevensigns.go
+	s.calendar = calendarOf(opts.TimeZone)
 	bg := context.Background()
 	s.bg.Store(&bg)
 	s.world.SetUpdateFlush(s.flushUpdate)

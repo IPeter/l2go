@@ -67,6 +67,7 @@ type Item struct {
 	mana     int32
 	custom1  int32
 	custom2  int32
+	aug      int32 // the augmentation, 0 for none (Plan 14, M11d)
 
 	lastChange Change
 	dirty      bool
@@ -110,6 +111,7 @@ func fromStorage(si storage.Item, t *data.Item) *Item {
 		mana:       si.Mana,
 		custom1:    si.CustomType1,
 		custom2:    si.CustomType2,
+		aug:        si.Augmentation,
 		lastChange: Modified,
 	}
 }
@@ -169,26 +171,48 @@ func (it *Item) Equipable() bool {
 // Depositable reports whether the item may go into a warehouse: the
 // template allows it and it is not worn; the clan warehouse and freight
 // (private false) also need it tradable and without mana (Mobius
-// isDepositable).
+// isDepositable). An augmented item is not tradable there
+// (AltAllowAugmentTrade is off).
 func (it *Item) Depositable(private bool) bool {
 	if !it.tmpl.Depositable || it.Equipped() {
 		return false
 	}
-	return private || (it.tmpl.Tradable && !it.Shadow())
+	return private || (it.tmpl.Tradable && !it.Shadow() && it.aug == 0)
+}
+
+// Augmentation returns the item's augmentation: option 1 in the low 16
+// bits, option 2 in the high 16; 0 for none (Mobius getAugmentation).
+func (it *Item) Augmentation() int32 { return it.aug }
+
+// Augmented reports whether the item has an augmentation (Mobius
+// isAugmented).
+func (it *Item) Augmented() bool { return it.aug != 0 }
+
+// SetAugmentation sets the augmentation, 0 to remove it (Mobius
+// setAugmentation and removeAugmentation). It does not touch the bonuses of
+// a worn item: the game takes the item off first, as Mobius does.
+func (it *Item) SetAugmentation(aug int32) {
+	if aug == it.aug {
+		return
+	}
+	it.aug = aug
+	it.lastChange = Modified
+	it.touch(Modified)
 }
 
 // Storage returns the item as the stores keep it.
 func (it *Item) Storage() storage.Item {
 	return storage.Item{
-		ObjectID:    it.objectID,
-		ItemID:      it.ItemID(),
-		Count:       it.count,
-		Enchant:     it.enchant,
-		Slot:        it.slot,
-		Loc:         it.loc,
-		Mana:        it.mana,
-		CustomType1: it.custom1,
-		CustomType2: it.custom2,
+		ObjectID:     it.objectID,
+		ItemID:       it.ItemID(),
+		Count:        it.count,
+		Enchant:      it.enchant,
+		Slot:         it.slot,
+		Loc:          it.loc,
+		Mana:         it.mana,
+		CustomType1:  it.custom1,
+		CustomType2:  it.custom2,
+		Augmentation: it.aug,
 	}
 }
 

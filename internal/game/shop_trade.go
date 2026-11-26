@@ -138,6 +138,7 @@ func (s *Server) handleBuyItem(p *Player, body []byte) {
 			// Sold out after the check (the request named the product twice):
 			// the adena comes back.
 			s.AddAdena(p, ln.price*ln.count, true)
+			subTotal -= ln.price * ln.count
 			continue
 		}
 		if _, err := p.inv.Create(int32(ln.product.ItemID), ln.count); err != nil { //nolint:gosec // item IDs fit in int32
@@ -147,6 +148,9 @@ func (s *Server) handleBuyItem(p *Player, body []byte) {
 		}
 		// PlayerInventory.addItem: InventoryUpdate and the load.
 		s.itemsChanged(p, true, nil)
+	}
+	if merchant != nil {
+		s.merchantTreasury(merchant, subTotal) // merchant_tax.go
 	}
 	s.finishTransaction(p)
 }
@@ -272,7 +276,7 @@ func (s *Server) handleSellItem(p *Player, body []byte) {
 // the template.
 func sellableItem(p *Player, sell clientpackets.SellItem) *inventory.Item {
 	it := p.inv.ByObjectID(sell.ObjectID)
-	if it == nil || !it.Template().Sellable {
+	if it == nil || !it.Template().Sellable || augmentLocked(it) {
 		return nil
 	}
 	count := int64(sell.Count)

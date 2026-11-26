@@ -248,14 +248,14 @@ func (s *Server) tryOpenBuyStore(p *Player) {
 // canOpenStore is Mobius Player.canOpenPrivateStore: not within 50 of a
 // sitting player or 100 of an NPC (decision T11, "You cannot open a Private
 // Store here." otherwise), alive, not in a no-store zone, not casting. The
-// olympiad and mounts do not exist yet.
+// olympiad does not exist yet; a rider may not (mount.go).
 func (s *Server) canOpenStore(p *Player) bool {
 	cfg := s.gs.Stores
 	if (cfg.MinRangeFromNpc > 0 || cfg.MinRangeFromPlayer > 0) && s.storeTooClose(p) {
 		p.SendSystemMessage(storeMsgCannotOpenHere)
 		return false
 	}
-	return !p.IsDead() && !p.Zones.Inside(ZoneNoStore) && !s.CastingNow(p)
+	return !p.IsDead() && !s.mounted(p) && !p.Zones.Inside(ZoneNoStore) && !s.CastingNow(p)
 }
 
 // storeTooClose reports whether a creature around p keeps a store away
@@ -388,7 +388,7 @@ func (s *Server) handleSetStoreListSell(p *Player, body []byte) {
 // out too: Mobius would sell it off its owner's body.
 func storeAddSellItem(p *Player, l *storeList, objectID int32, count, price, maxAdena int64) {
 	it := p.inv.ByObjectID(objectID)
-	if it == nil || it.Equipped() || !it.Template().Tradable || it.Template().QuestItem {
+	if it == nil || it.Equipped() || !it.Template().Tradable || it.Template().QuestItem || augmentLocked(it) {
 		return
 	}
 	if count <= 0 || count > it.Count() || (!it.Stackable() && count > 1) || maxAdena/count < price {
@@ -534,6 +534,8 @@ func (p *Player) storeMsgPacket() []byte {
 		return serverpackets.NewPrivateStoreMsgSellPacket(p.ObjectID(), p.store.sell.title)
 	case StoreBuy:
 		return serverpackets.NewPrivateStoreMsgBuyPacket(p.ObjectID(), p.store.buy.title)
+	case StoreManufacture:
+		return serverpackets.NewRecipeShopMsgPacket(p.ObjectID(), p.craft.shopTitle) // workshop.go
 	}
 	return nil
 }

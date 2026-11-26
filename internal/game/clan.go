@@ -749,7 +749,7 @@ func (p *Player) clanView() clanView {
 	}
 	v.clanID, v.crestID, v.crestLargeID = c.ID, c.CrestID, c.CrestLargeID
 	v.allyID, v.allyCrestID = c.AllyID, c.AllyCrestID
-	v.userRelation = social.UserInfoRelation(c.LeaderID == p.ObjectID(), 0)
+	v.userRelation = social.UserInfoRelation(c.LeaderID == p.ObjectID(), p.srv.siegeState(p)) // siege_zone.go
 	v.privileges = int32(p.clan.privs)
 	return v
 }

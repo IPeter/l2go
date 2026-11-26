@@ -35,6 +35,12 @@ type Characters struct {
 	crestsUsed int32 // crest IDs handed out
 	relations  map[storage.Relation]struct{}
 
+	cursedWeapons map[int32]storage.CursedWeapon // by item ID (cursedweapons.go)
+	castles       map[int32]storage.Castle       // by castle ID (residence.go)
+	clanHalls     map[int32]storage.ClanHall     // by hall ID (clanhalls.go)
+	auctions      map[int32]storage.Auction      // by auction ID (clanhalls.go)
+	manor         manorState                     // manor.go
+
 	// failNext, if set, fails the next Create, Update, Save, WriteBatch or
 	// Delete that gets past its checks, before it changes anything. Tests in
 	// this package use it to run the shared failed-write tests.
@@ -113,6 +119,9 @@ func (s *Characters) Create(ctx context.Context, c *storage.Character) error {
 	stored.Vars = cloneVars(c.Vars)
 	stored.Skills, stored.SavedSkills = cloneList(c.Skills), cloneList(c.SavedSkills)
 	stored.Shortcuts, stored.ItemReuse = cloneList(c.Shortcuts), cloneList(c.ItemReuse)
+	stored.Hennas = storage.CloneHennas(c.Hennas)
+	stored.Recipes = c.Recipes.Clone()
+	stored.Subclasses = cloneList(c.Subclasses)
 	stored.CreatedAt = normalizeTime(stored.CreatedAt)
 	stored.DeleteTime = normalizeTime(stored.DeleteTime)
 	stored.LastAccess = normalizeTime(stored.LastAccess)
@@ -231,6 +240,9 @@ func (s *Characters) load(c storage.Character) storage.Character {
 	c.Vars = cloneVars(c.Vars)
 	c.Skills, c.SavedSkills = cloneList(c.Skills), cloneList(c.SavedSkills)
 	c.Shortcuts, c.ItemReuse = cloneList(c.Shortcuts), cloneList(c.ItemReuse)
+	c.Hennas = storage.CloneHennas(c.Hennas)
+	c.Recipes = c.Recipes.Clone()
+	c.Subclasses = cloneList(c.Subclasses)
 	c.Quests = s.ownedQuests(c.ObjectID)
 	return c
 }
@@ -328,6 +340,9 @@ func (s *Characters) storeFields(c *storage.Character) {
 	stored.Vars = cloneVars(c.Vars)
 	stored.Skills, stored.SavedSkills = cloneList(c.Skills), cloneList(c.SavedSkills)
 	stored.Shortcuts, stored.ItemReuse = cloneList(c.Shortcuts), cloneList(c.ItemReuse)
+	stored.Hennas = storage.CloneHennas(c.Hennas)
+	stored.Recipes = c.Recipes.Clone()
+	stored.Subclasses = cloneList(c.Subclasses)
 	stored.Account, stored.Name, stored.Race, stored.CreatedAt = old.Account, old.Name, old.Race, old.CreatedAt
 	stored.Newbie = old.Newbie
 	stored.DeleteTime = normalizeTime(stored.DeleteTime)

@@ -9,7 +9,7 @@ Layout
 ----
 
 ```
-events/          event rules, e.g. character_create.lua
+events/          event rules, e.g. character_create.lua, and the seasonal events, one folder each: events/L2Day/L2Day.lua
 npcs/            NPC scripts, one folder each with its pages, e.g. talking_island_guard/
 quests/          quests, one folder each, named after the Mobius class: quests/Q00001_LettersOfLove/
 village_master/  the village master scripts: class changes, clan and alliance pages
@@ -173,9 +173,20 @@ Every link a page offers is remembered for the player; a link that the last page
 | Folder | Script | NPCs | What it shows |
 |---|---|---|---|
 | `npcs/talking_island_guard/` | `TalkingIslandGuard` | Talking Island guards | The example above. |
-| `npcs/symbol_maker/` | `SymbolMaker` | The 11 Symbol Makers | Mobius's `ai/others/SymbolMaker`: the symbol pages; drawing and removing symbols answer "not available yet" until symbols exist. |
+| `npcs/symbol_maker/` | `SymbolMaker` | The 11 Symbol Makers | Mobius's `ai/others/SymbolMaker`: the symbol pages; "Draw" and "Remove" open the dye windows (`player:show_henna_equip_list()`, `show_henna_remove_list()`). |
 | `npcs/asamah/` | `Asamah` | Asamah (32115) | Mobius's `ai/others/Asamah`: the Elroki pages and the capture skill explanations. |
 | `npcs/kier/` | `Kier` | Kierre's statue (32022) | Mobius's `ai/others/Kier`. |
+| `npcs/monument_of_heroes/` | `MonumentOfHeroes` | The 5 Monuments of Heroes | Mobius's `ai/others/MonumentOfHeroes`: the links of the game's `olympiad/hero_main.htm` (a hero or a noble sees it): an unclaimed hero claims the status (`hero.claim`), a hero takes one Infinity weapon and one Wings of Destiny Circlet. The Grand Olympiad Manager's own pages (`OlympiadNoble`, `Olympiad`) are commands of the game, as in Mobius's `OlympiadManager` NPC class. |
+| `npcs/castle_chamberlain/` | `CastleChamberlain` | The 9 chamberlains | Mobius's `ai/others/CastleChamberlain`: the lord's report, the tax within the Seal of Strife's limit, the vault (deposit and withdraw between the inventory and the treasury), the gates, banishing foreigners, the siege window, the general items buylist and the Lord's Crown; members of the owner clan by their clan privileges. Not yet: renting castle functions and their teleports and buffs, trap upgrades (their pages show, the confirmation answers "not available"); door upgrades work (`castle:set_door_upgrade`), the manor (M11k: its pages only), the dawn ticket sale (M11l). |
+| `npcs/castle_siege_manager/` | `CastleSiegeManager` | The 9 castle siege managers, 2 clan hall ones | Mobius's `ai/others/CastleSiegeManager`: the lord's pages, the siege window (`castle:show_siege_info`) for registering. The clan hall managers answer "not available" until M11j. |
+| `npcs/castle_mercenary_manager/` | `CastleMercenaryManager` | The 9 mercenary managers | Mobius's `ai/others/CastleMercenaryManager`: the ticket buylists (`npc:show_buy_window`, without the tax shown) for the lord, GMs and members with `CASTLE_MERCENARIES`, the limits per castle, the Seal of Strife's pages. |
+| `npcs/castle_teleporter/` | `CastleTeleporter` | The 9 mass gatekeepers | Mobius's `ai/others/CastleTeleporter`: after 30 s (8 min in a siege without control towers) everyone in the castle's teleport zone goes inside, with a shout to the map region. |
+| `npcs/castle_warehouse/` | `CastleWarehouse` | The 9 castle warehouse keepers | Mobius's `ai/others/CastleWarehouse`: the warehouse pages (the windows are the game's), the Blood Alliance pages (the clan's count is not kept: always 0). |
+| `npcs/castle_blacksmith/` | `CastleBlacksmith` | The 9 castle blacksmiths | Mobius's `ai/others/CastleBlacksmith`: the crop pages and their multisell for the lord, GMs and members with `CASTLE_MANOR`. |
+| `npcs/castle_court_magician/` | `CastleCourtMagician` | The 9 court magicians | Mobius's `ai/others/CastleCourtMagician`: the clan gate to the leader and the talisman trade (its items are not in the Interlude data, so it always asks for more epaulettes). |
+| `npcs/wyvern_manager/` | `WyvernManager` | The 10 castle and 2 clan hall wyvern managers | Mobius's `ai/others/WyvernManager`: the lord's pages; the lord on a strider of level 55 or more trades it and 25 B-grade crystals for a wyvern (`player:dismount`, `player:mount`). |
+
+The castle scripts serve Mobius's pages from `data/html/scripts/ai/others/<Class>/` (they return `data/html/...` page names); `castle:seal_owner` and `castle:seven_signs_period` are the Seven Signs' (the `sevensigns` module below).
 
 `village_master/` holds Mobius's 16 village master scripts, ported by hand with the same names: the first and second class changes (`ElfHumanFighterChange1`, `ElfHumanWizardChange1`, `DarkElfChange1`, `OrcChange1`, `DwarfBlacksmithChange1`, `DwarfWarehouseChange1` and their `...Change2`, plus `ElfHumanClericChange2`), the newbie village headmasters (`FirstClassTransferTalk`) and the clan and alliance pages (`ClanMaster`, `AllianceMaster`; the clan, unit, clan skill and alliance actions of their pages, `npc_%objectId%_create_clan`, `..._create_ally` and the others, are commands of the game's village masters, as in Mobius `VillageMaster`). `lib/class_master.lua` holds their shared class change step. Their pages are Mobius's, in `data/html/scripts/village_master/`.
 
@@ -217,7 +228,7 @@ end)
 ```
 
 - `quest.new(id, name, description)` makes a quest: `id` ≥ 1 is listed in the quest log and can be aborted; `name` is the Mobius class name, used in `Script <name> <event>` links; `description` is the quest window's name. `script.new(name)` is `quest.new(-1, name, "")`, so everything here works for plain scripts too.
-- **Registration**, while the scripts load: `add_start_npc`, `add_talk_id`, `add_first_talk_id` (one owning script per NPC), `add_kill_id`, `add_attack_id`, `add_spawn_id`, `add_skill_see_id`, `add_spell_finished_id`, `add_aggro_range_enter_id`, `add_enter_zone_id`, `add_exit_zone_id`, `add_item_talk_id`. Each takes IDs or lists, as many as you like; duplicates count once. Plus `register_quest_items(...)` (taken on exit and abort), `set_custom(true)` (no quest mark, no `start_quest`), `set_on_enter_world(true)`, and `requires("clans", ...)` for quests that need a later feature (`clans`, `clan_halls`, `subclass`, `noblesse`, `pets`, `fishing`, `seven_signs`, `sepulchers`, `grand_bosses`, `doors`): they are not offered until it exists (`clans` does since M9, `sepulchers` since M10).
+- **Registration**, while the scripts load: `add_start_npc`, `add_talk_id`, `add_first_talk_id` (one owning script per NPC), `add_kill_id`, `add_attack_id`, `add_spawn_id`, `add_skill_see_id`, `add_spell_finished_id`, `add_aggro_range_enter_id`, `add_enter_zone_id`, `add_exit_zone_id`, `add_item_talk_id`. Each takes IDs or lists, as many as you like; duplicates count once. Plus `register_quest_items(...)` (taken on exit and abort), `set_custom(true)` (no quest mark, no `start_quest`), `set_on_enter_world(true)`, and `requires("clans", ...)` for quests that need a later feature (`clans`, `clan_halls`, `subclass`, `noblesse`, `pets`, `fishing`, `seven_signs`, `sepulchers`, `grand_bosses`, `doors`): they are not offered until it exists (`clans` does since M9, `sepulchers` and `grand_bosses` since M10, `subclass` and `noblesse` since M11e).
 - **Handlers**, one per kind: `q:on_x(fn)` handles every ID registered for x; `q:on_x(ids, fn)` registers the IDs and binds `fn` to them (the NPC script form above).
 
 | Handler | Arguments | Returns |
@@ -257,7 +268,9 @@ end)
 | `skills` | `skills.get(id, level)` → Skill or nil; `skills.apply_effects(skill, effector, effected)`. |
 | `items` | `items.get(id)` → `{id, name, stackable}` or nil. |
 | `globals` | `get(name, default)`, `get_int`, `get_long`, `get_bool`, `set(name, value)`: saved server-wide variables. |
+| `hero` | `hero.is_hero(player)`, `hero.is_unclaimed(player)`, `hero.claim(player)`: the Olympiad's heroes (Mobius `Hero.isHero`, `isUnclaimedHero`, `claimHero`). |
 | `util` | `util.in_range(range, a, b, include_z)`. |
+| `sevensigns` | Mobius `SevenSigns` (cabals 0 none, 1 Dusk, 2 Dawn; seals 1-3; periods 0-3): `period()`, `cycle()`, `seal_owner(seal)`, `highest_cabal()`, `cabal(player)`, `seal(player)`, `contribution(player)`, `join(player, cabal, seal)`, `contribute(player, blue, green, red)`, `take_reward(player)`, `clan_castle(player)`, `config()`, `ticket_count(castle_id)` / `set_ticket_count`, and Mobius's Player item calls the priests use: `destroy_item`, `add_item`, `reduce_adena`, `send_disappeared`, `has_room`. Changes are saved at once. |
 
 **Constants** are read-only global tables with Mobius names; a name a table does not have is an error: `State`, `QuestType`, `QuestSound` (sound names), `Paperdoll`, `ChatType`, `Race`, `ClassId` (with `ClassId.level(id)`, `race`, `parent`, `is_mage`), `Category`, `SystemMessageId`, and `Config` (`ALT_PARTY_RANGE`, ...). `quest.DF_REWARD_35`, `_37` and `_39` are Mobius's Dimensional Diamond tables.
 
@@ -290,6 +303,10 @@ Shared libraries in `lib/`:
 
 Tests: `internal/scripting/ai_*_test.go` run the scripts against the fake world, bosses on the fake clock; `internal/game/boss_script_test.go`, `quest_world_ai_*_test.go` and `vehicle_test.go` run them in a game server.
 
+### Seasonal events: `events/<Event>/`
+
+Mobius's three `LongTimeEvent` scripts, `Christmas`, `L2Day` and `HeavyMedal`, are ported one folder each, with Mobius's pages in `data/html/scripts/events/<Event>/`. `lib/long_time_event.lua` is Mobius's `LongTimeEvent`: `lte.new(name)` makes the script and runs the event's life on its dates (start, drops during the drop period, the NPCs until the end, the start and end announcements, the login notice, the items destroyed at the end; a reload keeps a running event), and `lte.on_event(s, fn)` takes the event's own links, since the library owns `s:on_event` and `s:on_start`. The data (dates, drop list, spawn list, messages) is each event's `config.xml`, converted by `cmd/datagen` into `data/events/longtimeevents.json`; the game keeps the drop list, the notice and the item cleanup, which scripts reach through the `long_events` module. Every shipped date is past: the config's `events.dates` moves an event (see the main README), and `//event_start` / `//event_stop` run one now. Tests: `internal/scripting/long_events_test.go` (each event with `scripttest`) and `internal/game/long_time_event_test.go`.
+
 ### `Player` and `Npc`
 
 Handlers get players and NPCs as values with methods. They are valid only while that handler runs; keep `player:object_id()` instead of the player.
@@ -304,9 +321,11 @@ Handlers get players and NPCs as values with methods. They are valid only while 
 | `player:var(name, default)`, `var_int`, `var_bool`, `set_var(name, value)` | player variables, saved with the character |
 | `player:set_class_id(ClassId.X)`, `player:set_base_class(id)`, `player:broadcast_user_info()` | the class change (effect, message, skill list) |
 | `player:is_in_party()`, `party()`, `party_members()` | the party: `party()` is nil without one, else `{leader, members, loot}`; `party_members()` is the player alone without one |
-| `player:is_sub_class_active()` | false until sub-classes exist |
+| `player:is_sub_class_active()`, `class_index()`, `total_sub_classes()` | the subclasses: whether one is played, the active class index (0 for the base class), how many there are |
 | `player:clan()`, `player:is_clan_leader()` | the clan (nil without one): `clan:id()`, `name()`, `level()`, `reputation()`, `leader_id()`, `leader()` (`:object_id()`, `:name()`, `:player()`, nil offline), `add_reputation(n)`, `broadcast_pledge_info_update()` |
 | `player:is_noble()`, `set_noble(bool)` | noblesse (the flag and the noble skills) |
+| `player:show_henna_equip_list()`, `show_henna_remove_list()` | the symbol maker's dye windows (Mobius `HennaEquipList`, `HennaRemoveList`) |
+| `player:clan_id()`, `player:has_clan_privilege(name)` | the clan ID (0 without one); a clan privilege by Mobius's `ClanAccess` name (`"CASTLE_VAULT"`, ...; the leader holds all) |
 | `player:active_weapon()`, `player:target()` | the right-hand weapon's item ID (nil without one), the target (Player, Npc or nil) |
 | `player:is_affected_by_skill(id)`, `player:magic_skill_use(target, id, level, hit_ms, reuse_ms)` | a skill's effects on the player; the skill animation (shown only) |
 | `player:pk_kills()`, `set_pk_kills(n)`, `update_user_info()`, `active_quests()` | PK count, UserInfo, the IDs of the started quests |
@@ -319,6 +338,8 @@ Handlers get players and NPCs as values with methods. They are valid only while 
 | `npc:level()`, `npc:hp()`, `npc:max_hp()` | |
 | `npc:set_running()`, `add_damage_hate(target, damage, hate)`, `attack(target)`, `remove_attacker(target)`, `abort_attack()`, `move_to(x, y, z)`, `teleport(x, y, z)`, `die(killer)` | the monster AI and the NPC as Mobius quests drive them |
 | `npc:stop_respawn()`, `start_respawn()` | the NPC's spawn (a `q:add_spawn` NPC comes back where it was spawned) |
+| `npc:castle()`, `npc:is_my_lord(player)` | the NPC's castle (Mobius `Npc.getCastle`; nil without one), whether the player leads its owner clan. A castle, called with `:`: `id()`, `name()`, `owner_id()`, `owner()` (a clan or nil), `tax_percent()`, `set_tax_percent(n)` (saved), `max_tax()` (15, Dawn 25, Dusk 5), `treasury()`, `deposit(player, n)` / `withdraw(player, n)` (adena between the player and the treasury, saved together; false when nothing moved), `siege_date()` (Unix seconds, 0 for none), `is_siege_in_progress()`, `is_registration_over()`, `is_zone_active()`, `control_tower_count()`, `get_function(type)` (a rented function `{level, lease, rate, end_time, end_day, end_month, end_year}` or nil), `seal_owner(seal)`, `seven_signs_period()`, `open_close_door(player, door_id, open)`, `door_upgrade_level(door_id)` (the door's HP ratio, nil for a door not of the castle), `set_door_upgrade(door_id, level)` (saved), `banish_foreigners()`, `oust_all_players()`, `show_siege_info(player)` (the SiegeInfo window) |
+| `npc:show_buy_window(player, list_id[, apply_tax])`, `npc:broadcast_say_to_region(ChatType.X, text)` | a merchant's buylist (Mobius `Merchant.showBuyWindow`; `apply_tax` false shows no tax); NpcSay to every player in the NPC's map region |
 | `npc:set_target(target)`, `cast(skills.get(id, level)[, target])`, `magic_skill_use(target, id, level, hit_ms, reuse_ms)`, `drop_item(player, id, count)` | skills and drops |
 
 ### `html`
@@ -405,7 +426,7 @@ h.Kill(hero, &scripttest.Npc{ObjectID: 3, ID: 20035})
 
 The walkthroughs of the hand-ported quests are in `internal/scripting/quests_test.go`.
 
-The tests for the shipped scripts are in `internal/scripting/scripts_test.go` and, for the NPC scripts ported from Mobius, `internal/game/dialog_script_test.go`, which also runs scripts inside a game server.
+The tests for the shipped scripts are in `internal/scripting/scripts_test.go` (the castle NPCs in `castle_scripts_test.go`) and, for the NPC scripts ported from Mobius, `internal/game/dialog_script_test.go`, which also runs scripts inside a game server.
 
 Editor support
 ----

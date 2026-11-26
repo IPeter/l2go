@@ -128,6 +128,8 @@ func (s *Server) AddItem(p *Player, itemID int32, count int64, enchant int32, se
 	s.itemsChanged(p, true, nil)
 	if !p.IsGM() && !p.inv.ValidateCapacity(0) && t.Droppable && (!it.Stackable() || it.LastChange() != inventory.Modified) {
 		s.dropAtFeet(p, it)
+	} else if s.IsCursedWeapon(itemID) {
+		s.cursedActivate(p, it) // cursedweapon.go
 	}
 	return it, nil
 }

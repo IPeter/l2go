@@ -23,9 +23,13 @@ import (
 //   - Leaving: the effects to save are frozen, then every effect ends
 //     quietly and the timers stop (Mobius deleteMe).
 
-// classIndex is the class index of the active class: 0 until subclasses
-// exist (decision X3).
-const classIndex = 0
+// baseClassIndex is the class index of the base class (decision X3); a new
+// character's rows carry it.
+const baseClassIndex = 0
+
+// classIndex is the class index of the active class: 0 for the base class,
+// 1-3 for a subclass (subclass.go).
+func (p *Player) classIndex() int32 { return p.char.ClassIndex }
 
 // storedSkill is a row of character_skills of the active class.
 type storedSkill struct{ id, level int32 }
@@ -57,20 +61,7 @@ func (a *skillPlayer) unstoreSkill(id int) bool {
 // within the maxima the passives give. It runs on the loop, before
 // CharSelected shows them.
 func (s *Server) loadSkills(p *Player) {
-	a := p.skill
-	rows := slices.Clone(p.char.Skills)
-	slices.SortStableFunc(rows, func(x, y storage.CharacterSkill) int { return cmp.Compare(x.ID, y.ID) })
-	for _, r := range rows {
-		if r.ClassIndex != classIndex {
-			continue
-		}
-		a.stored = append(a.stored, storedSkill{id: r.ID, level: r.Level})
-		if sk, ok := s.Skill(int(r.ID), int(r.Level)); ok {
-			a.addSkill(sk)
-		} else if s.skills.catalog != nil {
-			s.log.Warn("game: skipping a saved skill the data does not have", append(p.logArgs(), "skill", r.ID, "level", r.Level)...)
-		}
-	}
+	s.restoreStoredSkills(p)
 	if s.settings.AutoLearnSkills {
 		s.learnAvailableSkills(p, false, false, false) // rewardSkills (skill_known.go)
 	} else {
@@ -86,6 +77,28 @@ func (s *Server) loadSkills(p *Player) {
 	p.CurCP = clampVital(p.char.CurCP, v.MaxCP)
 }
 
+// restoreStoredSkills is Mobius restoreSkills: the saved skills of the
+// active class in skill ID order become p's known and stored skills (a
+// level the data does not have is skipped but kept saved, as Mobius keeps
+// its row). Character selection and a class switch run it.
+func (s *Server) restoreStoredSkills(p *Player) {
+	a := p.skill
+	rows := slices.Clone(p.char.Skills)
+	slices.SortStableFunc(rows, func(x, y storage.CharacterSkill) int { return cmp.Compare(x.ID, y.ID) })
+	index := p.classIndex()
+	for _, r := range rows {
+		if r.ClassIndex != index {
+			continue
+		}
+		a.stored = append(a.stored, storedSkill{id: r.ID, level: r.Level})
+		if sk, ok := s.Skill(int(r.ID), int(r.Level)); ok {
+			a.addSkill(sk)
+		} else if s.skills.catalog != nil {
+			s.log.Warn("game: skipping a saved skill the data does not have", append(p.logArgs(), "skill", r.ID, "level", r.Level)...)
+		}
+	}
+}
+
 // storeSkills puts what a save keeps of p's skills into c: the rows of
 // character_skills (other classes' rows as loaded), and those of
 // character_skills_save (the frozen ones of a leaving player, else the live
@@ -95,14 +108,15 @@ func (p *Player) storeSkills(c *storage.Character) {
 	if a == nil {
 		return
 	}
+	index := p.classIndex()
 	var rows []storage.CharacterSkill
 	for _, r := range p.char.Skills {
-		if r.ClassIndex != classIndex {
+		if r.ClassIndex != index {
 			rows = append(rows, r)
 		}
 	}
 	for _, r := range a.stored {
-		rows = append(rows, storage.CharacterSkill{ClassIndex: classIndex, ID: r.id, Level: r.level})
+		rows = append(rows, storage.CharacterSkill{ClassIndex: index, ID: r.id, Level: r.level})
 	}
 	c.Skills = rows
 	saved := a.saved
@@ -116,7 +130,7 @@ func (p *Player) storeSkills(c *storage.Character) {
 	}
 	var out []storage.SavedSkill
 	for _, r := range p.char.SavedSkills {
-		if r.ClassIndex != classIndex {
+		if r.ClassIndex != index {
 			out = append(out, r)
 		}
 	}
@@ -131,6 +145,7 @@ func (s *Server) effectsToSave(p *Player) []storage.SavedSkill {
 	now := s.Now()
 	var out []storage.SavedSkill
 	seen := make(map[int]bool)
+	classIndex := p.classIndex()
 	for _, info := range a.el.ToStore() {
 		sk := info.Skill()
 		h := sk.ReuseHash()
@@ -177,6 +192,7 @@ func (s *Server) skillsEnter(p *Player) {
 	env := s.skills.env
 	now := s.Now()
 	var keep []storage.SavedSkill
+	classIndex := p.classIndex()
 	for _, r := range p.char.SavedSkills {
 		if r.ClassIndex != classIndex {
 			keep = append(keep, r)

@@ -554,6 +554,7 @@ func (s *Server) onHitTimer(a, t Creature, h stats.Hit, recharge bool) {
 			s.BreakCast(t)
 		}
 	}
+	s.augmentHitTriggers(a, t, h.Crit) // augment.go: the option trigger skills
 }
 
 // notifyCancel is Mobius notifyActionCancel for an attacker whose hit could
@@ -632,6 +633,8 @@ func (s *Server) fighter(c Creature, w *data.Item) stats.Fighter {
 		f.Stats = v.Stats
 		f.Attackable = v.class != nil && v.class.attackable
 		f.Arm(sw, v.Template.Stats.Attack.Type.String(), false)
+	case *Door:
+		f.Stats = v.combatStats() // door_combat.go
 	}
 	return f
 }
@@ -733,8 +736,11 @@ func attackerInWorld(c Creature) bool {
 
 // creatureTargetable is Mobius isTargetable.
 func creatureTargetable(c Creature) bool {
-	if n, ok := c.(*Npc); ok {
-		return n.Template.Status.Targetable
+	switch v := c.(type) {
+	case *Npc:
+		return v.Template.Status.Targetable
+	case *Door:
+		return v.Targetable()
 	}
 	return true
 }
@@ -765,6 +771,8 @@ func attackCollision(c Creature) int {
 		return int(walkCollision(v))
 	case *Npc:
 		return int(v.Template.Collision.Radius)
+	case *Door:
+		return v.collisionRadius()
 	}
 	return 0
 }

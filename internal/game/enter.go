@@ -60,11 +60,13 @@ func (s *Server) SelectCharacter(ctx context.Context, sess Session, slot int) er
 		sess.CloseAfter(serverClosePacket, 0)
 		return fmt.Errorf("%w: %s (%d)", ErrCharacterBanned, c.Name, c.ObjectID)
 	}
+	s.migrateCharacter(&c) // subclass.go: the class-index layout (decision X3)
 	p, err := s.newPlayer(sess, c)
 	if err != nil {
 		return err
 	}
-	s.loadRelations(ctx, p) // friends.go: the friend and block lists
+	s.loadRelations(ctx, p)          // friends.go: the friend and block lists
+	summons := s.loadSummons(ctx, p) // summon_store.go: the summons to restore
 
 	if err := s.loop.Call(ctx, func() {
 		if s.bySession[sess] != nil {
@@ -79,9 +81,13 @@ func (s *Server) SelectCharacter(ctx context.Context, sess Session, slot int) er
 		s.byAccount[account] = p
 		sess.SetState(StateEntering)
 		s.loadWornItems(p) // item_skill.go: the worn items' skills come with the inventory
+		s.loadHennas(p)    // henna.go: the dyes' stats before the HP
+		s.loadSubclass(p)  // subclass.go: the active class's dyes, the noble skills
+		s.loadHero(p)      // hero.go: a claimed hero's flag and skills
 		s.loadSkills(p)    // skill_persist.go: skills before the HP, as Mobius loads them
 		s.loadItemState(p) // item_skill.go: shortcuts, item reuse, grade penalty
 		s.restoreClan(p)   // clan.go: the clan, privileges and pledge class
+		s.summonsSelected(p, summons)
 		p.Send(s.charSelected(p, sess))
 	}); err != nil {
 		return fmt.Errorf("game: select a character: %w", err)
@@ -173,7 +179,7 @@ func (s *Server) EnterWorld(sess Session) {
 //  2. SendMacroList (empty, revision 2)
 //  3. ItemList (window closed)
 //  4. ShortcutInit
-//  5. HennaInfo (empty)
+//  5. HennaInfo
 //  6. QuestList (empty)
 //  7. the spawn: CharInfo and RelationChanged both ways with the players
 //     around, and the info of every other visible object
@@ -203,7 +209,7 @@ func (s *Server) enterWorld(p *Player) {
 	p.Send(enterMacroList)
 	p.Send(serverpackets.NewItemListPacket(serverpackets.ItemList{Items: p.inv.ItemInfos()}))
 	p.Send(shortcutInitPacket(p))
-	p.Send(emptyHennaInfo)
+	p.Send(hennaInfoPacket(p))
 	s.questsEnterWorld(p) // quest.go: the quests load, the tutorial, QuestList
 
 	if err := s.world.AddPlayer(p); err != nil {
@@ -284,12 +290,10 @@ func (p *Player) dropTimer(id world.TimerID) {
 // the Player.ini defaults and the configured warehouse sizes).
 func (s *Server) storageMaxCount(p *Player) []byte {
 	const (
-		privateSellOther  = 3  // MaxPvtStoreSellSlotsOther
-		privateSellDwarf  = 4  // MaxPvtStoreSellSlotsDwarf
-		privateBuyOther   = 4  // MaxPvtStoreBuySlotsOther
-		privateBuyDwarf   = 5  // MaxPvtStoreBuySlotsDwarf
-		dwarfRecipeLimit  = 50 // DwarfRecipeLimit
-		commonRecipeLimit = 50 // CommonRecipeLimit
+		privateSellOther = 3 // MaxPvtStoreSellSlotsOther
+		privateSellDwarf = 4 // MaxPvtStoreSellSlotsDwarf
+		privateBuyOther  = 4 // MaxPvtStoreBuySlotsOther
+		privateBuyDwarf  = 5 // MaxPvtStoreBuySlotsDwarf
 	)
 	var sell, buy int32 = privateSellOther, privateBuyOther
 	if p.char.Race == stats.RaceDwarf {
@@ -304,8 +308,8 @@ func (s *Server) storageMaxCount(p *Player) []byte {
 		ClanWarehouse:  int32(min(s.gs.Items.WarehouseSlotsClan, math.MaxInt32)), //nolint:gosec // clamped
 		PrivateSell:    sell + bonus(stats.PrivateSellLimit),
 		PrivateBuy:     buy + bonus(stats.PrivateBuyLimit),
-		DwarfRecipe:    dwarfRecipeLimit + bonus(stats.DwarfRecipeLimit),
-		CommonRecipe:   commonRecipeLimit + bonus(stats.CommonRecipeLimit),
+		DwarfRecipe:    int32(s.recipeLimit(p, true)),  //nolint:gosec // small limits (craft.go)
+		CommonRecipe:   int32(s.recipeLimit(p, false)), //nolint:gosec // small limits
 		InventoryExtra: bonus(stats.InventoryLimit),
 	})
 }

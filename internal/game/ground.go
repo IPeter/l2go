@@ -191,7 +191,7 @@ func (s *Server) handleDropItem(p *Player, body []byte) {
 	}
 	cfg := s.gs.Items
 	it := p.inv.ByObjectID(req.ObjectID)
-	if it == nil || req.Count == 0 || (!cfg.AllowDiscardItem && !p.IsGM()) || !it.Template().Droppable || p.Zones.Inside(ZoneNoItemDrop) {
+	if it == nil || req.Count == 0 || s.collarInUse(p, req.ObjectID) || (!cfg.AllowDiscardItem && !p.IsGM()) || !it.Template().Droppable || augmentLocked(it) || p.Zones.Inside(ZoneNoItemDrop) {
 		p.SendSystemMessage(sysMsgCannotDiscard)
 		return
 	}
@@ -218,6 +218,12 @@ func (s *Server) handleDropItem(p *Player, body []byte) {
 	}
 	if s.ProcessingTransaction(p) || p.InStoreMode() { // trade.go
 		p.SendSystemMessage(tradeMsgStoreNoDiscard)
+		return
+	}
+	if s.fishingRefusesDrop(p) { // fishing.go
+		return
+	}
+	if p.mount.flying { // mount.go: nothing falls from a wyvern
 		return
 	}
 	if t.Type2 == typeQuest && !p.IsGM() {
@@ -263,9 +269,13 @@ type pickUp struct {
 
 // itemClick is a click on an item on the ground (Mobius ItemClick and
 // setIntentionPickUp): the player walks up to it (MoveToPawn, 20 units)
-// and picks it up once it is close enough.
+// and picks it up once it is close enough. A player on a wyvern does not
+// (mount.go).
 func (s *Server) itemClick(p *Player, g *GroundItem) {
 	delete(s.items.pickups, p)
+	if p.mount.flying {
+		return
+	}
 	if p.Sitting || !g.InWorld() {
 		p.SendActionFailed()
 		return
@@ -370,6 +380,9 @@ func (s *Server) doPickUp(p *Player, g *GroundItem) {
 	if t.ExImmediateEffect && t.Etc != nil {
 		// Herbs take effect at once and never enter the inventory.
 		s.useHerb(p, it) // item_skill.go
+		return
+	}
+	if s.cursedPickUp(p, it) { // cursedweapon.go: not shared, not announced
 		return
 	}
 	if t.Weapon != nil || t.Armor != nil {

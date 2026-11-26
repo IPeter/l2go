@@ -131,6 +131,10 @@ func setPlayerChargedShot(p *Player, t skills.ShotType, charged bool) {
 // at the skill hit and the finalizer with the skill's UseSoulShot and
 // UseSpiritShot. NPCs have no automatic shots. Loop-only.
 func (s *Server) RechargeShots(c Creature, physical, magic bool) {
+	if sm := summonOfNpc(c); sm != nil {
+		s.summonRechargeShots(sm, physical, magic) // pet_shots.go
+		return
+	}
 	p, ok := c.(*Player)
 	if !ok || p.inv.Inventory == nil {
 		return
@@ -252,6 +256,9 @@ func (s *Server) useSoulShot(p *Player, it *inventory.Item) bool {
 // weapon's count is used up, then "Power of Mana enabled.", the charge and
 // the glow to everyone around.
 func (s *Server) useSpiritShot(p *Player, it *inventory.Item, blessed bool) bool {
+	if blessed && s.olympiadBlocksBlessedShots(p) { // olympiad_rules.go
+		return false
+	}
 	t := it.Template()
 	refs := normalSkills(t)
 	if len(refs) == 0 {
@@ -328,6 +335,13 @@ func (s *Server) handleRequestAutoSoulShot(p *Player, body []byte) {
 			return // fishing shots
 		}
 		if beastShot(req.ItemID) {
+			if sm := s.SummonOf(p); sm != nil { // summon.go: a summon's shots go on
+				p.itemSkill.autoShots.add(req.ItemID)
+				p.Send(serverpackets.NewExAutoSoulShotPacket(serverpackets.ExAutoSoulShot{ItemID: req.ItemID, Enabled: true}))
+				p.SendSystemMessage(sysMsgAutoUseActivated, s.itemNameParam(req.ItemID))
+				s.summonRechargeShots(sm, true, true)
+				return
+			}
 			p.SendSystemMessage(sysMsgNoServitorAutoUse)
 			return
 		}

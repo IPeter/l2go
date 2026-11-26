@@ -41,6 +41,14 @@ names when given the item and world data):
 | `multisell/multisell.json` | The 90 multisell lists (custom ones left out), each list on a line followed by its entries one per line: the NPCs that may open it, whether it applies taxes and keeps enchant levels, and the ingredients and products of each entry (item or special points ID, count, enchant level, tax and kept-ingredient flags) |
 | `merchant/price_configs.json` | The 27 merchant tax regions, one per line: base tax, the castle whose tax applies too, the town zone whose merchants use it, and which one is the default |
 
+Castle data (`data.LoadCastles`, Plan 14 M11i):
+
+| File | Content |
+|---|---|
+| `castles/castles.json` | The 9 castles of `castle.sql`: the siege weekday, hour and concurrency of `SiegeSchedule.xml`, the control and flame towers (with their trap zones) and the mercenary limit of `Siege.ini` |
+| `castles/guards.json` | The 3,689 siege guards of `castle_siege_guards.sql`, one per line: castle, NPC, position, heading and respawn delay |
+| `castles/merctickets.json` | The 468 mercenary posting tickets of `MercTicketManager.java`, one per line: item, mercenary NPC, castle, type index and the most of the type on the ground |
+
 Skill data (`data.LoadSkills`, which resolves all 15,311 skill levels and
 14,550 enchant levels at load; `CheckItems`, `CheckItemSkills` and
 `CheckNpcSkills` check the references from and to the item and NPC data):
@@ -57,6 +65,12 @@ Passive skills (`data.LoadPassives`) and categories (`data.LoadCategories`):
 |---|---|
 | `skills/passives.json` | 59 passive skills, one per line: those NPC templates name that have effects, plus Weight Penalty (4270) and Death Penalty (5076); per level, the stat functions of the Buff effects and the DefenceTrait and AttackTrait values as the XML writes them; effects left out are named per skill (none in the current datapack) |
 | `categories/categories.json` | The 160 categories (`FIGHTER_GROUP`, `MAGE_GROUP`, ...), one per line, with their class (or NPC) IDs |
+
+Recipes (`data.LoadRecipes`):
+
+| File | Content |
+|---|---|
+| `recipes/recipes.json` | The 871 recipes of `Recipes.xml` (737 dwarven, 134 common), one per line by ID: the recipe item, create level, book, success rate, ingredients, product, HP/MP cost and the `altStatChange` values (unused) |
 
 Script constants (`data.LoadConstants`):
 
@@ -77,6 +91,41 @@ World objects (`data.LoadObjects`), bosses (`data.LoadBosses`, whose
 | `bosses/grandbosses.json` | The 9 grand boss seeds of the server's boss state: position, heading, respawn time, HP, MP and status |
 | `bosses/zones.json` | The 10 boss zones' parameters (their shapes are in `zones/zones.json`): invade time, oust point, enabled at start |
 | `routes/routes.json` | The 14 walker routes, one per line: repeat flag and style, the NPCs that walk them from their spawn points, and the nodes with delay, run flag and speech |
+
+Pets, servitor skills and cubics (`data.LoadSummons`, whose `CheckWorld`
+checks the pet NPCs):
+
+| File | Content |
+|---|---|
+| `pets/pets.json` | The 12 pets, each on a line followed by its levels one per line: NPC, collar item, food, hungry limit, weight load, level sync, the `<skills>` entries, and per level the meal gauge and use, experience, the owner's experience share, base stats, shot counts and ride speeds |
+| `pets/skills.json` | The 1,220 rows of `PetSkillData.xml` in file order, one per line: pet or servitor NPC, skill and level (0: by pet level) |
+| `cubics/cubics.json` | The 67 cubic levels of the 9 cubics, one per line: slot, duration, delay, activation count, use-up, power, skill selection mode, target type, conditions and the skills with trigger rate, target and conditions |
+
+Hennas (`data.LoadHennas`):
+
+| File | Content |
+|---|---|
+| `hennas/hennas.json` | The 180 dyes symbol makers draw, one per line by dye ID: the dye item, the base stat changes, the dye count and adena to draw and to remove, and the classes that may wear it |
+
+Augmentation (`data.LoadAugment`):
+
+| File | Content |
+|---|---|
+| `augment/refine.json` | The tables Mobius keeps in Java, from `cmd/datagen/input/augment.json` and checked against `AbstractRefinePacket.java`, `RequestConfirmCancelItem.java` and `RequestRefineCancel.java`: the 40 life stones (grade, level, player level), the gemstone and count per item grade, the removal fees by grade and crystal count; and the 12 blacksmiths whose pages open the augmentation windows |
+| `augment/options.json` | The 16,380 augmentation options, one per line by ID: stat functions, active and passive skills, and the trigger skills with their chance |
+| `augment/chances.json` | The 400 categories of `retailchances.xml` in file order, one per line: weapon kind (warrior or mage), life stone, variation, category probability and the options with their chances |
+
+The Olympiad (`data.LoadOlympiadStadiums`):
+
+| File | Content |
+|---|---|
+| `olympiad/stadiums.json` | The 22 stadiums of `OlympiadManager.STADIUMS` in order (the centre of each arena), a table that exists only in Java: from `cmd/datagen/input/olympiad.json`, checked against `OlympiadManager.java` |
+
+The Seven Signs (`data.LoadSevenSigns`):
+
+| File | Content |
+|---|---|
+| `sevensigns/sevensigns.json` | The 56 Dimensional Rift rooms of `dimensional_rift.sql` (the waiting room and the rift of type 0, nine rooms in each of the six areas, room 9 the boss room) with the 150 spawn lines of `DimensionalRift.xml`; the Festival of Darkness spawn tables of `SevenSignsFestival.java` (player starts, witches, primary and secondary monsters and chests, per cabal and festival), a table that exists only in Java; the 121 `random_spawn.sql` groups of the Seven Signs NPCs (Mammon, the orators and preachers, the crests, Lilith and Anakim) with their `random_spawn_loc.sql` locations |
 
 The JSON schema is defined by the types in `internal/data`. The starting
 class templates character creation uses are built from `classes.json`.
@@ -120,6 +169,12 @@ datapack (`L2J_Mobius_CT_0_Interlude`):
 - `dist/db_installer/sql/game/raidboss_spawnlist.sql` and
   `grandboss_data.sql` (the rows that are not commented out, with the
   column defaults of their `CREATE TABLE`)
+- `dist/game/data/stats/pets/*.xml`, `dist/game/data/PetSkillData.xml` and
+  `dist/game/data/stats/cubics/**/*.xml`
+- `dist/game/data/stats/hennaList.xml`
+- `dist/game/data/stats/augmentation/options/*.xml` and `retailchances.xml`;
+  the tables of `cmd/datagen/input/augment.json`, checked against the Java
+  sources it names
 - The skill enums (abnormal, target and operate types, effect scopes,
   traits, abnormal visual effects, social classes, instance and category
   types), from their Java sources in `java/org/l2jmobius/gameserver/`; the
@@ -157,9 +212,9 @@ the Mobius sources; `go generate ./internal/data` does the same) and then
 `go run ./cmd/datagen` (every file of `data/`, `html/` included). To read
 another checkout: `make data MOBIUS=/path/to/L2J_Mobius_CT_0_Interlude`.
 
-`go run ./cmd/datagen -list` prints the domains (`bosses`, `categories`,
-`constants`, `economy`, `html`, `items`, `objects`, `passives`, `players`,
-`routes`, `skills`, `world`); naming some (for example `go run ./cmd/datagen html` or
+`go run ./cmd/datagen -list` prints the domains (`augment`, `bosses`, `categories`,
+`constants`, `economy`, `hennas`, `html`, `items`, `objects`, `passives`, `players`,
+`routes`, `skills`, `summons`, `world`); naming some (for example `go run ./cmd/datagen html` or
 `go run ./cmd/datagen players items`) regenerates only those. The output is
 sorted and does not depend on the time or file order, so running it again on
 the same datapack gives identical files. Commit the JSON files; `html/` stays

@@ -11,7 +11,8 @@ import (
 // The class page of the admin panel (an L2Go page, not in Mobius): one-click
 // buttons that change the class of the GM's player target, or of the GM
 // when no player is targeted (as //setclass, then RewardSkills), and turn
-// its noblesse (//setnoble) and hero status (//sethero) on or off, then show
+// its noblesse (//setnoble) and its hero status (a claimed hero of the
+// Olympiad, kept over relogs) on or off, then show
 // the page again with the new state. //admin's main page gets a button to it.
 func init() { registerFeature("admin_class", setupAdminClass) }
 
@@ -64,9 +65,13 @@ func (s *Server) gmAdminClassMenu(p *Player, args []string) {
 				t.SendMessage("GM changed your nobless status!")
 			}
 		case "hero":
-			if t.IsHero() != on {
-				s.setHero(t, on)
-				t.BroadcastUserInfo()
+			// The real hero status (hero.go): on claims it as a hero of the
+			// running cycle, off takes it away; both are saved.
+			switch {
+			case on && !s.olympiad.heroes.IsHero(t.ObjectID()):
+				s.claimHero(t)
+			case !on && (t.IsHero() || s.olympiad.heroes.IsHero(t.ObjectID())):
+				s.revokeHero(t)
 			}
 		case "all":
 			race := 0

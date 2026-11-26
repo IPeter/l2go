@@ -65,6 +65,7 @@ type Door struct {
 	attackable bool // Mobius _isAttackableDoor
 	targetable bool
 	shape      geo.Door
+	combat     doorCombat // door_combat.go: death, regeneration, upgrade
 
 	// autoClose closes an opened door after its close time (Mobius
 	// _autoCloseTask); timer is the open/close cycle of a door that opens by
@@ -211,7 +212,7 @@ func (s *Server) Doors() []*Door { return s.doors.list }
 
 // DoorsBetween reports whether a closed door stands between from and to
 // (Mobius DoorData.checkIfDoorsBetween): of the doors indexed in the
-// region of from, one in the instance, closed, with check_collision, whose
+// region of from, one in the instance, not broken, closed, with check_collision, whose
 // shape the segment crosses (geo.Door.Between; for sight both faces). It
 // is the door part of the composed geodata view (A2). Loop-only.
 func (s *Server) DoorsBetween(from, to geo.Point, instance int32, sight bool) bool {
@@ -220,7 +221,7 @@ func (s *Server) DoorsBetween(from, to geo.Point, instance int32, sight bool) bo
 		return false
 	}
 	for _, d := range s.doors.near[k] {
-		if d.InstanceID() != instance || d.open || !d.Template.CheckCollision {
+		if d.InstanceID() != instance || d.combat.dead || d.open || !d.Template.CheckCollision {
 			continue
 		}
 		if d.shape.Between(from, to, sight) {
@@ -275,9 +276,15 @@ func (d *Door) damage() int32 {
 	return min(max(dmg, 0), doorDamageSteps)
 }
 
-// autoAttackableBy is Mobius Door.isAutoAttackable for a player: an
-// attackable door; the siege doors come with the sieges.
-func (d *Door) autoAttackableBy(*Player) bool { return d.attackable }
+// autoAttackableBy is Mobius Door.isAutoAttackable for a player (or the
+// owner of a summon): an attackable door; otherwise only a door that shows
+// its HP, during a siege (siege_zone.go).
+func (d *Door) autoAttackableBy(p *Player) bool {
+	if d.attackable {
+		return true
+	}
+	return d.Template.ShowHP && d.srv != nil && d.srv.siegeDoorAttackable(d, p) // siege_zone.go
+}
 
 // InfoFor returns what a player that starts to see the door gets (Mobius
 // Door.sendInfo): StaticObjectInfo and DoorStatusUpdate (InfoProvider).
@@ -297,6 +304,7 @@ func (d *Door) statusUpdate() []byte {
 		ObjectID: int32(d.ID()),
 		Closed:   !d.open,
 		Damage:   d.damage(),
+		Enemy:    d.isEnemy(),          // door_combat.go
 		DoorID:   int32(d.Template.ID), //nolint:gosec // door IDs fit
 		MaxHP:    d.maxHP,
 		CurHP:    int32(d.curHP),
@@ -482,15 +490,18 @@ func (s *Server) CloseDoor(doorID int) bool {
 // ----- clicks -----
 
 // click is Mobius DoorClick: the first click targets the door. A click on
-// the target attacks an attackable door, and lets a clan hall's owners open
-// and close it; neither exists yet (attacks on doors come with the sieges,
-// clan halls with M11), so the second click does nothing.
-func (d *Door) click(p *Player, _ bool) {
+// the target attacks a door p may attack (door_combat.go), and lets a clan
+// hall's owners open and close it (not yet: clan halls come with M11).
+func (d *Door) click(p *Player, interact bool) {
 	if p.Target != world.Object(d) {
 		d.srv.SetTarget(p, d)
+		return
+	}
+	if interact && d.srv.doorAttackClick(p, d) {
+		return
 	}
 }
 
 // hpBar returns the numbers of the door's HP bar as a target (target.go
-// targetHPBar).
+// targetHPBar). The bar follows the DoorStatusUpdates.
 func (d *Door) hpBar() (maxHP int32, cur float64) { return d.maxHP, d.curHP }

@@ -101,6 +101,7 @@ func shortcutInitPacket(p *Player) []byte {
 func (s *Server) loadShortcuts(p *Player) {
 	b := &p.itemSkill.bar
 	var rows []storage.Shortcut
+	classIndex := p.classIndex()
 	for _, r := range p.char.Shortcuts {
 		if r.ClassIndex != classIndex {
 			b.other = append(b.other, r)
@@ -129,7 +130,7 @@ func (p *Player) storeShortcuts(c *storage.Character) {
 		return cmp.Or(cmp.Compare(x.slot, y.slot), cmp.Compare(x.page, y.page))
 	})
 	for _, sc := range mine {
-		rows = append(rows, storage.Shortcut{ClassIndex: classIndex, Slot: sc.slot, Page: sc.page, Type: sc.typ, ID: sc.id, Level: sc.level})
+		rows = append(rows, storage.Shortcut{ClassIndex: p.classIndex(), Slot: sc.slot, Page: sc.page, Type: sc.typ, ID: sc.id, Level: sc.level})
 	}
 	c.Shortcuts = rows
 }
@@ -275,7 +276,7 @@ func (s *Server) NewCharacterShortcuts(c *storage.Character) []storage.Shortcut 
 	}
 	var out []storage.Shortcut
 	for _, sc := range initial.For(int(c.ClassID)) {
-		row := storage.Shortcut{ClassIndex: classIndex, Slot: int32(sc.Slot), Page: int32(sc.Page), ID: int32(sc.ID), Level: int32(sc.Level)} //nolint:gosec // small data values
+		row := storage.Shortcut{ClassIndex: baseClassIndex, Slot: int32(sc.Slot), Page: int32(sc.Page), ID: int32(sc.ID), Level: int32(sc.Level)} //nolint:gosec // small data values
 		switch sc.Type {
 		case data.ShortcutTypeItem:
 			i := slices.IndexFunc(c.Items, func(it storage.Item) bool { return it.ItemID == int32(sc.ID) }) //nolint:gosec // item IDs are small
@@ -284,7 +285,7 @@ func (s *Server) NewCharacterShortcuts(c *storage.Character) []storage.Shortcut 
 			}
 			row.Type, row.ID = storage.ShortcutItem, c.Items[i].ObjectID
 		case data.ShortcutTypeSkill:
-			if !slices.ContainsFunc(c.Skills, func(k storage.CharacterSkill) bool { return k.ClassIndex == classIndex && k.ID == int32(sc.ID) }) { //nolint:gosec // skill IDs are small
+			if !slices.ContainsFunc(c.Skills, func(k storage.CharacterSkill) bool { return k.ClassIndex == baseClassIndex && k.ID == int32(sc.ID) }) { //nolint:gosec // skill IDs are small
 				continue
 			}
 			row.Type = storage.ShortcutSkill

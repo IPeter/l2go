@@ -227,8 +227,8 @@ func TestAdminGMMenuToggles(t *testing.T) {
 	_ = pl
 
 	// Buttons of systems that do not exist yet.
-	if msgs := messages(adminRun(t, e, gs, gm, "ride_strider")); !slices.Equal(msgs, []string{"Mounts are not available yet."}) {
-		t.Errorf("//ride_strider: %q", msgs)
+	if msgs := messages(adminRun(t, e, gs, gm, "view_petitions")); !slices.Equal(msgs, []string{"Petitions are not available yet."}) {
+		t.Errorf("//view_petitions: %q", msgs)
 	}
 }
 

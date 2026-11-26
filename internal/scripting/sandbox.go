@@ -77,6 +77,11 @@ func (v *vm) modules() []module {
 		{name: "grandboss", funcs: v.grandbossFuncs()},
 		{name: "cinematics", funcs: v.cinematicsFuncs()},
 		{name: "vehicles", funcs: v.vehiclesFuncs()},
+		{name: "long_events", funcs: v.longEventsFuncs()}, // api_long_events.go
+		{name: "hero", funcs: v.heroFuncs()},              // api_hero.go
+		{name: "sevensigns", funcs: v.sevenSignsFuncs()},  // api_sevensigns.go
+		{name: "clanhall", funcs: v.clanHallFuncs()},      // api_clanhall.go
+		{name: "manor", funcs: v.manorFuncs()},            // api_manor.go
 	}
 }
 

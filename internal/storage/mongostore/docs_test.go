@@ -44,6 +44,12 @@ func TestItemDocRoundTrip(t *testing.T) {
 			in:   storage.Item{ObjectID: 15, ItemID: 6730, Count: 1, Slot: storage.PaperdollNone, Loc: storage.LocInventory, Mana: 30},
 			want: storage.Item{ObjectID: 15, ItemID: 6730, Count: 1, Slot: storage.PaperdollNone, Loc: storage.LocInventory, Mana: 30},
 		},
+		{
+			name:    "augmented",
+			in:      storage.Item{ObjectID: 16, ItemID: 2499, Count: 1, Slot: storage.PaperdollRHand, Mana: storage.NoMana, Augmentation: 14578<<16 | 91},
+			want:    storage.Item{ObjectID: 16, ItemID: 2499, Count: 1, Slot: storage.PaperdollRHand, Loc: storage.LocPaperdoll, Mana: storage.NoMana, Augmentation: 14578<<16 | 91},
+			locData: 7,
+		},
 	}
 	for _, tt := range tests {
 		d := toItemDoc(99, tt.in)
@@ -60,6 +66,27 @@ func TestItemDocRoundTrip(t *testing.T) {
 		}
 		if got := back.item(); got != tt.want {
 			t.Errorf("%s: read back %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// The augmentation is the field aug of the item document (Plan 14, M11d),
+// left out for an item without one.
+func TestItemDocAugmentation(t *testing.T) {
+	for _, tt := range []struct {
+		aug  int32
+		want bool
+	}{{0, false}, {14578<<16 | 91, true}} {
+		raw, err := bson.Marshal(toItemDoc(1, storage.Item{ObjectID: 2, ItemID: 2499, Count: 1, Mana: storage.NoMana, Augmentation: tt.aug}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := bson.Raw(raw).LookupErr("aug")
+		if (err == nil) != tt.want {
+			t.Errorf("aug %d: field present %v, want %v", tt.aug, err == nil, tt.want)
+		}
+		if tt.want && v.Int32() != tt.aug {
+			t.Errorf("aug stored as %v, want %d", v, tt.aug)
 		}
 	}
 }

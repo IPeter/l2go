@@ -173,6 +173,10 @@ func (s *Server) skillCreatureOf(o world.Object) skills.Creature {
 		if v != nil && v.skill != nil {
 			return v.skill
 		}
+	case *Door:
+		if v != nil {
+			return v.skillCreature() // door_skill.go
+		}
 	}
 	return nil
 }
@@ -196,6 +200,8 @@ func (s *Server) gameCreature(c skills.Creature) Creature {
 		return v.p
 	case *skillNpc:
 		return v.n
+	case *skillDoor:
+		return v.d
 	}
 	return nil
 }
@@ -709,8 +715,14 @@ func (b *skillBase) SkillLevel(id int) int { return b.known.level(id) }
 // AsPlayer returns the player.
 func (a *skillPlayer) AsPlayer() skills.Player { return a }
 
-// AsPlayer returns nil: NPCs are not players.
-func (a *skillNpc) AsPlayer() skills.Player { return nil }
+// AsPlayer returns nil: NPCs are not players; a summon answers with its
+// owner (Mobius Summon.asPlayer).
+func (a *skillNpc) AsPlayer() skills.Player {
+	if sm := a.n.summon; sm != nil && sm.owner != nil && sm.owner.skill != nil {
+		return sm.owner.skill
+	}
+	return nil
+}
 
 // AsAttackable returns nil for a player.
 func (a *skillPlayer) AsAttackable() skills.Attackable { return nil }
@@ -723,18 +735,31 @@ func (a *skillNpc) AsAttackable() skills.Attackable {
 	return nil
 }
 
-// SendMessage sends a system message to a player.
+// SendMessage sends a system message to a player, or to a summon's owner
+// (Mobius Summon.sendPacket).
 func (b *skillBase) SendMessage(m serverpackets.SystemMessage) {
-	if b.p != nil {
-		b.p.Send(serverpackets.NewSystemMessagePacket(m))
+	if p := b.messageTarget(); p != nil {
+		p.Send(serverpackets.NewSystemMessagePacket(m))
 	}
 }
 
-// SendText sends a text to a player.
+// SendText sends a text to a player, or to a summon's owner.
 func (b *skillBase) SendText(text string) {
-	if b.p != nil {
-		b.p.SendMessage(text)
+	if p := b.messageTarget(); p != nil {
+		p.SendMessage(text)
 	}
+}
+
+// messageTarget is the player that hears the creature's messages: itself,
+// a summon's owner, nil for NPCs.
+func (b *skillBase) messageTarget() *Player {
+	if b.p != nil {
+		return b.p
+	}
+	if b.n != nil && b.n.summon != nil {
+		return b.n.summon.owner
+	}
+	return nil
 }
 
 // SendDamageMessage is Player.sendDamageMessage.
@@ -871,6 +896,10 @@ func (b *skillBase) UpdateAbnormalEffect() {
 		}
 		return
 	}
+	if b.n.summon != nil {
+		b.srv.summonAbnormalChanged(b.n.summon) // summon_info.go
+		return
+	}
 	if b.n.InWorld() {
 		b.n.BroadcastInfo()
 	}
@@ -918,6 +947,10 @@ func (b *skillBase) IsMovementDisabled() bool {
 // other events wait for the AI of Milestone 10 and Phase 7.4.
 func (b *skillBase) NotifyAI(ev skills.AIEvent, other skills.Creature) {
 	o := b.srv.gameCreature(other)
+	if b.n != nil && b.n.summon != nil {
+		b.srv.summonNotifyAI(b.n.summon, ev, o) // summon_ai.go
+		return
+	}
 	switch {
 	case b.n != nil && ev == skills.AIAttacked && o != nil:
 		b.srv.NotifyAttacked(b.n, o)
@@ -965,6 +998,10 @@ func (b *skillBase) Revive(percent float64) {
 	}
 	n := b.n
 	if !n.Dead {
+		return
+	}
+	if n.summon != nil {
+		s.summonRevived(n.summon, percent) // summon.go
 		return
 	}
 	s.CancelNpcDecay(n)
@@ -1106,12 +1143,12 @@ func (a *skillPlayer) PkKills() int { return int(a.p.char.PKKills) }
 // PvpFlag returns the PvP flag.
 func (a *skillPlayer) PvpFlag() int { return int(a.p.PvPFlag) }
 
-// IsHero reports the hero status; until the Olympiad only //sethero gives
-// it (admin_char.go).
+// IsHero reports the hero status (hero.go, admin_char.go).
 func (a *skillPlayer) IsHero() bool { return a.p.IsHero() }
 
-// InOlympiad is false: the Olympiad does not exist yet.
-func (a *skillPlayer) InOlympiad() bool { return false }
+// InOlympiad reports whether the player fights in an Olympiad match
+// (olympiad.go).
+func (a *skillPlayer) InOlympiad() bool { return a.p.InOlympiadMode() }
 
 // Charges returns the force charges.
 func (a *skillPlayer) Charges() int { return a.charges }
@@ -1183,8 +1220,9 @@ func (a *skillPlayer) PaperdollItem(slot int) (itemID, enchant int, ok bool) {
 	return int(it.ItemID()), int(it.Enchant()), true
 }
 
-// InObserverMode is false: observing does not exist yet.
-func (a *skillPlayer) InObserverMode() bool { return false }
+// InObserverMode reports whether the player watches an Olympiad stadium
+// (olympiad_observe.go).
+func (a *skillPlayer) InObserverMode() bool { return a.p.InObserverMode() }
 
 // SiegeState is 0: sieges do not exist yet.
 func (a *skillPlayer) SiegeState() int { return 0 }
@@ -1218,6 +1256,10 @@ func (a *skillPlayer) CheckPvPSkill(target skills.Player, sk *skills.Skill) bool
 // party (party_window.go); the Olympiad does not exist yet.
 func (a *skillPlayer) SendEffectIcons(u skills.IconUpdate) {
 	if !a.p.InGame() {
+		return
+	}
+	if u.Summon != nil {
+		a.srv.summonSpelled(a.p, u) // summon_info.go: the summon's icons
 		return
 	}
 	if u.SendAbnormal {

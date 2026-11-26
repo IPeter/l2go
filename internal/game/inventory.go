@@ -62,23 +62,24 @@ func itemInfos(items []*inventory.Item) []serverpackets.ItemInfo {
 // ItemInfo returns one item as the item packets write it (Mobius ItemInfo
 // and AbstractItemPacket.writeItem): the template's list types and body
 // part mask, the display ID, the count cut to an int, the enchant level and
-// the mana left (-1 for items without mana).
+// the augmentation and the mana left (-1 for items without mana).
 func ItemInfo(it *inventory.Item) serverpackets.ItemInfo {
 	t := it.Template()
 	s := it.Storage()
 	//nolint:gosec // list types are 0-5, IDs and masks fit in int32, the rest is clamped
 	return serverpackets.ItemInfo{
-		Type1:       int16(t.Type1),
-		ObjectID:    it.ObjectID(),
-		ItemID:      int32(t.DisplayID),
-		Count:       itemCount32(it.Count()),
-		Type2:       int16(t.Type2),
-		CustomType1: int16(s.CustomType1),
-		Equipped:    it.Equipped(),
-		BodyPart:    int32(t.BodyPartMask),
-		Enchant:     int16(min(max(it.Enchant(), math.MinInt16), math.MaxInt16)),
-		CustomType2: int16(s.CustomType2),
-		Mana:        it.Mana(),
+		Type1:          int16(t.Type1),
+		ObjectID:       it.ObjectID(),
+		ItemID:         int32(t.DisplayID),
+		Count:          itemCount32(it.Count()),
+		Type2:          int16(t.Type2),
+		CustomType1:    int16(s.CustomType1),
+		Equipped:       it.Equipped(),
+		BodyPart:       int32(t.BodyPartMask),
+		Enchant:        int16(min(max(it.Enchant(), math.MinInt16), math.MaxInt16)),
+		CustomType2:    int16(s.CustomType2),
+		AugmentationID: it.Augmentation(),
+		Mana:           it.Mana(),
 	}
 }
 
@@ -93,6 +94,11 @@ func (p *Player) storageItems() []storage.Item {
 	}
 	if p.items.warehouse != nil {
 		for _, it := range p.items.warehouse.Items() {
+			out = append(out, it.Storage())
+		}
+	}
+	if p.items.pet != nil {
+		for _, it := range p.items.pet.Items() {
 			out = append(out, it.Storage())
 		}
 	}

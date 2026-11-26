@@ -120,6 +120,8 @@ func (t *tables) fsys(tb testing.TB) fstest.MapFS {
 		ClassesFile: t.classes, EquipmentFile: t.equipment, StatBonusFile: t.bonus,
 		ExperienceFile: t.exp, ExperienceLossFile: t.expLoss, KarmaLossFile: t.karmaLoss,
 		HitConditionBonusFile: t.hit, ItemsFile: t.items,
+		CursedWeaponsFile: []CursedWeapon{},
+		SeedsFile:         []Seed{},
 	} {
 		b, err := json.Marshal(v)
 		if err != nil {

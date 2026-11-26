@@ -142,9 +142,40 @@ type GameServer struct {
 	Clan    Clan    `json:"clan"`
 	Ally    Ally    `json:"ally"`
 
+	// Crafting configures the recipe books, crafting and the private
+	// workshop (DefaultCrafting, crafting.go).
+	Crafting Crafting `json:"crafting"`
+	// Enchant configures enchanting (DefaultEnchant, enchant.go).
+	Enchant Enchant `json:"enchant"`
+	// Augment configures augmentation (DefaultAugment, augment.go).
+	Augment Augment `json:"augment"`
+	// Fishing configures fishing and its championship (DefaultFishing,
+	// fishing.go).
+	Fishing Fishing `json:"fishing"`
+	// Olympiad configures the Olympiad and the heroes (DefaultOlympiad,
+	// olympiad.go).
+	Olympiad Olympiad `json:"olympiad"`
+	// Siege configures castles and sieges (DefaultSiege, siege.go).
+	Siege Siege `json:"siege"`
+	// SevenSigns configures the Seven Signs, the festival and the rift
+	// (DefaultSevenSigns, sevensigns.go).
+	SevenSigns SevenSigns `json:"sevenSigns"`
+	// ClanHalls configures the clan hall functions (DefaultClanHalls,
+	// clanhalls.go); HallSiege the contestable halls' sieges
+	// (DefaultHallSiege, hallsiege.go).
+	ClanHalls ClanHalls `json:"clanHalls"`
+	HallSiege HallSiege `json:"hallSiege"`
+	// Manor configures the castle manor (DefaultManor, manor.go).
+	Manor Manor `json:"manor"`
+
 	// GrandBosses are game rules too (DefaultGrandBosses); Geodata's
 	// defaults are DefaultGeodata.
 	GrandBosses GrandBosses `json:"grandBosses"`
+	// Events are the seasonal events (DefaultEvents, events.go).
+	Events Events `json:"events"`
+	// CommunityBoard configures the community board (DefaultCommunityBoard,
+	// communityboard.go).
+	CommunityBoard CommunityBoard `json:"communityBoard"`
 }
 
 // UnmarshalJSON decodes a game server on top of the default game rule
@@ -167,7 +198,24 @@ func (g *GameServer) UnmarshalJSON(b []byte) error {
 		Ally:    DefaultAlly(),
 		Geodata: DefaultGeodata(),
 
+		Crafting: DefaultCrafting(),
+		Enchant:  DefaultEnchant(),
+		Augment:  DefaultAugment(),
+		Fishing:  DefaultFishing(),
+		Olympiad: DefaultOlympiad(),
+		Siege:    DefaultSiege(),
+
+		SevenSigns: DefaultSevenSigns(),
+
+		ClanHalls: DefaultClanHalls(),
+		HallSiege: DefaultHallSiege(),
+
+		Manor: DefaultManor(),
+
 		GrandBosses: DefaultGrandBosses(),
+		Events:      DefaultEvents(),
+
+		CommunityBoard: DefaultCommunityBoard(),
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
@@ -226,6 +274,20 @@ type World struct {
 	// BoatBroadcastRadius is how far from a ferry's docks players hear its
 	// calls, in game units (Mobius BoatBroadcastRadius).
 	BoatBroadcastRadius int `json:"boatBroadcastRadius"`
+	// TimeZone is the time zone of the systems that run on wall-clock time
+	// (the fishing championship, and later sieges, the Olympiad and Seven
+	// Signs), an IANA name such as "Europe/Budapest" or "UTC". Empty uses
+	// the machine's local zone, as Mobius uses the JVM's (Location).
+	TimeZone string `json:"timeZone"`
+}
+
+// Location returns the time zone TimeZone names: time.Local when it is
+// empty.
+func (w World) Location() (*time.Location, error) {
+	if strings.TrimSpace(w.TimeZone) == "" {
+		return time.Local, nil
+	}
+	return time.LoadLocation(strings.TrimSpace(w.TimeZone))
 }
 
 // DefaultWorld returns the Mobius defaults.
@@ -1124,7 +1186,19 @@ func Default() Config {
 			Clan:                    DefaultClan(),
 			Ally:                    DefaultAlly(),
 			Geodata:                 DefaultGeodata(),
+			Crafting:                DefaultCrafting(),
+			Enchant:                 DefaultEnchant(),
+			Augment:                 DefaultAugment(),
+			Fishing:                 DefaultFishing(),
+			Olympiad:                DefaultOlympiad(),
+			Siege:                   DefaultSiege(),
+			SevenSigns:              DefaultSevenSigns(),
+			ClanHalls:               DefaultClanHalls(),
+			HallSiege:               DefaultHallSiege(),
+			Manor:                   DefaultManor(),
 			GrandBosses:             DefaultGrandBosses(),
+			Events:                  DefaultEvents(),
+			CommunityBoard:          DefaultCommunityBoard(),
 		}},
 	}
 }
@@ -1331,6 +1405,9 @@ func (g GameServer) validateGame() []error {
 	if w.SpawnProtection < 0 {
 		add("world.spawnProtection: %v is negative", time.Duration(w.SpawnProtection))
 	}
+	if _, err := w.Location(); err != nil {
+		add("world.timeZone: %w", err)
+	}
 	if g.Chat.GeneralRange <= 0 {
 		add("chat.generalRange: %d is not positive", g.Chat.GeneralRange)
 	}
@@ -1352,6 +1429,18 @@ func (g GameServer) validateGame() []error {
 	errs = append(errs, g.validateItemsAndCombat()...)
 	errs = append(errs, g.validateSocial()...)
 	errs = append(errs, g.validateWorldAI()...)
+	errs = append(errs, g.validateCrafting()...)
+	errs = append(errs, g.validateEnchant()...)
+	errs = append(errs, g.validateAugment()...)    // augment.go
+	errs = append(errs, g.validateFishing()...)    // fishing.go
+	errs = append(errs, g.validateOlympiad()...)   // olympiad.go
+	errs = append(errs, g.validateSiege()...)      // siege.go
+	errs = append(errs, g.validateSevenSigns()...) // sevensigns.go
+	errs = append(errs, g.validateClanHalls()...)  // clanhalls.go
+	errs = append(errs, g.validateHallSiege()...)  // hallsiege.go
+	errs = append(errs, g.validateManor()...)      // manor.go
+	errs = append(errs, g.validateEvents()...)     // events.go
+	errs = append(errs, g.validateCommunityBoard()...)
 	return errs
 }
 

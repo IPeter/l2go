@@ -28,7 +28,6 @@ type UpdateFlusher interface {
 var (
 	actionFailedPacket   = serverpackets.NewActionFailedPacket()
 	leaveWorldPacket     = serverpackets.NewLeaveWorldPacket()
-	emptyHennaInfo       = serverpackets.NewHennaInfoPacket(serverpackets.HennaInfo{})
 	manorListPacket      = serverpackets.NewExSendManorListPacket(serverpackets.InterludeCastles())
 	welcomeMessagePacket = serverpackets.NewSystemMessagePacket(serverpackets.SystemMessage{ID: serverpackets.SysMsgWelcome})
 	// enterMacroList is the empty macro list EnterWorld sends: Mobius starts
@@ -246,6 +245,7 @@ func (p *Player) userInfo() []byte {
 		}
 	}
 	cv := p.clanView()
+	fishOn, fishX, fishY, fishZ := p.fishingSpot() // fishing.go
 	return serverpackets.NewUserInfoPacket(serverpackets.UserInfo{
 		X: pos.X, Y: pos.Y, Z: pos.Z,
 		VehicleID:             p.vehicleID(), // vehicle.go
@@ -271,6 +271,7 @@ func (p *Player) userInfo() []byte {
 		MaxLoad:               v.WeightLimit,
 		WeaponEquipped:        p.inv.Paperdoll(storage.PaperdollRHand) != nil,
 		Paperdoll:             p.inv.PacketPaperdoll(),
+		WeaponAugmentationID:  p.weaponAugmentation(), // augment.go
 		PAtk:                  v.PAtk,
 		PAtkSpd:               v.PAtkSpd,
 		PDef:                  v.PDef,
@@ -301,20 +302,27 @@ func (p *Player) userInfo() []byte {
 		PvPKills:              p.char.PvPKills,
 		AbnormalEffects:       abnormal,
 		InWater:               p.Zones.Inside(ZoneWater),
+		Fishing:               fishOn,
+		FishX:                 fishX,
+		FishY:                 fishY,
+		FishZ:                 fishZ,
 		RecomLeft:             recLeft,
 		RecomHave:             recHave,
 		InventoryLimit:        int16(min(v.InventoryLimit, 32767)), //nolint:gosec // clamped
 		ClassID:               p.char.ClassID,
 		MaxCP:                 v.MaxCP,
 		CurCP:                 p.CurCP,
-		EnchantEffect:         p.enchantEffect(),
+		EnchantEffect:         p.mountEnchantEffect(), // mount.go: 0 while mounted
+		MountType:             uint8(p.mount.typ),     //nolint:gosec // 0-2
+		MountNpcID:            int32(p.mount.npcID),   //nolint:gosec // NPC IDs are small
 		Noble:                 p.nobleFlag(),
 		HeroAura:              p.IsHero(),
 		NameColor:             p.nameColor(),
 		Running:               p.Running(),
 		TitleColor:            p.titleColor(),
 		PrivateStoreType:      uint8(p.store.typ),
-		ClanID:                cv.clanID, // clan.go
+		DwarvenCraft:          p.CraftLevel(true) >= 1, // craft.go
+		ClanID:                cv.clanID,               // clan.go
 		ClanCrestID:           cv.crestID,
 		AllyID:                cv.allyID,
 		AllyCrestID:           cv.allyCrestID,
@@ -323,6 +331,8 @@ func (p *Player) userInfo() []byte {
 		ClanCrestLargeID:      cv.crestLargeID,
 		PledgeClass:           cv.pledgeClass,
 		PledgeType:            cv.pledgeType,
+		CursedWeaponLevel:     p.cursedWeaponLevel(), // cursedweapon.go
+		Cubics:                p.srv.CubicIDs(p),     // cubic.go
 	})
 }
 
@@ -341,6 +351,11 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 	}
 	recLeft, recHave := p.recommendations()
 	cv := p.clanView()
+	clanID, crestID, allyID, allyCrestID := cv.clanID, cv.crestID, cv.allyID, cv.allyCrestID
+	if p.CursedWeaponEquipped() { // cursedweapon.go: a holder shows no clan
+		clanID, crestID, allyID, allyCrestID = 0, 0, 0, 0
+	}
+	fishOn, fishX, fishY, fishZ := p.fishingSpot() // fishing.go
 	return serverpackets.NewCharInfoPacket(serverpackets.CharInfo{
 		X: pos.X, Y: pos.Y, Z: pos.Z,
 		VehicleID:             vehicleID,
@@ -350,6 +365,7 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 		Female:                p.Female(),
 		BaseClassID:           int32(p.BaseClassID()), //nolint:gosec // class IDs are small
 		Paperdoll:             p.inv.PacketPaperdoll(),
+		WeaponAugmentationID:  p.weaponAugmentation(), // augment.go
 		PvPFlag:               p.PvPFlag,
 		Karma:                 p.char.Karma,
 		MAtkSpd:               v.MAtkSpd,
@@ -379,20 +395,27 @@ func (p *Player) charInfoFor(viewer *Player) []byte {
 		ClassID:               p.char.ClassID,
 		MaxCP:                 v.MaxCP,
 		CurCP:                 p.CurCP,
-		EnchantEffect:         p.enchantEffect(),
+		EnchantEffect:         p.mountEnchantEffect(), // mount.go: 0 while mounted
+		MountType:             uint8(p.mount.typ),     //nolint:gosec // 0-2
 		Noble:                 p.nobleFlag(),
 		HeroAura:              p.IsHero(),
+		Fishing:               fishOn,
+		FishX:                 fishX,
+		FishY:                 fishY,
+		FishZ:                 fishZ,
 		NameColor:             p.nameColor(),
 		Heading:               pos.Heading,
 		TitleColor:            p.titleColor(),
 		PrivateStoreType:      uint8(p.store.typ),
-		ClanID:                cv.clanID, // clan.go
-		ClanCrestID:           cv.crestID,
-		AllyID:                cv.allyID,
-		AllyCrestID:           cv.allyCrestID,
+		ClanID:                clanID, // clan.go
+		ClanCrestID:           crestID,
+		AllyID:                allyID,
+		AllyCrestID:           allyCrestID,
 		ClanCrestLargeID:      cv.crestLargeID,
 		PledgeClass:           cv.pledgeClass,
 		PledgeType:            cv.pledgeType,
+		CursedWeaponLevel:     p.cursedWeaponLevel(),
+		Cubics:                p.srv.CubicIDs(p), // cubic.go
 	})
 }
 
