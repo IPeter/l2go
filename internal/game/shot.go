@@ -308,14 +308,14 @@ func spiritshotID(id int32) bool {
 // quirk); then "The automatic use of S1 has been activated." and both kinds
 // recharge. Fishing shots are never automatic; beast shots need a summon,
 // which does not exist yet. Off (0) turns it off with its message. A dead
-// player or one without the item gets nothing.
+// player, one in store mode or one without the item gets nothing.
 func (s *Server) handleRequestAutoSoulShot(p *Player, body []byte) {
 	req, err := clientpackets.ParseRequestAutoSoulShot(body)
 	if err != nil {
 		s.log.Debug("game: bad RequestAutoSoulShot", append(p.logArgs(), "err", err)...)
 		return
 	}
-	if p.IsDead() || p.inv.Inventory == nil {
+	if p.IsDead() || p.InStoreMode() || p.inv.Inventory == nil { // store.go
 		return
 	}
 	it := p.inv.ByItemID(req.ItemID)

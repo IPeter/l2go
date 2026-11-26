@@ -10,9 +10,9 @@ import (
 
 const b3cQ508 = "Q00508_AClansReputation"
 
-// A Clan's Reputation waits for clans: it loads with requires("clans"),
-// refuses players who lead no clan, and its raid choice works without
-// one. Turning in a raid item needs the clan.
+// A Clan's Reputation loads with requires("clans"), refuses players who
+// lead no clan, and its raid choice works without one. The clan side is in
+// clanq_test.go.
 func TestB3cQ508Walkthrough(t *testing.T) {
 	h := b3cLoad(t, b3cQ508)
 	w := h.World()

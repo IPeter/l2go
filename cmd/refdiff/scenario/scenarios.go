@@ -191,6 +191,15 @@ var scenarios = []Scenario{
 		Ignore:      npcNoise,
 		GM:          true,
 	},
+	// Milestone 9: playing together.
+	{
+		Name:        "private-store",
+		Description: "GM setup: 20 Stems for alice, 1,000 adena for bob, both on fixed spots; alice opens a sell store of 10 Stems, bob walks up, buys 4, then the rest, and the store closes",
+		Roles:       []string{"alice", "bob"},
+		Run:         privateStore,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
 }
 
 func loginCreateEnter(ctx context.Context, s *Session) error {

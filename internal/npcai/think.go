@@ -90,7 +90,7 @@ func canCast(npc Npc, sk *skills.Skill) bool {
 	if npc.IsSkillDisabled(sk) {
 		return false
 	}
-	return sk.IsStatic() || !((sk.IsMagic() && npc.IsMuted()) || npc.IsPhysicalMuted())
+	return sk.IsStatic() || ((!sk.IsMagic() || !npc.IsMuted()) && !npc.IsPhysicalMuted())
 }
 
 // isParty is CreatureAI.isParty: the skill targets the party.

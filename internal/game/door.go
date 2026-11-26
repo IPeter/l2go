@@ -380,6 +380,7 @@ func (s *Server) doorGroupOpen(open bool, group string) {
 // as in Mobius).
 func (s *Server) setDoorOpen(d *Door, open bool) {
 	d.open = open
+	s.GeoBlockersChanged() // pathing_door.go: the walkers' door look-ahead
 	child := d.Template.ChildID
 	if child <= 0 {
 		return

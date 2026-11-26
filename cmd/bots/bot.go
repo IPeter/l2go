@@ -62,6 +62,12 @@ type bot struct {
 	target, attacking, avoid int32
 	fightStart, lastCast     time.Time
 	buffRetryAt              time.Time
+
+	// The private stores (store.go): keeper is set for a bot that keeps a
+	// sell store (-stores); storeRetryAt is when to try //create_item
+	// again after it failed (no GM rights).
+	keeper       bool
+	storeRetryAt time.Time
 }
 
 func newBot(id int, cfg config, stats *Stats, logger *slog.Logger) *bot {
@@ -76,6 +82,7 @@ func newBot(id int, cfg config, stats *Stats, logger *slog.Logger) *bot {
 		rng:     rand.New(rand.NewPCG(uint64(cfg.seed), uint64(id))), //nolint:gosec // behaviour, not security
 		logger:  logger.With("bot", account),
 		state:   stateIdle,
+		keeper:  cfg.mode == modeWander && storeKeeper(id, cfg.stores),
 	}
 }
 
@@ -260,7 +267,8 @@ func moveSpeed(u testclient.UserInfo) float64 {
 }
 
 // act reports the bot's position and does one random action: talk to the
-// nearest NPC, say something, or walk.
+// nearest NPC, say something, buy at the nearest store, or walk. A store
+// keeper keeps its store instead.
 func (b *bot) act(ctx context.Context, gc *testclient.GameConn) error {
 	// The packets queued while the bot slept are old; an answer must come
 	// after the request.
@@ -277,12 +285,17 @@ func (b *bot) act(ctx context.Context, gc *testclient.GameConn) error {
 	if err := b.reportPosition(ctx, gc); err != nil {
 		return staged("validate", err)
 	}
+	if b.keeper {
+		return b.keepStore(ctx, gc)
+	}
 	r := b.rng.Float64()
 	switch {
 	case r < b.cfg.talk:
 		return b.talk(ctx, gc)
 	case r < b.cfg.talk+b.cfg.say:
 		return b.say(ctx, gc)
+	case r < b.cfg.talk+b.cfg.say+b.cfg.buy:
+		return b.shop(ctx, gc)
 	default:
 		return b.walk(ctx, gc)
 	}

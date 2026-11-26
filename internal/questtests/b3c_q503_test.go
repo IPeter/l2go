@@ -7,8 +7,8 @@ import (
 
 const b3cQ503 = "Q00503_PursuitOfClanAmbition"
 
-// Pursuit of Clan Ambition waits for clans: every talk starts with the
-// clan leader's quest state, so only loading is checked.
+// Pursuit of Clan Ambition loads with requires("clans"); its clan
+// walkthrough is in clanq_test.go.
 func TestB3cQ503Loads(t *testing.T) {
 	h := b3cLoad(t, b3cQ503)
 	b3cRequires(t, h, b3cQ503, "clans")

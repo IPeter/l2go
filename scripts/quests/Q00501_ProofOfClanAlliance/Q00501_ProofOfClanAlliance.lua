@@ -1,7 +1,6 @@
 -- Translated by questport from quests/Q00501_ProofOfClanAlliance (Mobius CT_0 Interlude); owned by L2Go from here on.
 -- @author Rootware, Skache
--- Needs clans (M9): the clan, its leader, clan levels, NPC skill casts and
--- skill effects, and the poison check do not exist before.
+-- Needs clans (M9): the clan, its leader and clan levels.
 local J = require("lib.java")
 
 local q = quest.new(501, "Q00501_ProofOfClanAlliance", "Proof of Clan Alliance")

@@ -117,7 +117,7 @@ func (p *Profile) AllowsCast(r rnd.Source, caster Npc, sk *skills.Skill, target 
 		}
 	}
 	if g.highHP > 0 {
-		var src Creature = target
+		src := target
 		if g.hpTarget == 1 {
 			src = caster
 		}

@@ -435,7 +435,7 @@ func TestAdminEnchant(t *testing.T) {
 		t.Errorf("//setew 7: enchant %d, P. Atk %d from %d", enchant, after, before)
 	}
 	enchanted := func(c testclient.ItemChange) bool {
-		return c.Item.ItemID == itemLongSword && c.Item.Enchant == 7 && c.Item.Equipped
+		return c.ItemID == itemLongSword && c.Enchant == 7 && c.Equipped
 	}
 	iu := only[testclient.InventoryUpdate](got)
 	if len(iu) != 1 || !slices.ContainsFunc(iu[0].Items, enchanted) {

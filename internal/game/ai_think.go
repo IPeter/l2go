@@ -65,6 +65,9 @@ func (s *Server) npcThinkActive(n *Npc) {
 		n.clearAttackBy()
 	}
 
+	if n.script.noReturn {
+		return // Mobius: !canReturnToSpawnPoint stops here (clan_script.go)
+	}
 	home, terr, hasHome := s.npcHome(n)
 	pos := n.Position()
 	drift := s.settings.NPCs.MaxDriftRange
@@ -225,7 +228,9 @@ func (s *Server) npcThinkAttack(n *Npc) {
 	}
 	ai := &n.ai
 	c := s.aiClassOf(n)
-	if c.monster && s.settings.NPCs.AggroDistanceCheck && s.hasStrayed(n) {
+	// Mobius leaves walkers and grand bosses alone, and raid bosses unless
+	// AggroDistanceCheckRaids (off, no key here).
+	if c.monster && !n.isWalker() && !n.IsRaid() && s.settings.NPCs.AggroDistanceCheck && s.hasStrayed(n) {
 		s.leash(n)
 		return
 	}
@@ -423,8 +428,9 @@ func (s *Server) leash(n *Npc) {
 }
 
 // checkTarget is Mobius AttackableAI.checkTarget: a living creature the NPC
-// may attack (players; NPCs never, as monsters and guards leave each other
-// alone by default), in reach and sight when the NPC cannot move.
+// may attack (npcAutoAttacks: players; NPCs never, as monsters and guards
+// leave each other alone by default), in reach and sight when the NPC cannot
+// move.
 func (s *Server) checkTarget(n *Npc, target Creature) bool {
 	if target == nil || target.IsDead() {
 		return false
@@ -435,8 +441,7 @@ func (s *Server) checkTarget(n *Npc, target Creature) bool {
 			return false
 		}
 	}
-	p, ok := target.(*Player)
-	return ok && p.state == stateInGame
+	return s.npcAutoAttacks(n, target)
 }
 
 // isClan is Mobius NpcTemplate.isClan(Set): both have clans, and they share
@@ -501,6 +506,22 @@ func (s *Server) factionCall(npc, caller *Npc, attacker *Player) {
 	s.loop.Post(func() {
 		if s.scripts != nil {
 			_ = s.scripts.FactionCall(s.background(), npcRef, callerRef, attacker, false) // failures are logged
+		}
+	})
+}
+
+// aggroRangeEnter raises on_aggro_range_enter(npc, player) for the scripts
+// registered for npc when it starts to hate a player without damage (Mobius
+// Attackable.addDamageHate with no aggro, OnAttackableAggroRangeEnter,
+// notified asynchronously: it runs after the current command).
+func (s *Server) aggroRangeEnter(npc *Npc, p *Player) {
+	if s.scripts == nil || !s.scripts.Listens("aggro_range_enter", npc.Template.ID) {
+		return
+	}
+	ref := npc.ScriptRef()
+	s.loop.Post(func() {
+		if s.scripts != nil && p.state == stateInGame {
+			_ = s.scripts.AggroRangeEnter(s.background(), ref, p, false) // failures are logged
 		}
 	})
 }

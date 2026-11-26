@@ -9,6 +9,7 @@ import (
 
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/gameserver/clientpackets"
+	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/social"
 	"github.com/IPeter/l2go/internal/storage"
 	"github.com/IPeter/l2go/internal/testclient"
@@ -136,10 +137,14 @@ func TestClanLevelUpSteps(t *testing.T) {
 		e.onLoop(func() {
 			p.char.SP = st.sp - 1
 			if st.adena > 0 {
-				e.srv.AddItem(p, adenaID, st.adena, -1, false, false)
+				if _, err := e.srv.AddItem(p, adenaID, st.adena, -1, false, false); err != nil {
+					t.Error(err)
+				}
 			}
 			if st.item != 0 {
-				e.srv.AddItem(p, st.item, 1, -1, false, false)
+				if _, err := e.srv.AddItem(p, st.item, 1, -1, false, false); err != nil {
+					t.Error(err)
+				}
 			}
 			c.Reputation = st.rep - 1
 			if st.sp == 0 {
@@ -756,6 +761,38 @@ func TestClanGMCommands(t *testing.T) {
 }
 
 func itoa32(v int32) string { return strconv.Itoa(int(v)) }
+
+// The clan target types see the clan members in the game; the quests that
+// require clans are offered; the scripts see the clan and whether its
+// members are online.
+func TestClanSkillWorldAndScripts(t *testing.T) {
+	e := newClanEnv(t, nil, time.Time{}, nil)
+	sessA, a := e.enterClanChar(clanChar{account: "lead", name: "Leader", level: 40})
+	sessB, b := e.enterClanChar(clanChar{account: "bob", name: "Bob", level: 20})
+	_, x := e.enterClanChar(clanChar{account: "xeno", name: "Xeno", level: 20})
+	e.foundClan(a, "Dragons")
+	e.inviteToClan(sessA, a, sessB, b, 0, 1)
+	e.onLoop(func() {
+		w := skillWorld{e.srv}
+		var got []int32
+		for _, c := range w.ClanMembers(e.srv.SkillCreature(b)) {
+			got = append(got, c.ObjectID())
+		}
+		if !slices.Equal(got, []int32{a.ObjectID(), b.ObjectID()}) {
+			t.Errorf("ClanMembers = %v", got)
+		}
+		if w.ClanMembers(e.srv.SkillCreature(x)) != nil {
+			t.Error("a player without a clan has clan members")
+		}
+		ref, ok := b.ScriptClan().(clanScriptRef)
+		if !ok || ref.c != a.Clan() || len(ref.OnlineMembers()) != 2 || !b.IsOnline() {
+			t.Errorf("script clan %+v online %v", b.ScriptClan(), b.IsOnline())
+		}
+	})
+	if !questAvailable(scripting.QuestInfo{Requires: []string{"clans"}}) || questAvailable(scripting.QuestInfo{Requires: []string{"clans", "clan_halls"}}) {
+		t.Error("questAvailable: clans should be there, clan halls not")
+	}
+}
 
 // /clanpenalty lists the penalties; clan members and leaders cannot be
 // deleted.

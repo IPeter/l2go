@@ -35,6 +35,39 @@ func (s *Server) NpcSetCast(n *Npc, sk *skills.Skill, target Creature) {
 	s.startAITask(n)
 }
 
+// NpcUseMagic is Mobius Attackable.useMagic, which scripts use to make a
+// monster cast (Queen Ant's nurses): when n is alive, not casting and can
+// cast sk now (not passive, not disabled, enough MP and HP, not muted for
+// it), it takes the CAST intention at the first target of the skill's list.
+// Loop-only.
+func (s *Server) NpcUseMagic(n *Npc, sk *skills.Skill) {
+	if n == nil || sk == nil || n.Dead || n.skill == nil || sk.IsPassive() || s.CastingNow(n) || s.SkillDisabled(n, sk) {
+		return
+	}
+	b := &n.skill.skillBase
+	env := s.skills.env
+	if b.CurrentMP() < float64(skills.MPConsume(env, b.self, sk)+skills.MPInitialConsume(b.self, sk)) ||
+		b.CurrentHP() <= float64(sk.HPConsume) {
+		return
+	}
+	if !sk.IsStatic() {
+		if sk.IsMagic() {
+			if b.el.IsAffected(skills.FlagMuted) {
+				return
+			}
+		} else if b.el.IsAffected(skills.FlagPhysicalMuted) {
+			return
+		}
+	}
+	targets := sk.Targets(env, b.self, true, b.Target())
+	if len(targets) == 0 {
+		return
+	}
+	if t := s.gameCreature(targets[0]); t != nil {
+		s.NpcSetCast(n, sk, t)
+	}
+}
+
 // npcChangeToCast is Mobius changeIntentionToCast.
 func (s *Server) npcChangeToCast(n *Npc, sk *skills.Skill, target Creature) {
 	ai := s.aiOf(n)

@@ -131,17 +131,15 @@ func (s *Server) bossZoneEntered(p *Player, zoneID int) {
 // the zone that strayed more than 150 from their spawn walk home.
 func (s *Server) bossZoneExited(p *Player, zoneID int, offline bool) {
 	z := s.bosses.zones[zoneID]
-	if z == nil {
+	if z == nil || p.IsGM() { // Mobius returns for a GM before the raid check too
 		return
 	}
-	if !p.IsGM() {
-		id := p.ObjectID()
-		if offline && z.isAllowed(id) {
-			z.reentry[id] = s.Now().Add(z.invadeTime())
-		} else {
-			z.disallow(id)
-			delete(z.reentry, id)
-		}
+	id := p.ObjectID()
+	if offline && z.isAllowed(id) {
+		z.reentry[id] = s.Now().Add(z.invadeTime())
+	} else {
+		z.disallow(id)
+		delete(z.reentry, id)
 	}
 	// Mobius takes the creature off the zone's list before onExit.
 	if slices.ContainsFunc(s.BossZonePlayers(zoneID), func(o *Player) bool { return o != p }) {

@@ -211,7 +211,10 @@ func (v *vm) playerQuestMethods() map[string]lua.LGFunction {
 		// party.go; subclasses come in a later milestone.
 		"clan":                v.playerClanMethod,
 		"is_clan_leader":      playerIsClanLeader,
+		"is_online":           playerIsOnline,
 		"is_sub_class_active": solo("is_sub_class_active", lua.LFalse),
+
+		"buff_info_by_abnormal_type": v.playerBuffInfoByAbnormalType, // api_clan.go
 		"social_action": func(L *lua.LState) int {
 			p := checkPlayer(L, "social_action")
 			id := int(checkInt(L, 2, "player:social_action"))
@@ -311,6 +314,7 @@ func (v *vm) npcQuestMethods() map[string]lua.LGFunction {
 			v.needActions(L, "npc:social_action").SocialAction(n, id)
 			return 0
 		},
+		"set_can_return_to_spawn_point": v.npcSetCanReturnToSpawnPoint, // api_clan.go
 	}
 	for name, fn := range locationMethods("npc", self) {
 		m[name] = fn

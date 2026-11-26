@@ -1,6 +1,6 @@
 -- Translated by questport from quests/Q00509_AClansFame (Mobius CT_0 Interlude); owned by L2Go from here on.
--- Needs clans (M9): the clan calls below (clan level and reputation, the
--- clan leader's quest state, the NPC distance) do not exist before.
+-- Needs clans (M9): the clan level and reputation and the clan leader's
+-- quest state.
 local J = require("lib.java")
 
 local q = quest.new(509, "Q00509_AClansFame", "The Clan's Prestige")
@@ -112,7 +112,7 @@ q:on_kill(function(npc, player, isPet)
     local item = REWARD_LIST[raid][2]
     local clanLeader = st:get_player()
     -- Check if the clan leader is within 1500 range of the raid boss.
-    if clanLeader ~= nil and npc:distance_3d(clanLeader) < Config.ALT_PARTY_RANGE and not q:has_quest_items(clanLeader, item) then
+    if clanLeader ~= nil and npc:calculate_distance_3d(clanLeader) < Config.ALT_PARTY_RANGE and not q:has_quest_items(clanLeader, item) then
       q:give_items(clanLeader, item, 1)
       q:play_sound(clanLeader, QuestSound.ITEMSOUND_QUEST_MIDDLE)
     end

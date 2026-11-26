@@ -93,8 +93,8 @@ func (s *Server) handleAction(p *Player, body []byte) {
 
 // handleAttackRequest handles AttackRequest (0x0A). Mobius treats it as a
 // click when the object is not the target yet, and as a forced attack on
-// the target (onForcedAttack), except on the player itself, which gets
-// ActionFailed (private stores and requests do not exist yet).
+// the target (onForcedAttack), except on the player itself, in store mode
+// or with an active requester, which get ActionFailed.
 func (s *Server) handleAttackRequest(p *Player, body []byte) {
 	req, err := clientpackets.ParseAttackRequest(body)
 	if err != nil {
@@ -111,7 +111,7 @@ func (s *Server) handleAttackRequest(p *Player, body []byte) {
 		s.onAction(p, obj, true)
 		return
 	}
-	if obj.ID() == p.ID() {
+	if obj.ID() == p.ID() || p.InStoreMode() || p.ActiveRequester() != nil { // store.go, party_request.go
 		p.SendActionFailed()
 		return
 	}

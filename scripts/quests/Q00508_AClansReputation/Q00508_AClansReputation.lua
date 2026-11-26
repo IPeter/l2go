@@ -1,6 +1,6 @@
 -- Translated by questport from quests/Q00508_AClansReputation (Mobius CT_0 Interlude); owned by L2Go from here on.
--- Needs clans (M9): the clan calls below (clan level and reputation, the
--- clan leader's quest state, the NPC distance) do not exist before.
+-- Needs clans (M9): the clan level and reputation and the clan leader's
+-- quest state.
 local J = require("lib.java")
 
 local q = quest.new(508, "Q00508_AClansReputation", "A Clan's Reputation")
@@ -112,7 +112,7 @@ q:on_kill(function(npc, player, isPet)
   end
   -- Check if the clan leader is within 1500 range of the raid boss.
   local clanLeader = st:get_player()
-  if npc:distance_3d(clanLeader) < Config.ALT_PARTY_RANGE then
+  if npc:calculate_distance_3d(clanLeader) < Config.ALT_PARTY_RANGE then
     -- Reward only if quest is set up on the correct index.
     local raid = st:get_int("raid")
     if REWARD_LIST[raid][1] == npc:id() then

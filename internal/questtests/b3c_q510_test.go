@@ -9,9 +9,9 @@ import (
 
 const b3cQ510 = "Q00510_AClansPrestige"
 
-// A Clan's Reputation (Q510) waits for clans: it loads with
-// requires("clans") and refuses players who lead no clan; started without
-// claws, Valdis asks for them.
+// A Clan's Reputation (Q510) loads with requires("clans") and refuses
+// players who lead no clan; started without claws, Valdis asks for them.
+// The clan side is in clanq_test.go.
 func TestB3cQ510Walkthrough(t *testing.T) {
 	h := b3cLoad(t, b3cQ510)
 	b3cRequires(t, h, b3cQ510, "clans")

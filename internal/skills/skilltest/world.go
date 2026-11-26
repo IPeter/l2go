@@ -21,6 +21,43 @@ type World struct {
 	Old map[int32]bool
 	// Night is game-time night.
 	Night bool
+	// NpcClans maps an NPC's object ID to its template clans ("ALL" is in
+	// every clan).
+	NpcClans map[int32][]string
+}
+
+var _ skills.ClanWorld = (*World)(nil)
+
+// ClanMembers returns the players of the world with c's clan (Creature.Clan),
+// in world order; nil when c has none.
+func (w *World) ClanMembers(c skills.Creature) []skills.Creature {
+	cc, ok := c.(*Creature)
+	if !ok || cc.Clan == 0 {
+		return nil
+	}
+	var out []skills.Creature
+	for _, o := range w.Creatures {
+		if oc, ok := o.(*Creature); ok && oc.Clan == cc.Clan && oc.AsPlayer() != nil {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// NpcHasClans reports whether the NPC has clans in NpcClans.
+func (w *World) NpcHasClans(npc skills.Creature) bool { return len(w.NpcClans[npc.ObjectID()]) > 0 }
+
+// NpcInMyClan is NpcTemplate.isClan: npc is in "ALL" or shares a clan with
+// other.
+func (w *World) NpcInMyClan(npc, other skills.Creature) bool {
+	mine, theirs := w.NpcClans[npc.ObjectID()], w.NpcClans[other.ObjectID()]
+	if len(mine) == 0 || len(theirs) == 0 {
+		return false
+	}
+	if slices.Contains(mine, "ALL") {
+		return true
+	}
+	return slices.ContainsFunc(theirs, func(c string) bool { return slices.Contains(mine, c) })
 }
 
 // Add adds creatures to the world.

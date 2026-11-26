@@ -29,7 +29,26 @@ const (
 // Sense comes first and the spawns and scripts follow on other threads.
 func setupDayNight(s *Server) error {
 	s.world.GameTime().OnDayNightChange(s.dayNightChanged)
+	s.OnPlayerEnter(s.shadowSenseOnEnter)
 	return nil
+}
+
+// shadowSenseOnEnter is Mobius EnterWorld's Shadow Sense check: a Dark Elf
+// who knows it is told whether it works now (the passive's own night
+// condition does the rest).
+func (s *Server) shadowSenseOnEnter(p *Player) {
+	if data.Race(p.Race()) != data.RaceDarkElf { //nolint:gosec // player races are 0-4
+		return
+	}
+	sk := p.KnownSkill(shadowSenseSkill)
+	if sk == nil {
+		return
+	}
+	msg := sysMsgDawnEffect
+	if s.world.GameTime().IsNight() {
+		msg = sysMsgMidnightEffect
+	}
+	p.SendSystemMessage(msg, serverpackets.SkillNameParam(int32(sk.DisplayID), int32(sk.DisplayLevel))) //nolint:gosec // skill IDs and levels are small
 }
 
 // dayNightChanged is Mobius GameTimeTaskManager's change of mode: Shadow
@@ -42,7 +61,10 @@ func (s *Server) dayNightChanged(night bool) {
 		}
 	}
 	if s.scripts != nil && s.scripts.Listens("day_night_change", 0) {
-		s.loop.Post(func() {
+		// Mobius notifies it asynchronously: a timer due now runs once this
+		// tick's hooks (the spawn switch among them) are done, before the
+		// next command or tick.
+		s.loop.After(0, func() {
 			if s.scripts != nil {
 				_ = s.scripts.DayNightChange(s.background(), night) // failures are logged
 			}

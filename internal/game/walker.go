@@ -173,7 +173,7 @@ func (s *Server) walkerStart(n *Npc, route *data.WalkRoute) {
 			s.walkerNext(n, info)
 			node = info.node()
 		}
-		if to := walkerNodePos(node); !(pos.DistanceSq3D(to) < walkerFarStart*walkerFarStart) {
+		if to := walkerNodePos(node); pos.DistanceSq3D(to) >= walkerFarStart*walkerFarStart {
 			s.log.Warn("game: a walker is too far from its route; teleporting it there",
 				"route", route.Name, "npc", n.Template.ID, "pos", pos, "node", to)
 			s.TeleportNpc(n, to)
@@ -323,24 +323,32 @@ func (s *Server) walkerArrived(n *Npc) {
 
 // walkerScriptEvent runs the scripts' on_node_arrived(npc) or
 // on_route_finished(npc) when one listens for the NPC's template (Mobius
-// OnNpcMoveNodeArrived, OnNpcMoveRouteFinished).
+// OnNpcMoveNodeArrived, OnNpcMoveRouteFinished). Mobius notifies them
+// asynchronously, so they run after the current command or tick (a timer
+// due now), in order.
 func (s *Server) walkerScriptEvent(n *Npc, event string) {
 	if s.scripts == nil || !s.scripts.Listens(event, n.Template.ID) {
 		return
 	}
-	ctx, ref := s.background(), n.ScriptRef()
-	switch event {
-	case "node_arrived":
-		_ = s.scripts.NodeArrived(ctx, ref) // failures are logged
-	case "route_finished":
-		_ = s.scripts.RouteFinished(ctx, ref)
-	}
+	ref := n.ScriptRef()
+	s.loop.After(0, func() {
+		if s.scripts == nil || !n.InWorld() {
+			return
+		}
+		ctx := s.background()
+		switch event {
+		case "node_arrived":
+			_ = s.scripts.NodeArrived(ctx, ref) // failures are logged
+		case "route_finished":
+			_ = s.scripts.RouteFinished(ctx, ref)
+		}
+	})
 }
 
 // npcBroadcastSay is Mobius npc.broadcastSay(NPC_GENERAL, text).
 func (s *Server) npcBroadcastSay(n *Npc, text string) {
 	s.world.Broadcast(n, serverpackets.NewNpcSayPacket(serverpackets.NpcSay{
-		ObjectID: int32(n.ID()),                //nolint:gosec // object IDs fit in int32
+		ObjectID: int32(n.ID()), //nolint:gosec // object IDs fit in int32
 		Type:     serverpackets.ChatGeneral,
 		NpcID:    int32(n.Template.DisplayID), //nolint:gosec // NPC IDs fit in int32
 		Text:     text,

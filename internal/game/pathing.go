@@ -36,9 +36,9 @@ const (
 	// pathFallDZ: a move this much downwards over a shorter distance is a
 	// fall, which geodata never corrects.
 	pathFallDZ = 300
-	// pathLedgeDZ: a monster that sees its target this far up or down walks
-	// to it unclipped ("monsters can move on ledges").
-	pathLedgeDZ = 100
+	// shortcut: Mobius's ledge rule (a monster that sees its target 100+ up
+	// or down walks to it unclipped) isn't built; add it when the monster AI
+	// keeps Mobius's creature target.
 )
 
 // geoRoute is a walk along a geodata path (Mobius MoveData geoPath,

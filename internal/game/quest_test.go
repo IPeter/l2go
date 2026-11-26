@@ -562,8 +562,8 @@ q:on_talk(function(npc, player)
 end)
 `,
 	"quests/QR/QR.lua": `
-local q = quest.new(9, "QR", "Needs Clans")
-q:requires("clans")
+local q = quest.new(9, "QR", "Needs Clan Halls")
+q:requires("clan_halls")
 q:add_start_npc(30598)
 q:add_talk_id(30598)
 q:on_talk(function(npc, player) return "<html><body>Clans</body></html>" end)

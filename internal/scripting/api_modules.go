@@ -319,6 +319,7 @@ var builtinConstants = map[string]map[string]any{
 	// Filled by the game from its data (datagen).
 	"Category":        {},
 	"SystemMessageId": {},
+	"AbnormalType":    {},
 }
 
 // dimensionalDiamondRewards are Mobius Quest.DF_REWARD_35, _37 and _39:

@@ -399,11 +399,36 @@ func (w aiWorld) Visible(center npcai.Creature, of npcai.Of, radius int) iter.Se
 	}
 }
 
-// AutoAttackable is target.isAutoAttackable(by): monsters and guards attack
-// players in the game, never NPCs (they leave each other alone by default).
-func (w aiWorld) AutoAttackable(target npcai.Creature, _ npcai.Npc) bool {
-	p, ok := gameOf(target).(*Player)
-	return ok && p.state == stateInGame
+// AutoAttackable is target.isAutoAttackable(by) (Mobius
+// Player.isAutoAttackable): only players in the game, never NPCs (they leave
+// each other alone by default); not an invisible GM; friendly mobs never,
+// monsters always, guards a player with karma, other NPCs a player with
+// karma or a PvP flag.
+func (w aiWorld) AutoAttackable(target npcai.Creature, by npcai.Npc) bool {
+	n, _ := gameOf(by).(*Npc)
+	return w.s.npcAutoAttacks(n, gameOf(target))
+}
+
+// npcAutoAttacks is target.isAutoAttackable(n) for the AI's checkTarget
+// (see aiWorld.AutoAttackable).
+func (s *Server) npcAutoAttacks(n *Npc, target Creature) bool {
+	p, ok := target.(*Player)
+	if !ok || p.state != stateInGame || (p.Invisible() && p.IsGM()) {
+		return false
+	}
+	if n == nil {
+		return true
+	}
+	c := s.aiClassOf(n)
+	switch {
+	case c.friendly:
+		return false
+	case c.monster:
+		return true
+	case c.guard:
+		return p.Karma() > 0
+	}
+	return p.Karma() > 0 || p.PvPFlag > 0
 }
 
 // ----- carrying out decisions -----

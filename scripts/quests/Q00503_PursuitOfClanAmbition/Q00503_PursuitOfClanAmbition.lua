@@ -1,8 +1,7 @@
 -- Translated by questport from quests/Q00503_PursuitOfClanAmbition (Mobius CT_0 Interlude); owned by L2Go from here on.
 -- @author Jackass, Skache
 -- Needs clans (M9): nearly every handler asks for the clan leader's quest
--- state (q:get_clan_leader_quest_state), the clan, NPC variables, the NPC's
--- HP/MP, teleport and casting, none of which exist before.
+-- state (q:get_clan_leader_quest_state) and the clan.
 local J = require("lib.java")
 
 local q = quest.new(503, "Q00503_PursuitOfClanAmbition", "Pursuit of Clan Ambition!")
@@ -77,10 +76,10 @@ local function spawnImperialSlaves(npc)
   end
 end
 
+-- Mobius broadcasts the teleport, sets the position and revalidates the
+-- zones: npc:teleport does all three.
 local function teleportImperialGravekeeper(npc, x, y, z)
-  npc:broadcast_teleport(x, y, z)
-  npc:set_xyz(x, y, z)
-  npc:revalidate_zone()
+  npc:teleport(x, y, z)
 end
 
 q:register_quest_items(MIST_DRAKE_EGG, BLITZ_WYRM_EGG, DRAKE_EGG, THUNDER_WYRM_EGG, BROOCH_OF_THE_MAGPIE, NEBULITE_CRYSTALS, BROKEN_TITANS_POWERSTONE, TITANS_POWERSTONE, IMPERIAL_KEY, GUSTAVS_1ST_LETTER, GUSTAVS_2ND_LETTER, GUSTAVS_3RD_LETTER, SCEPTER_OF_JUDGMENT)
@@ -455,7 +454,9 @@ q:on_attack(function(npc, attacker, damage, isSummon, skill)
     local now = time.now_ms()
     local lastCast = npc:var_int("lastDarkHealCast", 0)
     local reuseDelay = 60000
-    if now - lastCast >= reuseDelay and not npc:is_casting_now() and not npc:is_skill_disabled(selfHealSkill) and npc:mp() >= selfHealSkill.mp_consume and npc:hp() > selfHealSkill.hp_consume then
+    -- Mobius also checks the skill's reuse and its MP and HP costs here;
+    -- npc:cast refuses the cast on those itself (doCast's conditions).
+    if now - lastCast >= reuseDelay and not npc:is_casting_now() then
       npc:set_target(npc)
       npc:cast(selfHealSkill, npc)
       npc:set_var("lastDarkHealCast", now)
@@ -473,7 +474,7 @@ q:on_kill(function(npc, player, isPet)
   local cond = st:get_cond()
   if npcId == IMPERIAL_GRAVEKEEPER then
     local clanLeader = st:get_player()
-    if clanLeader ~= nil and clanLeader:is_online() and cond == 10 and not q:has_quest_items(clanLeader, SCEPTER_OF_JUDGMENT) and clanLeader:distance_3d(npc) <= 1500 then
+    if clanLeader ~= nil and clanLeader:is_online() and cond == 10 and not q:has_quest_items(clanLeader, SCEPTER_OF_JUDGMENT) and clanLeader:calculate_distance_3d(npc) <= 1500 then
       local coffer = q:add_spawn(IMPERIAL_COFFER, {x = npc:x(), y = npc:y(), z = npc:z(), heading = npc:heading()}, true, 180000)
       coffer:broadcast_say(ChatType.NPC_GENERAL, "Curse of the gods on the one that defiles the property of the empire!")
     end
@@ -481,7 +482,7 @@ q:on_kill(function(npc, player, isPet)
   end
   if npcId == GRAVE_GUARD then
     local clanLeader = st:get_player()
-    if clanLeader ~= nil and clanLeader:is_online() and cond == 10 and not q:has_quest_items(clanLeader, SCEPTER_OF_JUDGMENT) and clanLeader:distance_3d(npc) <= 1500 then
+    if clanLeader ~= nil and clanLeader:is_online() and cond == 10 and not q:has_quest_items(clanLeader, SCEPTER_OF_JUDGMENT) and clanLeader:calculate_distance_3d(npc) <= 1500 then
       local graveGuardKills = st:get_int("grave_guard_kills") + 1
       st:set("grave_guard_kills", tostring(graveGuardKills))
       if graveGuardKills >= 5 and rnd(100) < 50 or graveGuardKills >= 10 then
@@ -493,7 +494,7 @@ q:on_kill(function(npc, player, isPet)
   end
   if npcId == GRAVE_KEYMASTER then
     local clanLeader = st:get_player()
-    if clanLeader ~= nil and clanLeader:is_online() and cond == 10 and not q:has_quest_items(clanLeader, SCEPTER_OF_JUDGMENT) and q:get_quest_items_count(clanLeader, IMPERIAL_KEY) < 6 and clanLeader:distance_3d(npc) <= 1500 then
+    if clanLeader ~= nil and clanLeader:is_online() and cond == 10 and not q:has_quest_items(clanLeader, SCEPTER_OF_JUDGMENT) and q:get_quest_items_count(clanLeader, IMPERIAL_KEY) < 6 and clanLeader:calculate_distance_3d(npc) <= 1500 then
       q:give_items(clanLeader, IMPERIAL_KEY, 1)
       if q:get_quest_items_count(clanLeader, IMPERIAL_KEY) >= 6 then
         q:play_sound(clanLeader, QuestSound.ITEMSOUND_QUEST_MIDDLE)

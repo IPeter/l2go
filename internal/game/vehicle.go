@@ -186,7 +186,7 @@ func (b *Boat) departurePacket() []byte {
 	}
 	return serverpackets.NewVehicleDeparturePacket(serverpackets.VehicleDeparture{
 		ObjectID:      b.ObjectID(),
-		MoveSpeed:     int32(b.speed), //nolint:gosec // boat speeds are small
+		MoveSpeed:     int32(b.speed),    //nolint:gosec // boat speeds are small
 		RotationSpeed: int32(b.rotation), //nolint:gosec // small
 		X:             dest.X, Y: dest.Y, Z: dest.Z,
 	})

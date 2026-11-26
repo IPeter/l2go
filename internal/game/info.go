@@ -28,9 +28,6 @@ type UpdateFlusher interface {
 var (
 	actionFailedPacket   = serverpackets.NewActionFailedPacket()
 	leaveWorldPacket     = serverpackets.NewLeaveWorldPacket()
-	emptySkillCoolTime   = serverpackets.NewSkillCoolTimePacket(nil)
-	emptySkillList       = serverpackets.NewSkillListPacket(nil)
-	emptyAbnormalStatus  = serverpackets.NewAbnormalStatusUpdatePacket(nil)
 	emptyHennaInfo       = serverpackets.NewHennaInfoPacket(serverpackets.HennaInfo{})
 	manorListPacket      = serverpackets.NewExSendManorListPacket(serverpackets.InterludeCastles())
 	welcomeMessagePacket = serverpackets.NewSystemMessagePacket(serverpackets.SystemMessage{ID: serverpackets.SysMsgWelcome})

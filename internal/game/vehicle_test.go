@@ -183,9 +183,6 @@ func TestBoatTalkingGludinCycle(t *testing.T) {
 	if aliceTickets != 0 || bobOn != 0 || len(passengers) != 2 {
 		t.Errorf("at the departure: Alice has %d tickets, Bob on board %d, %d passengers; want 0, 0, 2", aliceTickets, bobOn, len(passengers))
 	}
-	if len(only[testclient.InventoryUpdate](aliceGot)) == 0 {
-		t.Error("Alice got no InventoryUpdate for her ticket")
-	}
 	if msgs := systemMessages(bobGot, int32(sysMsgNoTicket)); len(msgs) != 1 {
 		t.Errorf("Bob got %d \"no ticket\" messages, want 1", len(msgs))
 	}
@@ -207,6 +204,11 @@ func TestBoatTalkingGludinCycle(t *testing.T) {
 
 	// Under way: the passengers move with the ship; UserInfo names it.
 	step(30 * time.Second)
+	// The ticket's InventoryUpdate comes 100 ms after the departure (Mobius
+	// sendInventoryUpdate).
+	if len(only[testclient.InventoryUpdate](aliceGot)) == 0 {
+		t.Error("Alice got no InventoryUpdate for her ticket")
+	}
 	bp := e.positionOf(boat)
 	if ap := e.position(pa); ap.X != bp.X || ap.Y != bp.Y || bp.X == tiDock.X {
 		t.Errorf("after 30 s at sea the boat is at %v and Alice at %v; want her with the moving boat", bp, ap)
@@ -427,7 +429,9 @@ func TestBoatBoardingRules(t *testing.T) {
 	if ps := alice.take(t); len(only[testclient.ActionFailed](ps)) != 1 || len(only[testclient.GetOffVehicle](ps)) != 0 {
 		t.Errorf("getting off 1,200 away: %q", testclient.Names(ps))
 	}
-	send(alice, clientpackets.OpRequestGetOffVehicle, boat.ObjectID(), tiDock.X, tiDock.Y-500, tiDock.Z)
+	// Back where she stood before boarding (500 south is inside a peace zone
+	// of the dock already).
+	send(alice, clientpackets.OpRequestGetOffVehicle, boat.ObjectID(), tiDock.X, tiDock.Y-600, tiDock.Z)
 	names := testclient.Names(bob.take(t))
 	stop, off := -1, -1
 	for i, n := range names {
@@ -445,6 +449,94 @@ func TestBoatBoardingRules(t *testing.T) {
 	e.onLoop(func() { peace, aboard = pa.Zones.Inside(ZonePeace), pa.Vehicle() != nil })
 	if peace != peaceBefore || aboard {
 		t.Errorf("Alice ashore: in peace %v (before boarding %v), aboard %v", peace, peaceBefore, aboard)
+	}
+}
+
+// All five ferry schedules of scripts/vehicles/ run their whole cycle on the
+// fake clock: every step comes in order, and each boat is back at its
+// starting dock when its cycle starts over. The two ferries that share the
+// Talking Island dock wait for each other there.
+func TestBoatAllRoutesCycle(t *testing.T) {
+	dir := filepath.Join("..", "..", "scripts")
+	scripts := map[string]string{}
+	read := func(name string) {
+		b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		scripts[name] = string(b)
+	}
+	read("lib/boat.lua")
+	entries, err := os.ReadDir(filepath.Join(dir, "vehicles"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, en := range entries {
+		read("vehicles/" + en.Name())
+	}
+	e := newDialogEnv(t, dialogEnvOptions{scripts: scripts})
+
+	type progress struct {
+		name     string
+		steps    int
+		start    world.Position
+		cycle    int
+		seen     []bool
+		laps     int
+		lastStep time.Duration
+	}
+	var ps []*progress
+	e.onLoop(func() {
+		for _, sc := range e.srv.vehicles.schedules {
+			r := sc.route
+			ps = append(ps, &progress{
+				name: r.Name, steps: len(r.Steps), seen: make([]bool, len(r.Steps)),
+				start: world.Position{X: int32(r.Start.X), Y: int32(r.Start.Y), Z: int32(r.Start.Z)}, //nolint:gosec // world coordinates fit
+			})
+		}
+	})
+	if len(ps) != 5 {
+		t.Fatalf("%d schedules running, want 5", len(ps))
+	}
+	done := func() bool {
+		for _, p := range ps {
+			if p.laps == 0 {
+				return false
+			}
+		}
+		return true
+	}
+	for elapsed := time.Duration(0); elapsed < 3*time.Hour && !done(); elapsed += time.Second {
+		e.advance(time.Second)
+		e.onLoop(func() {
+			for i, sc := range e.srv.vehicles.schedules {
+				p := ps[i]
+				for p.cycle != sc.cycle {
+					// A step ran: steps never run twice within a second.
+					p.seen[p.cycle] = true
+					p.cycle = (p.cycle + 1) % p.steps
+					if p.cycle == 0 {
+						p.laps++
+						pos := sc.boat.Position()
+						if pos.X != p.start.X || pos.Y != p.start.Y || sc.boat.Moving() {
+							t.Errorf("%s starts over at %v (moving %v), want its dock %v", p.name, pos, sc.boat.Moving(), p.start)
+						}
+					}
+					p.lastStep = elapsed
+				}
+			}
+		})
+	}
+	for _, p := range ps {
+		if p.laps == 0 {
+			t.Errorf("%s did not finish a cycle in 3 hours: at step %d of %d (last step at %v)", p.name, p.cycle, p.steps, p.lastStep)
+			continue
+		}
+		for i, ok := range p.seen {
+			if !ok {
+				t.Errorf("%s skipped step %d", p.name, i)
+			}
+		}
 	}
 }
 

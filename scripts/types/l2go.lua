@@ -505,6 +505,24 @@ function Script:get_quest_state(player, create) end
 ---@return QuestState
 function Script:new_quest_state(player) end
 
+---The quest state of the player's clan leader (the player's own when it
+---leads), when the leader is in the game, alive and within the party range
+---of npc; else nil (Mobius getClanLeaderQuestState).
+---@param player Player
+---@param npc Npc?
+---@return QuestState?
+function Script:get_clan_leader_quest_state(player, npc) end
+
+---When the player leads its clan, the other members in the game get this
+---quest started with the leader's cond (Mobius setQuestToClanMembers).
+---@param player Player
+function Script:set_quest_to_clan_members(player) end
+
+---When the player leads its clan, the other members in the game lose their
+---state of this quest (Mobius finishQuestToClan).
+---@param player Player
+function Script:finish_quest_to_clan(player) end
+
 ---The "no quest" page (data/html/noquest.htm, or Mobius's text).
 ---@param player Player?
 ---@return string html
@@ -1088,6 +1106,16 @@ function Player:clan() end
 ---@return boolean
 function Player:is_clan_leader() end
 
+---Whether the player is in the game (Mobius isOnline).
+---@return boolean
+function Player:is_online() end
+
+---true when the player has an effect of the abnormal type (an AbnormalType
+---value), else nil (Mobius getEffectList().getBuffInfoByAbnormalType).
+---@param abnormal_type string
+---@return true|nil
+function Player:buff_info_by_abnormal_type(abnormal_type) end
+
 ---Always false until subclasses exist.
 ---@return boolean
 function Player:is_sub_class_active() end
@@ -1382,6 +1410,12 @@ function Npc:set_target(target) end
 ---@param y? integer
 ---@param z? integer
 function Npc:teleport(x, y, z) end
+
+---With false, the monster no longer walks back to its spawn point when it
+---has nothing to fight, for as long as it lives, respawns included (Mobius
+---Attackable.setCanReturnToSpawnPoint).
+---@param can boolean
+function Npc:set_can_return_to_spawn_point(can) end
 
 ---Drops items on the ground around the NPC, kept for player for 15 s
 ---(Mobius dropItem(player, item_id, count)).
@@ -2085,6 +2119,12 @@ Category = {}
 ---@class SystemMessageId
 ---@field [string] integer
 SystemMessageId = {}
+
+---Abnormal types (Mobius AbnormalType), for
+---player:buff_info_by_abnormal_type (the values are the names).
+---@class AbnormalType
+---@field [string] string
+AbnormalType = {}
 
 ---Server settings quests read, with Mobius names: ALT_PARTY_RANGE,
 ---ALT_VILLAGES_REPEATABLE_QUEST_REWARD, DISABLE_TUTORIAL,

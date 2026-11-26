@@ -78,16 +78,16 @@ const b3aCompleted = "<completed>"
 // b3aNoQuest or b3aCompleted markers, or "" for no reply at all.
 func b3aWantReply(t *testing.T, what string, reply scripting.Reply, ok bool, want string) {
 	t.Helper()
-	switch {
-	case want == b3aNoQuest:
+	switch want {
+	case b3aNoQuest:
 		if !ok || reply.Kind != scripting.ReplyHTML || reply.Content != scripting.DefaultNoQuestMsg {
 			t.Fatalf("%s: reply = %+v, %v; want the no-quest message", what, reply, ok)
 		}
-	case want == b3aCompleted:
+	case b3aCompleted:
 		if !ok || reply.Kind != scripting.ReplyHTML || reply.Content != scripting.DefaultAlreadyCompletedMsg {
 			t.Fatalf("%s: reply = %+v, %v; want the already-completed message", what, reply, ok)
 		}
-	case want == "":
+	case "":
 		if ok && reply.Content != "" {
 			t.Fatalf("%s: reply = %+v; want none", what, reply)
 		}

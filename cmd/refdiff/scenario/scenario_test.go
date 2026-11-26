@@ -26,6 +26,7 @@ func TestScenariosAreRegistered(t *testing.T) {
 		"items-equip", "items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private",
 		"kill-monster", "pvp-death-restart", "sample-sword", "sample-unarmed",
 		"cast-wind-strike", "learn-skill", "buff-stack", "potion", "soulshot", "newbie-buffs",
+		"private-store",
 	}
 	if !slices.Equal(names, want) {
 		t.Errorf("scenarios = %v, want %v", names, want)
@@ -33,6 +34,7 @@ func TestScenariosAreRegistered(t *testing.T) {
 	gm := []string{
 		"items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private",
 		"cast-wind-strike", "learn-skill", "buff-stack", "potion", "soulshot", "newbie-buffs",
+		"private-store",
 	}
 	for _, sc := range All() {
 		if sc.GM != slices.Contains(gm, sc.Name) {

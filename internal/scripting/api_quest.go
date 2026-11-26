@@ -185,6 +185,9 @@ func (v *vm) questHelpers() map[string]lua.LGFunction {
 		"remove_radar":                  v.qRadar("remove_radar", 1),
 		"clear_radar":                   v.qClearRadar,
 		"show_on_screen_msg":            v.qShowOnScreenMsg,
+		"get_clan_leader_quest_state":   v.qGetClanLeaderQuestState, // api_clan.go
+		"set_quest_to_clan_members":     v.qSetQuestToClanMembers,
+		"finish_quest_to_clan":          v.qFinishQuestToClan,
 	}
 }
 

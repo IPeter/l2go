@@ -2,6 +2,7 @@ package game
 
 import (
 	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
+	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/stats"
 )
 
@@ -22,6 +23,11 @@ func (p *Player) CurrentHP() float64 { return p.CurHP }
 
 // MaxHP returns the maximum HP (Creature).
 func (p *Player) MaxHP() int32 { return int32(p.stats.MaxHP()) } //nolint:gosec // HP fits
+
+var _ scripting.PlayerHP = (*Player)(nil)
+
+// MaxHPValue is player:max_hp() for Lua (scripting.PlayerHP).
+func (p *Player) MaxHPValue() float64 { return float64(p.stats.MaxHP()) }
 
 // Regenerating reports whether the regeneration task runs.
 func (p *Player) Regenerating() bool { return p.regen.timer != 0 }

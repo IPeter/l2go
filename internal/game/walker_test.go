@@ -84,10 +84,13 @@ func TestWalkerRoute(t *testing.T) {
 	sess := newSession("alice")
 	e.enter(sess, 0)
 	sess.take(t)
-	// 300 at 120 a second, less the collision radius.
-	e.advance(2500 * time.Millisecond)
+	// 300 at a run takes a little over 2 s; the tick that ends the move is
+	// the arrival.
+	for i := 0; i < 40 && walkerStateOf(e, lector).moving; i++ {
+		e.advance(100 * time.Millisecond)
+	}
 	if st = walkerStateOf(e, lector); st.moving || !samePoint(st.pos, b.X, b.Y) || st.cursor != 2 {
-		t.Fatalf("after 2.5 s: %+v; want Lector waiting at the second node", st)
+		t.Fatalf("at the second node: %+v; want Lector waiting there", st)
 	}
 	e.advance(100 * time.Millisecond)
 	if st = walkerStateOf(e, lector); !st.moving || !samePoint(st.dest, c.X, c.Y) || st.running {
@@ -115,6 +118,65 @@ func TestWalkerRoute(t *testing.T) {
 	e.advance(100 * time.Millisecond)
 	if st = walkerStateOf(e, lector); !st.moving || !samePoint(st.dest, b.X, b.Y) || !st.running {
 		t.Fatalf("after 2.1 s: %+v; want Lector running back to the second node", st)
+	}
+}
+
+// The scripts hear of a walker's nodes: on_node_arrived at every node, and
+// on_route_finished when it passes the last one (Mobius
+// OnNpcMoveNodeArrived, OnNpcMoveRouteFinished), after the arrival itself.
+func TestWalkerScriptEvents(t *testing.T) {
+	e := newDialogEnv(t, dialogEnvOptions{scripts: map[string]string{
+		"ai/walker_events.lua": `
+local s = script.new("WalkerEvents")
+s:on_node_arrived(30001, function(npc) npc:say("node") end)
+s:on_route_finished(30001, function(npc) npc:say("end") end)`,
+	}})
+	at := world.Position{X: tiStart.X + 80, Y: tiStart.Y, Z: tiStart.Z}
+	lector := e.spawnNpc(npcLector, at)
+	a := data.RouteNode{X: int(at.X), Y: int(at.Y), Z: int(at.Z)}
+	b := data.RouteNode{X: a.X + 200, Y: a.Y, Z: a.Z}
+	routes, err := data.NewRoutes([]data.WalkRoute{{
+		Name: "lector", Repeat: true, RepeatStyle: data.RepeatBack,
+		Targets: []data.RouteTarget{{NpcID: npcLector, X: a.X, Y: a.Y, Z: a.Z}},
+		Nodes:   []data.RouteNode{a, b},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, _ := e.enterChar(testChar{account: "alice", name: "Alice", pos: world.Position{X: at.X, Y: at.Y + 100, Z: at.Z}})
+	// A spawned NPC has no spawn point a route could target: start the walk.
+	e.onLoop(func() { e.srv.walkerStart(lector, &routes.Routes[0]) })
+	says := func() []string {
+		var out []string
+		for _, s := range only[testclient.NpcSay](sess.take(t)) {
+			if s.ObjectID == int32(lector.ID()) {
+				out = append(out, s.Text)
+			}
+		}
+		return out
+	}
+	if st := walkerStateOf(e, lector); !st.moving || !samePoint(st.dest, b.X, b.Y) {
+		t.Fatalf("the walk did not start: %+v", st)
+	}
+	var heard []string
+	for i := 0; i < 100 && walkerStateOf(e, lector).moving; i++ {
+		e.advance(100 * time.Millisecond)
+		heard = append(heard, says()...)
+	}
+	if len(heard) != 2 || heard[0] != "node" || heard[1] != "end" {
+		t.Fatalf("at the last node Alice heard %q, want [node end]", heard)
+	}
+	// Back at the first node: only on_node_arrived.
+	heard = nil
+	for i := 0; i < 10 && !walkerStateOf(e, lector).moving; i++ {
+		e.advance(100 * time.Millisecond)
+	}
+	for i := 0; i < 100 && walkerStateOf(e, lector).moving; i++ {
+		e.advance(100 * time.Millisecond)
+		heard = append(heard, says()...)
+	}
+	if st := walkerStateOf(e, lector); !samePoint(st.pos, a.X, a.Y) || len(heard) != 1 || heard[0] != "node" {
+		t.Errorf("back at the first node (%+v) Alice heard %q, want [node]", st, heard)
 	}
 }
 

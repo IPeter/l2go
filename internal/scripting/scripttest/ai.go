@@ -330,8 +330,8 @@ func (r npcRef) TemplateParam(name string) (string, bool) {
 	return v, ok
 }
 
-func (r playerRef) CurrentHP() float64 { return r.p.HP }
-func (r playerRef) MaxHP() float64     { return r.p.MaxHP }
+func (r playerRef) CurrentHP() float64  { return r.p.HP }
+func (r playerRef) MaxHPValue() float64 { return r.p.MaxHP }
 
 func (r playerRef) SummonObject() any {
 	if r.p.Summon == nil {

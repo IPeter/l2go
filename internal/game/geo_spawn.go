@@ -29,8 +29,8 @@ func (s *Server) territoryPoint(t *data.SpawnTerritory) world.Position {
 	highZ := int32(t.Shape.HighZ()) //nolint:gosec // world coordinates fit
 	draw := func() world.Position {
 		loc := t.Shape.RandomPoint(s.npc.rnd.IntN)
-		x, y := int32(loc.X), int32(loc.Y) //nolint:gosec // world coordinates fit
-		return world.Position{X: x, Y: y, Z: s.geo.Height(x, y, int32(loc.Z))} //nolint:gosec // world coordinates fit
+		x, y, z := int32(loc.X), int32(loc.Y), int32(loc.Z) //nolint:gosec // world coordinates fit
+		return world.Position{X: x, Y: y, Z: s.geo.Height(x, y, z)}
 	}
 	tooHigh := func(p world.Position) bool { return s.geo.Height(p.X, p.Y, p.Z) > highZ }
 	if len(t.Banned) > 0 {

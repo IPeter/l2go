@@ -84,7 +84,7 @@ func (s *Server) inviteToNewParty(p, target *Player, mode social.LootMode) {
 		p.SendSystemMessage(partyMsgWaitingReply)
 		return
 	}
-	target.Send(serverpackets.NewAskJoinPartyPacket(p.Name(), serverpackets.PartyLoot(mode)))
+	target.Send(serverpackets.NewAskJoinPartyPacket(p.Name(), serverpackets.PartyLoot(mode))) //nolint:gosec // loot modes are 0-4
 	target.SetActiveRequester(p)
 	p.OnTransactionRequest(target)
 	p.party.lootMode = mode
@@ -104,7 +104,7 @@ func (s *Server) inviteToParty(p, target *Player, pt *Party) {
 		p.SendSystemMessage(partyMsgBusy, serverpackets.TextParam(target.Name()))
 	default:
 		p.OnTransactionRequest(target)
-		target.Send(serverpackets.NewAskJoinPartyPacket(p.Name(), serverpackets.PartyLoot(pt.loot.Mode)))
+		target.Send(serverpackets.NewAskJoinPartyPacket(p.Name(), serverpackets.PartyLoot(pt.loot.Mode))) //nolint:gosec // loot modes are 0-4
 		s.setPendingInvite(pt, true)
 	}
 }

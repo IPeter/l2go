@@ -65,6 +65,17 @@ func Load(t testing.TB, dir string, files ...string) *Harness {
 	return start(t, opts)
 }
 
+// LoadWithTables is Load with more constant tables on top of Constants
+// (e.g. the generated SystemMessageId of data.LoadConstants).
+func LoadWithTables(t testing.TB, dir string, tables map[string]map[string]any, files ...string) *Harness {
+	t.Helper()
+	opts := scripting.Options{Dir: dir, Constants: scripting.Constants{Tables: tables}}
+	if len(files) > 0 {
+		opts.Include = func(path string) bool { return slices.Contains(files, path) }
+	}
+	return start(t, opts)
+}
+
 // LoadSource writes files (slash path relative to the scripts folder →
 // Lua source) to a temporary scripts folder and loads all of them.
 func LoadSource(t testing.TB, files map[string]string) *Harness {
@@ -105,7 +116,9 @@ func start(t testing.TB, opts scripting.Options) *Harness {
 	opts.Output = h.out
 	opts.World = h.world
 	opts.Rand = h.rand
-	opts.Constants = Constants()
+	consts := Constants()
+	maps.Copy(consts.Tables, opts.Constants.Tables)
+	opts.Constants = consts
 	e, err := scripting.New(t.Context(), opts)
 	if err != nil {
 		t.Fatalf("loading scripts: %v", err)
@@ -130,9 +143,14 @@ func (h *Harness) syncCustom() {
 }
 
 // Constants returns the generated constant tables the server passes to the
-// engine, built from internal/data: ClassId (with the class helpers).
+// engine, built from internal/data: ClassId (with the class helpers) and
+// AbnormalType.
 func Constants() scripting.Constants {
-	var c scripting.Constants
+	c := scripting.Constants{Tables: map[string]map[string]any{"AbnormalType": {}}}
+	for i := range data.NumAbnormalTypes {
+		name := data.AbnormalType(i).String()
+		c.Tables["AbnormalType"][name] = name
+	}
 	for _, pc := range data.PlayerClasses() {
 		parent := -1
 		if p, ok := pc.Parent(); ok {
@@ -349,6 +367,14 @@ type Player struct {
 	HP, MaxHP float64
 	// Summon is player:summon(): a *Npc or nil.
 	Summon *Npc
+	// Clan is player:clan() (clan.go); the player leads it when it is the
+	// clan's Leader.
+	Clan *Clan
+	// Offline makes player:is_online() false and hides a clan leader.
+	Offline bool
+	// Abnormals are the abnormal types of the effects on the player
+	// (player:buff_info_by_abnormal_type).
+	Abnormals []string
 
 	quests map[string]*QuestState
 }
@@ -570,6 +596,8 @@ type Npc struct {
 	Minions []*Npc
 	// Box, Interacted and Bombed are a treasure chest's state.
 	Box, Interacted, Bombed bool
+	// NoReturn is set by npc:set_can_return_to_spawn_point(false).
+	NoReturn bool
 }
 
 // Hate is one row of a fake NPC's aggro list. Target is a *Player or *Npc.

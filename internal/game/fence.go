@@ -95,6 +95,7 @@ func (s *Server) FencesBetween(from, to geo.Point, instance int32) bool {
 // (Mobius Fence.setState and broadcastInfo). Loop-only.
 func (s *Server) SetFenceState(f *Fence, state string) {
 	f.state = state
+	s.GeoBlockersChanged() // pathing_door.go: the walkers' fence look-ahead
 	for v := range s.world.VisiblePlayers(f) {
 		if vp, ok := v.(*Player); ok && s.world.CanSee(v, f) {
 			for _, b := range f.InfoFor(vp) {

@@ -71,6 +71,8 @@ type npcScriptState struct {
 	// follow is the follow task, 0 for none; followTarget its target.
 	follow       world.TimerID
 	followTarget Creature
+	// noReturn is Mobius !canReturnToSpawnPoint (clan_script.go).
+	noReturn bool
 }
 
 // scriptStateSpawned is the scripts' part of Mobius Npc.onSpawn and

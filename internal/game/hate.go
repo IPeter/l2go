@@ -196,13 +196,14 @@ func (s *Server) addDamageHate(n *Npc, attacker Creature, damage, aggro int64) {
 	}
 	a.addDamage(damage)
 	a.addHate(aggro)
-	_, isPlayer := attacker.(*Player)
+	p, isPlayer := attacker.(*Player)
 	switch {
 	case isPlayer && aggro == 0:
 		s.addDamageHate(n, attacker, 0, 1)
 		if s.aiOf(n).intention == NpcIdle {
 			s.npcSetActive(n)
 		}
+		s.aggroRangeEnter(n, p) // ai_think.go: on_aggro_range_enter
 	case !isPlayer && aggro == 0:
 		aggro = 1
 		a.addHate(1)

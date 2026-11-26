@@ -486,6 +486,12 @@ func ScriptConstants(c *data.Constants, partyRange int, q QuestSettings) scripti
 		cfg["ALT_PARTY_RANGE"] = partyRange
 	}
 	out.Tables["Config"] = cfg
+	abnormal := make(map[string]any, data.NumAbnormalTypes)
+	for i := range data.NumAbnormalTypes {
+		name := data.AbnormalType(i).String()
+		abnormal[name] = name
+	}
+	out.Tables["AbnormalType"] = abnormal // player:buff_info_by_abnormal_type
 	for _, pc := range data.PlayerClasses() {
 		parent := -1
 		if p, ok := pc.Parent(); ok {

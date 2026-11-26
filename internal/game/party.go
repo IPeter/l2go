@@ -265,7 +265,7 @@ func partyMember(m *Player) serverpackets.PartyMember {
 
 // windowAll is PartySmallWindowAll for p: the other members.
 func (pt *Party) windowAll(p *Player) []byte {
-	all := serverpackets.PartySmallWindowAll{LeaderID: pt.Leader().ObjectID(), Loot: serverpackets.PartyLoot(pt.loot.Mode)}
+	all := serverpackets.PartySmallWindowAll{LeaderID: pt.Leader().ObjectID(), Loot: serverpackets.PartyLoot(pt.loot.Mode)} //nolint:gosec // loot modes are 0-4
 	for _, m := range pt.members {
 		if m != p {
 			all.Members = append(all.Members, partyMember(m))
@@ -304,7 +304,7 @@ func (s *Server) addPartyMember(pt *Party, p *Player) {
 	p.Send(pt.windowAll(p))
 	p.SendSystemMessage(partyMsgJoined, serverpackets.TextParam(pt.Leader().Name()))
 	pt.BroadcastExcept(p, sysMsgPacket(partyMsgMemberJoined, serverpackets.TextParam(p.Name())))
-	add := serverpackets.NewPartySmallWindowAddPacket(pt.Leader().ObjectID(), serverpackets.PartyLoot(pt.loot.Mode), partyMember(p))
+	add := serverpackets.NewPartySmallWindowAddPacket(pt.Leader().ObjectID(), serverpackets.PartyLoot(pt.loot.Mode), partyMember(p)) //nolint:gosec // loot modes are 0-4
 	pt.BroadcastExcept(p, add)
 	for _, m := range pt.members {
 		m.Effects().UpdateIcons(true)
@@ -456,7 +456,7 @@ func (s *Server) partyInfo(p *Player) {
 	p.SendSystemMessage(partyMsgInformation)
 	if pt := p.party.party; pt != nil {
 		if pt.loot.Mode.Valid() {
-			p.SendSystemMessage(partyMsgLootingBase + serverpackets.SystemMessageID(pt.loot.Mode))
+			p.SendSystemMessage(partyMsgLootingBase + serverpackets.SystemMessageID(pt.loot.Mode)) //nolint:gosec // loot modes are 0-4
 		}
 		if !pt.IsLeader(p) {
 			p.SendSystemMessage(partyMsgLeaderS1, serverpackets.TextParam(pt.Leader().Name()))

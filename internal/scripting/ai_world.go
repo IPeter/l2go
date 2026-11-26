@@ -123,7 +123,7 @@ type SkillTargets interface {
 // methods for NPCs.
 type PlayerHP interface {
 	CurrentHP() float64
-	MaxHP() float64
+	MaxHPValue() float64 // not MaxHP: the game's Player.MaxHP returns int32
 }
 
 // PlayerSummon is the part of a PlayerRef behind player:summon(): the

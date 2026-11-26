@@ -150,8 +150,19 @@ func (s *Server) showQuestWindow(p *Player, n *Npc) {
 }
 
 // questAvailable reports whether the features a quest requires exist
-// (decision Q10). None of them does yet.
-func questAvailable(q scripting.QuestInfo) bool { return len(q.Requires) == 0 }
+// (decision Q10).
+func questAvailable(q scripting.QuestInfo) bool {
+	for _, f := range q.Requires {
+		if !questFeatures[f] {
+			return false
+		}
+	}
+	return true
+}
+
+// questFeatures are the q:requires features the game has: clans since M9
+// (Plan 12 Phase 7).
+var questFeatures = map[string]bool{"clans": true}
 
 // showQuestChooseWindow lets p choose one of quests (Mobius
 // showQuestChooseWindow).

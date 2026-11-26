@@ -4,7 +4,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/world"
 )
 
@@ -348,19 +347,6 @@ func (s *Server) playerMoveToPawn(p *Player, ai *playerAI, pawn Creature, offset
 	if p.state == stateInGame && p.InWorld() && s.broadcastPawnWalk(p, pawn, offset) {
 		ai.pawnOffset = 0
 	}
-}
-
-// attackMoveToPawnPacket is MoveToPawn of mover walking up to target until
-// it is distance away.
-func attackMoveToPawnPacket(mover, target world.Object, distance int32) []byte {
-	m, t := mover.Position(), target.Position()
-	return serverpackets.NewMoveToPawnPacket(serverpackets.MoveToPawn{
-		ObjectID: int32(mover.ID()),
-		TargetID: int32(target.ID()),
-		Distance: distance,
-		X:        m.X, Y: m.Y, Z: m.Z,
-		TargetX: t.X, TargetY: t.Y, TargetZ: t.Z,
-	})
 }
 
 // attackArrived is the OnPlayerArrived hook: Mobius notifyActionArrived for

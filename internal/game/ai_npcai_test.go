@@ -397,9 +397,20 @@ func TestAIHealerMinionHealsItsLeader(t *testing.T) {
 	}
 }
 
-// The CAST intention (a script's order): out of the skill's range the
-// monster runs up to the target, then stops, turns ACTIVE and casts.
+// The CAST intention (a script's order, or Attackable.useMagic at the NPC's
+// target): out of the skill's range the monster runs up to the target, then
+// stops, turns ACTIVE and casts.
 func TestAINpcCastIntention(t *testing.T) {
+	for _, useMagic := range []bool{false, true} {
+		name := "setIntention"
+		if useMagic {
+			name = "useMagic"
+		}
+		t.Run(name, func(t *testing.T) { aiNpcCastIntention(t, useMagic) })
+	}
+}
+
+func aiNpcCastIntention(t *testing.T, useMagic bool) {
 	id := aiFindNuker(t)
 	start := npcTestStart(t)
 	var casts []aiCast
@@ -410,7 +421,12 @@ func TestAINpcCastIntention(t *testing.T) {
 	var sk *skills.Skill
 	e.onLoop(func() {
 		sk = aiOnlyLongRange(e.srv.npcProfile(n.Template))
-		e.srv.NpcSetCast(n, sk, p)
+		if useMagic {
+			n.ai.target = p
+			e.srv.NpcUseMagic(n, sk)
+		} else {
+			e.srv.NpcSetCast(n, sk, p)
+		}
 	})
 	if st := aiStateOf(e, n); st.intention != NpcCast || !st.moving || !st.running {
 		t.Fatalf("ordered to cast from 1200 away: %+v; want running in CAST", st)
@@ -551,6 +567,36 @@ s:on_npc_hate(20103, function(npc, player, is_summon) return ` + tc.allow + ` en
 	}
 }
 
+// on_aggro_range_enter: an aggressive Giant Spider that starts to hate Alice
+// in its aggro range tells its script once (the hate without damage of
+// thinkActive; later thinks find her on the list already).
+func TestAIAggroRangeEnter(t *testing.T) {
+	start := npcTestStart(t)
+	scripts := map[string]string{"aggro.lua": `
+local s = script.new("AggroTest")
+s:on_aggro_range_enter(20103, function(npc, player, is_summon) npc:say("enter " .. player:name()) end)
+`}
+	e := newSkillAIEnv(t, aiSkillWorld(t, testWorldData(t), start), newAIRand(), scripts, nil, nil)
+	sess, alice := statusPlayer(t, e, "alice", "Alice")
+	spider := aiSpawn(e, aiSpider, start, 300, 0)
+	e.advance(12 * time.Second)
+	e.sync() // the event runs after the think's loop command
+	count := 0
+	for _, s := range only[testclient.NpcSay](sess.take(t)) {
+		if s.ObjectID == int32(spider.ID()) && s.Text == "enter Alice" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("on_aggro_range_enter said %d times; want once", count)
+	}
+	var hate int64
+	e.onLoop(func() { hate = spider.Hating(alice) })
+	if hate == 0 {
+		t.Error("the spider does not hate Alice")
+	}
+}
+
 // on_creature_see: a monster registered for it sees Alice once within its
 // aggro range on the 1 s scan; after she leaves its regions and comes back,
 // it sees her again.
@@ -576,7 +622,9 @@ s:on_creature_see(20481, function(npc, creature) npc:say("see " .. creature:name
 	if got := sees(); got != 1 {
 		t.Fatalf("Alice was seen %d times in 3 s; want once", got)
 	}
-	e.onLoop(func() { _ = e.srv.Teleport(p, world.Position{X: int32(start.X) + 20000, Y: int32(start.Y), Z: int32(start.Z)}) })
+	e.onLoop(func() {
+		_ = e.srv.Teleport(p, world.Position{X: int32(start.X) + 20000, Y: int32(start.Y), Z: int32(start.Z)})
+	})
 	e.advance(8 * time.Second)
 	e.onLoop(func() { _ = e.srv.Teleport(p, world.Position{X: int32(start.X), Y: int32(start.Y), Z: int32(start.Z)}) })
 	e.advance(8 * time.Second)

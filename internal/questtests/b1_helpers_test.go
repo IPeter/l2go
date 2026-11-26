@@ -53,12 +53,6 @@ func b1HTML(t *testing.T, what string, reply scripting.Reply, ok bool, html stri
 	}
 }
 
-// b1NoQuestMsg checks the default "no quest" answer.
-func b1NoQuestMsg(t *testing.T, what string, reply scripting.Reply, ok bool) {
-	t.Helper()
-	b1HTML(t, what, reply, ok, scripting.DefaultNoQuestMsg)
-}
-
 // b1Completed checks the default "already completed" answer.
 func b1Completed(t *testing.T, what string, reply scripting.Reply, ok bool) {
 	t.Helper()

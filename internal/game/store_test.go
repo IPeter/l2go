@@ -431,7 +431,7 @@ func TestStoreSlotLimits(t *testing.T) {
 func TestStoreClosing(t *testing.T) {
 	e := newItemEnv(t, nil)
 	sa, a := e.enterWith("seller", storeAt(0, 0), storeItems(itemMithrilOre, 10)...)
-	sb, _ := e.enterWith("trader", storeAt(40, 0))
+	sb, trader := e.enterWith("trader", storeAt(40, 0))
 	ore := e.storeObject(a, itemMithrilOre)
 	e.storeAction(sa, clientpackets.ActionUsePrivateStoreSell)
 	e.handle(sa, clientpackets.OpSetPrivateStoreMsgSell, stringBody("Ore"))
@@ -455,6 +455,11 @@ func TestStoreClosing(t *testing.T) {
 	}
 	if ps := e.storeAction(sa, clientpackets.ActionUseSitStand); len(only[testclient.ChangeWaitType](ps)) != 0 {
 		t.Fatal("the owner of a store stood up")
+	}
+	e.handle(sa, clientpackets.OpAttackRequest, npcActionBody(trader.ObjectID(), false)) // the first targets
+	e.advance(time.Second)
+	if ps := e.handle(sa, clientpackets.OpAttackRequest, npcActionBody(trader.ObjectID(), false)); len(only[testclient.ActionFailed](ps)) != 1 || len(only[testclient.Attack](ps))+len(only[testclient.MoveToPawn](ps)) != 0 {
+		t.Fatalf("a forced attack from a store: %q, want ActionFailed alone", testclient.Names(ps))
 	}
 
 	e.enterWith("viewer", storeAt(0, 60))

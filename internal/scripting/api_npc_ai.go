@@ -480,7 +480,7 @@ func (v *vm) playerControlMethods() map[string]lua.LGFunction {
 			return 1
 		},
 		"max_hp": func(L *lua.LState) int {
-			L.Push(lua.LNumber(playerAs[PlayerHP](L, "max_hp", "HP").MaxHP()))
+			L.Push(lua.LNumber(playerAs[PlayerHP](L, "max_hp", "HP").MaxHPValue()))
 			return 1
 		},
 		"summon": func(L *lua.LState) int {

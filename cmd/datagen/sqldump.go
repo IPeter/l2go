@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -538,7 +539,7 @@ func (r sqlRow) int(col string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n != int64(int32(n)) {
+	if n < math.MinInt32 || n > math.MaxInt32 {
 		return 0, r.errorf("column %s: %d is out of the int range", col, n)
 	}
 	return int(n), nil

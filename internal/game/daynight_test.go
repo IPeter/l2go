@@ -36,6 +36,9 @@ func systemMessages(ps []testclient.Packet, id int32) []testclient.SystemMessage
 func TestShadowSenseAtMidnightAndDawn(t *testing.T) {
 	e := newSkillsEnv(t, false)
 	c := e.createCharacter("dark", "Dark", classDarkFighter, storage.AccessLevelPlayer)
+	// Shadow Sense is learned at level 15 (DarkFighter.xml); a lower level
+	// would lose it at login (checkPlayerSkills).
+	c.Level = 15
 	c.Skills = []storage.CharacterSkill{{ID: shadowSenseSkill, Level: 1}}
 	if err := e.store.Update(e.ctx, &c); err != nil {
 		t.Fatalf("Update: %v", err)
@@ -44,8 +47,14 @@ func TestShadowSenseAtMidnightAndDawn(t *testing.T) {
 	dark, human := newSession("dark"), newSession("human")
 	p := e.enter(dark, 0)
 	e.enter(human, 0)
-	dark.take(t)
-	human.take(t)
+	// Entering by day, the Dark Elf hears that the effect is gone (Mobius
+	// EnterWorld).
+	if msgs := systemMessages(dark.take(t), int32(sysMsgDawnEffect)); len(msgs) != 1 {
+		t.Errorf("entering by day: %d \"dawn\" messages, want 1", len(msgs))
+	}
+	if msgs := systemMessages(human.take(t), int32(sysMsgDawnEffect)); len(msgs) != 0 {
+		t.Errorf("the human fighter entering got %+v", msgs)
+	}
 	accuracy := func() int32 {
 		var a int32
 		e.onLoop(func() { a = p.stats.View().Accuracy })

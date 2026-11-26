@@ -317,6 +317,9 @@ func (s *Server) NpcMoveToPawn(n *Npc, pawn world.Object, offset int32) {
 	}
 	to := pawn.Position()
 	s.npcMoveToLocation(n, to.X, to.Y, to.Z, offset)
+	if n.Move == nil {
+		return // in reach already, or geodata left nothing to walk (Mobius: !isMoving)
+	}
 	if _, ok := pawn.(Creature); ok {
 		if s.onRoute(n) {
 			// On a route the client gets the leg, not the pawn.

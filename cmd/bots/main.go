@@ -12,7 +12,11 @@
 //
 //   - wander (the default): it reports its position and either walks to a
 //     random point around where it started, says something in general
-//     chat, or targets and talks to the nearest NPC.
+//     chat, or targets and talks to the nearest NPC. With -stores, that
+//     share of the bots (one in ten for 0.1) keep a private sell store of
+//     Stems instead; with -buy, an action of the others is, with that
+//     probability, a purchase at the nearest store. Both create their
+//     Stems and adena with //create_item, so the characters need GM rights.
 //   - hunt: it attacks the monsters within -hunt-range of where it
 //     started, one after the other, casts its attack skill (-skill; Wind
 //     Strike for the default Human Mystic) every -cast, holds -buffs buffs
@@ -23,14 +27,17 @@
 //     10).
 //
 // Every -report interval and at the end, bots prints the bots in the
-// world, the errors by kind, the game events (kill, death, cast), the
+// world, the errors by kind, the game events (kill, death, cast, store, store refused, purchase), the
 // packets per second in both directions and the latency percentiles of
 // each request and its expected answer: move (MoveToLocation and the
 // character's MoveToLocation back), say (Say2 and the CreatureSay echo),
 // target (Action and MyTargetSelected), talk (the second Action and
 // NpcHtmlMessage, including the walk to the NPC), attack (AttackRequest
 // and the first Attack that hits), cast (RequestMagicSkillUse and
-// MagicSkillLaunched), buff (the //buff commands and the icons), restart
+// MagicSkillLaunched), buff (the //buff commands and the icons), store (the
+// setup window of a store to its message), shop (the second click on a
+// store, the walk included, to its window), buy (RequestPrivateStoreBuy and
+// the purchase message), restart
 // (RequestRestartPoint and the UserInfo after the teleport), kill (from
 // choosing a monster to its death), login and enter.
 //
@@ -38,6 +45,7 @@
 //
 //	bots [-n 50] [-login 127.0.0.1:2106] [-server 1] [-game addr] [-prefix bot] [-rate 10] [-duration 5m] [-seed N] ...
 //	bots -mode hunt [-class mystic|fighter] [-skill id] [-cast 5s] [-buffs 10] [-hunt-range 3000] ...
+//	bots [-stores 0.1] [-buy 0.2] ...
 package main
 
 import (
@@ -86,6 +94,12 @@ type config struct {
 	cast      time.Duration
 	buffs     int
 	huntRange float64
+
+	// The private stores of wandering bots: the share of the bots that keep
+	// a sell store, and the probability that an action of the others is a
+	// purchase at the nearest store.
+	stores float64
+	buy    float64
 }
 
 // maxAccountLength is the longest account name the login packet holds.
@@ -126,6 +140,8 @@ func parseFlags(args []string, output io.Writer) (config, error) {
 	fs.DurationVar(&cfg.cast, "cast", 5*time.Second, "time between two attack skill casts of a hunter (0: no casts)")
 	fs.IntVar(&cfg.buffs, "buffs", 0, fmt.Sprintf("buffs a hunter holds, 0 to %d, given with //buff (needs GM rights)", len(huntBuffs)))
 	fs.Float64Var(&cfg.huntRange, "hunt-range", 3000, "how far from its start point a hunter looks for monsters")
+	fs.Float64Var(&cfg.stores, "stores", 0, "share of the wandering bots that keep a sell store (needs GM rights for //create_item)")
+	fs.Float64Var(&cfg.buy, "buy", 0, "probability that an action of a wandering bot is a purchase at the nearest store (needs GM rights for the adena)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -172,8 +188,10 @@ func (c config) validate() error {
 		return errors.New("-radius must not be negative")
 	case c.step <= 0 || c.report <= 0 || c.timeout <= 0:
 		return errors.New("-step, -report and -timeout must be positive")
-	case c.say < 0 || c.talk < 0 || c.say+c.talk > 1:
-		return errors.New("-say and -talk are probabilities with a sum of at most 1")
+	case c.say < 0 || c.talk < 0 || c.buy < 0 || c.say+c.talk+c.buy > 1:
+		return errors.New("-say, -talk and -buy are probabilities with a sum of at most 1")
+	case c.stores < 0 || c.stores > 1:
+		return errors.New("-stores is a share between 0 and 1")
 	case c.talkRange < 0:
 		return errors.New("-talk-range must not be negative")
 	case c.queue < 1:
@@ -260,6 +278,9 @@ func run(ctx context.Context, cfg config, out io.Writer, logger *slog.Logger) er
 	if cfg.mode == modeHunt {
 		fmt.Fprintf(out, "bots: hunting within %g of the start, skill %d every %v, %d buffs\n",
 			cfg.huntRange, cfg.skill, cfg.cast, cfg.buffs)
+	}
+	if cfg.mode == modeWander && (cfg.stores > 0 || cfg.buy > 0) {
+		fmt.Fprintf(out, "bots: %g of the bots keep a store, the others buy with probability %g\n", cfg.stores, cfg.buy)
 	}
 
 	reportDone := make(chan struct{})
