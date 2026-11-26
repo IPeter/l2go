@@ -1,7 +1,6 @@
 package game
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/IPeter/l2go/internal/config"
 	"github.com/IPeter/l2go/internal/data"
-	"github.com/IPeter/l2go/internal/gameserver/serverpackets"
 	"github.com/IPeter/l2go/internal/scripting"
 	"github.com/IPeter/l2go/internal/scripting/scripttest"
 	"github.com/IPeter/l2go/internal/storage/memstore"
@@ -409,16 +407,17 @@ func TestScriptAICinematics(t *testing.T) {
 	})
 	ps := sess.take(t)
 
-	var raw [][]byte
+	var cinematics []testclient.Packet
 	for _, pk := range ps {
-		if u, ok := pk.(testclient.Unknown); ok && (u.Opcode == serverpackets.OpSpecialCamera || u.Opcode == serverpackets.OpEarthquake) {
-			raw = append(raw, append([]byte{u.Opcode}, u.Body...))
+		switch pk.(type) {
+		case testclient.SpecialCamera, testclient.Earthquake:
+			cinematics = append(cinematics, pk)
 		}
 	}
-	wantCam := serverpackets.NewSpecialCameraPacket(serverpackets.SpecialCamera{ObjectID: kid, Force: 700, Angle1: 13, Angle2: -19, Duration: 20000})
-	wantQuake := serverpackets.NewEarthquakePacket(serverpackets.Earthquake{X: 1, Y: 2, Z: 3, Intensity: 20, Duration: 10})
-	if len(raw) != 2 || !bytes.Equal(raw[0], wantCam) || !bytes.Equal(raw[1], wantQuake) {
-		t.Errorf("camera and earthquake packets % x; want % x and % x", raw, wantCam, wantQuake)
+	wantCam := testclient.SpecialCamera{ObjectID: kid, Force: 700, Angle1: 13, Angle2: -19, Duration: 20000}
+	wantQuake := testclient.Earthquake{X: 1, Y: 2, Z: 3, Intensity: 20, Duration: 10}
+	if len(cinematics) != 2 || cinematics[0] != testclient.Packet(wantCam) || cinematics[1] != testclient.Packet(wantQuake) {
+		t.Errorf("camera and earthquake packets %+v; want %+v and %+v", cinematics, wantCam, wantQuake)
 	}
 	sounds := only[testclient.PlaySound](ps)
 	var kpos world.Position

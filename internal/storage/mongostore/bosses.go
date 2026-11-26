@@ -25,7 +25,7 @@ func (s *Store) Bosses() *Bosses { return &Bosses{store: s} }
 // Bosses is a storage.BossStore on four collections, with Mobius's column
 // names:
 //
-//	raidbosses:             {_id: <boss>, respawn_time, currentHP, currentMP}
+//	raidbosses:             {_id: <boss>, respawn_time, currentHP, currentMP, [moved, loc_x, loc_y, loc_z, heading]}
 //	grandbosses:            {_id: <boss>, loc_x, loc_y, loc_z, heading, respawn_time, currentHP, currentMP, status}
 //	grandboss_zone_players: {_id: {zone, player_id}}
 //	raid_points:            {_id: {charId, boss_id}, points}
@@ -40,6 +40,22 @@ type raidBossDoc struct {
 	RespawnTime int64   `bson:"respawn_time"`
 	CurHP       float64 `bson:"currentHP"`
 	CurMP       float64 `bson:"currentMP"`
+	// The spawn point of a boss a GM moved; absent for the others.
+	Moved   bool  `bson:"moved,omitempty"`
+	X       int32 `bson:"loc_x,omitempty"`
+	Y       int32 `bson:"loc_y,omitempty"`
+	Z       int32 `bson:"loc_z,omitempty"`
+	Heading int32 `bson:"heading,omitempty"`
+}
+
+func toRaidBossDoc(r storage.RaidBossState) raidBossDoc {
+	return raidBossDoc{BossID: r.BossID, RespawnTime: r.RespawnTime, CurHP: r.CurHP, CurMP: r.CurMP,
+		Moved: r.Moved, X: r.X, Y: r.Y, Z: r.Z, Heading: r.Heading}
+}
+
+func (d raidBossDoc) state() storage.RaidBossState {
+	return storage.RaidBossState{BossID: d.BossID, RespawnTime: d.RespawnTime, CurHP: d.CurHP, CurMP: d.CurMP,
+		Moved: d.Moved, X: d.X, Y: d.Y, Z: d.Z, Heading: d.Heading}
 }
 
 type grandBossDoc struct {
@@ -127,7 +143,7 @@ func (b *Bosses) LoadRaidBosses(ctx context.Context) ([]storage.RaidBossState, e
 	}
 	var out []storage.RaidBossState
 	for _, d := range docs {
-		out = append(out, storage.RaidBossState{BossID: d.BossID, RespawnTime: d.RespawnTime, CurHP: d.CurHP, CurMP: d.CurMP})
+		out = append(out, d.state())
 	}
 	return out, nil
 }
@@ -138,7 +154,7 @@ func (b *Bosses) SaveRaidBosses(ctx context.Context, bosses []storage.RaidBossSt
 	for _, r := range bosses {
 		models = append(models, mongo.NewReplaceOneModel().
 			SetFilter(bson.D{{Key: "_id", Value: r.BossID}}).
-			SetReplacement(raidBossDoc{BossID: r.BossID, RespawnTime: r.RespawnTime, CurHP: r.CurHP, CurMP: r.CurMP}).
+			SetReplacement(toRaidBossDoc(r)).
 			SetUpsert(true))
 	}
 	return b.writeTx(ctx, "save raid bosses", func(ctx context.Context) error {

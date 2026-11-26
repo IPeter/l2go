@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 	"sync"
+	"time"
 )
 
 // logLimit is how many chat lines, NPC speeches and system messages the
@@ -146,6 +147,12 @@ type World struct {
 	sysMsgs   []SystemMessage
 	html      NpcHtmlMessage
 	hasHTML   bool
+	// ai holds the doors, static objects, boats and the game clock
+	// (worldai.go).
+	ai worldAI
+	// social holds the party, the trade, the friends and the open requests
+	// (socialstate.go).
+	social socialState
 }
 
 func newWorld() *World {
@@ -305,6 +312,8 @@ func (w *World) reset() {
 	clear(w.autoShots)
 	w.chat, w.npcSays, w.sysMsgs = nil, nil, nil
 	w.html, w.hasHTML = NpcHtmlMessage{}, false
+	w.ai = worldAI{}
+	w.social = socialState{}
 }
 
 // object returns the object id, adding it when it is new; the caller holds
@@ -342,6 +351,7 @@ func (w *World) apply(p Packet) {
 		w.me.ObjectID = v.ObjectID
 		w.me.Name = v.Name
 		w.me.Pos = Position{v.X, v.Y, v.Z}
+		w.ai.selected(v.GameTime, time.Now())
 	case RestartResponse:
 		if v.OK {
 			w.reset()
@@ -381,6 +391,7 @@ func (w *World) apply(p Packet) {
 	case DeleteObject:
 		delete(w.objects, v.ObjectID)
 		delete(w.ground, v.ObjectID)
+		w.ai.forget(v.ObjectID)
 	case RelationChanged:
 		if o, ok := w.objects[v.ObjectID]; ok {
 			o.Relation, o.AutoAttackable = v.Relation, v.AutoAttackable
@@ -389,6 +400,8 @@ func (w *World) apply(p Packet) {
 		w.applyMotion(p)
 		w.applyOther(p)
 		w.applyPlay(p)
+		w.applyWorldAI(p)
+		w.applySocial(p)
 	}
 }
 

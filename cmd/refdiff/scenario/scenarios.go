@@ -200,6 +200,38 @@ var scenarios = []Scenario{
 		Ignore:      npcNoise,
 		GM:          true,
 	},
+	// Milestone 9, Phase 9 (social.go).
+	{
+		Name:        "party-hunt",
+		Description: "GM setup: both in the Bearded Keltir field; alice invites bob (loot Random), bob accepts, alice kills a keltir and both get their share of the exp; alice leaves and the party disperses",
+		Roles:       []string{"alice", "bob"},
+		Run:         partyHunt,
+		Ignore:      fightNoise,
+		GM:          true,
+	},
+	{
+		Name:        "trade",
+		Description: "GM setup: 10 Stems for alice, 1,000 adena for bob, both on fixed spots; alice trades 5 Stems for 100 adena, both confirm",
+		Roles:       []string{"alice", "bob"},
+		Run:         trade,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
+	{
+		Name:        "friends",
+		Description: "alice invites bob as a friend, bob accepts; a friend message; bob logs out and in (alice gets both notices); alice deletes bob",
+		Roles:       []string{"alice", "bob"},
+		Run:         friends,
+		Ignore:      npcNoise,
+	},
+	{
+		Name:        "clan-create",
+		Description: "GM setup: alice at level 10, both next to Bitz (Talking Island village master); alice founds a clan named after her, invites bob, bob accepts",
+		Roles:       []string{"alice", "bob"},
+		Run:         clanCreate,
+		Ignore:      npcNoise,
+		GM:          true,
+	},
 }
 
 func loginCreateEnter(ctx context.Context, s *Session) error {

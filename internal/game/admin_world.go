@@ -801,16 +801,27 @@ func (s *Server) gmCreateCoin(p *Player, args []string) {
 
 // gmRecallNpc is //recall_npc (Mobius AdminTeleport.recallNPC): the GM's
 // target NPC moves to the GM for good: its spawn is deleted and a new one,
-// with the same respawn delay, is made where the GM stands. Raid bosses do
-// not exist yet; grand bosses cannot be moved.
+// with the same respawn delay, is made where the GM stands. A raid boss's
+// spawn moves the same way in the raid spawner and is stored
+// (moveRaidSpawn), silently as in Mobius; grand bosses and minions cannot be
+// moved.
 func (s *Server) gmRecallNpc(p *Player, _ []string) {
 	n, ok := p.Target.(*Npc)
 	switch {
-	case !ok || n == nil || n.Template.Type == "GrandBoss":
-		p.SendSystemMessage(gmSysMsgInvalidTarget)
+	case ok && n != nil && n.Template.Type == "RaidBoss":
+		if n.spawn == nil || n.boss.raid == nil {
+			gmSysMessage(p, "Incorrect raid spawn.")
+			s.log.Warn("game: //recall_npc of a raid boss without a spawn", append(p.logArgs(), "npc", n.Template.ID)...)
+			return
+		}
+		if s.moveRaidSpawn(n, p.Position()) == nil {
+			p.SendSystemMessage(npcSysMsgTargetNotFound)
+			return
+		}
+		s.log.Info("GM moved a raid boss spawn", append(p.logArgs(), "npc", n.Template.ID, "pos", p.Position())...)
 		return
-	case n.Template.Type == "RaidBoss":
-		p.SendMessage("Raid bosses are not available yet.")
+	case !ok || n == nil || n.Template.Type == "GrandBoss" || n.Leader() != nil:
+		p.SendSystemMessage(gmSysMsgInvalidTarget)
 		return
 	}
 	sp := n.spawn

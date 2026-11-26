@@ -51,8 +51,10 @@ type stack struct {
 // scripts/ folders. Everything stops when the test ends, in the order
 // cmd/l2go stops it: the game server's connections first, then the world
 // loop (which saves every player), the login link, the scripts engine and
-// last the login server. Server logs go to the test output.
-func startStack(t *testing.T) *stack {
+// last the login server. Server logs go to the test output. Each of opts
+// changes the game's options before game.New (worldai_test.go adds the
+// doors, the raid bosses and their store).
+func startStack(t *testing.T, opts ...func(*game.Options)) *stack {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(t.Output(), nil))
 	clientLn, linkLn, gameLn := listen(t), listen(t), listen(t)
@@ -140,7 +142,7 @@ func startStack(t *testing.T) *stack {
 	}, gsLogger)
 	serve(t, "login link", loginLink.Run)
 
-	s.game, err = game.New(game.Options{
+	gameOpts := game.Options{
 		Config:         cfg,
 		ServerID:       gs.ID,
 		Data:           gameData,
@@ -155,7 +157,11 @@ func startStack(t *testing.T) *stack {
 		Clock:          s.clock,
 		Logger:         gsLogger,
 		CheckLoopOwner: true,
-	})
+	}
+	for _, o := range opts {
+		o(&gameOpts)
+	}
+	s.game, err = game.New(gameOpts)
 	if err != nil {
 		t.Fatalf("game.New: %v", err)
 	}

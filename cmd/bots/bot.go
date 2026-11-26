@@ -68,6 +68,9 @@ type bot struct {
 	// again after it failed (no GM rights).
 	keeper       bool
 	storeRetryAt time.Time
+
+	// soc is the party, trade, friend and ping state (social.go).
+	soc socialBot
 }
 
 func newBot(id int, cfg config, stats *Stats, logger *slog.Logger) *bot {
@@ -277,10 +280,18 @@ func (b *bot) act(ctx context.Context, gc *testclient.GameConn) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.timeout)
 	defer cancel()
-	if b.cfg.mode == modeHunt {
+	// The ping, the open requests, the parties, trades and friend
+	// messages (social.go); nothing without their flags.
+	if done, err := b.social(ctx, gc); done || err != nil {
+		return err
+	}
+	switch b.cfg.mode {
+	case modeHunt:
 		// The server moves a fighting character (chases, restarts), which
 		// the walk estimate does not follow, so a hunter reports nothing.
 		return b.hunt(ctx, gc)
+	case modeCruma:
+		return b.crumaHunt(ctx, gc)
 	}
 	if err := b.reportPosition(ctx, gc); err != nil {
 		return staged("validate", err)

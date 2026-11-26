@@ -2,10 +2,9 @@
 -- village_master/AllianceMaster. Every page but the first one needs a clan;
 -- without one the master answers 9001-04.htm.
 --
--- Clans come with M9: until then nobody has one, so only the first page and
--- 9001-04.htm show. The alliance actions on the pages
--- (npc_%objectId%_create_ally, ..._dissolve_ally) are NPC commands of the
--- game, which answers them as not available yet.
+-- The alliance actions on the pages (npc_%objectId%_create_ally,
+-- ..._dissolve_ally) are village master commands of the game
+-- (internal/game/alliance.go: Mobius Clan.createAlly and dissolveAlly).
 --
 -- The pages are Mobius's, served from
 -- data/html/scripts/village_master/AllianceMaster/.

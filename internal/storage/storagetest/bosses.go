@@ -14,7 +14,9 @@ import (
 // commits.
 func TestBossStore(t *testing.T, newStore func(t *testing.T) (s storage.BossStore, failNext func(error))) {
 	kutus := storage.RaidBossState{BossID: 25001, RespawnTime: 1795000000000, CurHP: 95986, CurMP: 514}
-	tyrannosaurus := storage.RaidBossState{BossID: 25019, CurHP: 120000.5, CurMP: 600.25}
+	// A raid boss a GM moved (//recall_npc) keeps its spawn point.
+	tyrannosaurus := storage.RaidBossState{BossID: 25019, CurHP: 120000.5, CurMP: 600.25,
+		Moved: true, X: 117000, Y: -16500, Z: -1900, Heading: 32768}
 	queenAnt := storage.GrandBossState{BossID: 29001, X: -21610, Y: 181594, Z: -5734, CurHP: 229898.48, CurMP: 667.776}
 	core := storage.GrandBossState{BossID: 29006, X: 17726, Y: 108915, Z: -6480, CurHP: 622493.58388, CurMP: 3793.536}
 

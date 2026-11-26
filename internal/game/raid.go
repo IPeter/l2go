@@ -196,6 +196,18 @@ type raidEntry struct {
 	hasInfo bool
 	// timer is the pending respawn (Mobius _schedules), or 0.
 	timer world.TimerID
+	// moved is set once a GM moved the boss's spawn (//recall_npc): the
+	// slot's point is stored with the state.
+	moved bool
+}
+
+// stored returns st with the moved spawn point of e, if any.
+func (e *raidEntry) stored(st storage.RaidBossState) storage.RaidBossState {
+	if e.moved {
+		pt := e.slot.point
+		st.Moved, st.X, st.Y, st.Z, st.Heading = true, pt.X, pt.Y, pt.Z, pt.Heading
+	}
+	return st
 }
 
 // id is the boss's NPC ID as the store keeps it.
@@ -204,7 +216,8 @@ func (e *raidEntry) id() int32 { return int32(e.spawn.BossID) } //nolint:gosec /
 // setupRaidSpawns makes a spawn slot for every raid boss of the data and
 // spawns it, or schedules its stored respawn (Mobius addNewSpawn): a boss
 // without a respawn time, or whose time has passed, spawns now with the
-// stored HP and MP (the data's on the first start).
+// stored HP and MP (the data's on the first start). A boss a GM moved
+// (moveRaidSpawn) spawns at its stored point.
 func (s *Server) setupRaidSpawns(stored []storage.RaidBossState) {
 	f := &s.bosses
 	if f.data == nil || s.worldData == nil {
@@ -225,14 +238,17 @@ func (s *Server) setupRaidSpawns(stored []storage.RaidBossState) {
 		lo, hi := r.RespawnWindow()
 		sp := &npcSpawn{tmpl: t, respawnMin: lo, respawnMax: hi, index: -1,
 			point: world.Position{X: int32(r.X), Y: int32(r.Y), Z: int32(r.Z), Heading: int32(r.Heading)}} //nolint:gosec // world coordinates fit
+		st, ok := byID[int32(r.BossID)] //nolint:gosec // NPC IDs are small
+		if !ok {
+			st = storage.RaidBossState{BossID: int32(r.BossID), CurHP: r.HP, CurMP: r.MP} //nolint:gosec // NPC IDs are small
+		}
+		if st.Moved {
+			sp.point = world.Position{X: st.X, Y: st.Y, Z: st.Z, Heading: st.Heading}
+		}
 		s.addSpawnSlot(sp)
-		e := &raidEntry{spawn: r, slot: sp}
+		e := &raidEntry{spawn: r, slot: sp, moved: st.Moved}
 		f.raids = append(f.raids, e)
 		f.raidByID[r.BossID] = e
-		st, ok := byID[e.id()]
-		if !ok {
-			st = storage.RaidBossState{BossID: e.id(), CurHP: r.HP, CurMP: r.MP}
-		}
 		now := s.Now().UnixMilli()
 		if st.RespawnTime == 0 || now > st.RespawnTime {
 			if n := s.spawnSlot(sp); n != nil {
@@ -305,7 +321,7 @@ func (s *Server) raidUpdateDB() {
 		if e.status == RaidAlive {
 			e.info = storage.RaidBossState{BossID: e.id(), CurHP: n.CurHP, CurMP: n.CurMP}
 		}
-		row := e.info
+		row := e.stored(e.info)
 		if n.Dead {
 			row.CurHP, row.CurMP = float64(n.MaxHP()), float64(n.MaxMP())
 		}
@@ -351,6 +367,55 @@ func (s *Server) RaidBossRespawnAt(bossID int) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return time.UnixMilli(e.info.RespawnTime), true
+}
+
+// moveRaidSpawn is the RaidBoss branch of Mobius AdminTeleport.recallNPC: the
+// spawner's spawn of n is deleted (RaidBossSpawnManager.deleteSpawn: a
+// pending respawn is cancelled) and a new one at pos spawns the boss there at
+// once with n's HP and MP (addNewSpawn with no respawn time), ALIVE, and is
+// stored with its point (Mobius's raidboss_spawnlist row), so the boss
+// spawns there after a restart too. It returns the new boss, or nil when n
+// is not a boss of the spawner or the boss could not be placed.
+//
+// Unlike Mobius, the old boss leaves the world (Mobius leaves it standing,
+// no longer the spawner's, beside the new one), a dead boss comes back with
+// full HP and MP rather than none, and the new spawn keeps the boss's
+// respawn window: Mobius sets 43200 and 129600 "seconds" that its spawn
+// reads as milliseconds, and after a restart its table's default of 36 h ±
+// 24 h, the data's window of most bosses. Loop-only.
+func (s *Server) moveRaidSpawn(n *Npc, pos world.Position) *Npc {
+	e := n.boss.raid
+	if e == nil || e.slot.deleted() || e.slot != n.spawn {
+		return nil
+	}
+	hp, mp := n.CurHP, n.CurMP
+	if n.Dead {
+		hp, mp = float64(n.MaxHP()), float64(n.MaxMP())
+	}
+	old := e.slot
+	if e.timer != 0 {
+		s.loop.Cancel(e.timer)
+		e.timer = 0
+	}
+	s.deleteSpawn(old)
+	sp := &npcSpawn{tmpl: old.tmpl, respawnMin: old.respawnMin, respawnMax: old.respawnMax, point: pos, index: -1}
+	s.addSpawnSlot(sp)
+	e.slot, e.boss, e.status, e.info, e.hasInfo, e.moved = sp, nil, RaidUndefined, storage.RaidBossState{}, false, true
+	b := s.spawnSlot(sp)
+	if b == nil {
+		return nil
+	}
+	b.boss.raid = e
+	b.SetCurrentHPMP(hp, mp)
+	e.boss, e.status = b, RaidAlive
+	e.info, e.hasInfo = storage.RaidBossState{BossID: e.id(), CurHP: b.CurHP, CurMP: b.CurMP}, true
+	if store := s.bosses.store; store != nil {
+		row := e.stored(e.info)
+		s.bosses.writer.enqueue("raid boss spawn", func(ctx context.Context) error {
+			return store.SaveRaidBosses(ctx, []storage.RaidBossState{row})
+		})
+	}
+	return b
 }
 
 // ----- RaidBoss and GrandBoss -----

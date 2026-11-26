@@ -27,6 +27,12 @@
 // minute, and the GM and gatekeeper steps skip: the test cannot reach into
 // the server's store.
 //
+// TestSocial and TestSmokeSocial (build tag smoke) walk two players through
+// the playing-together checklist of Milestone 9 (social_test.go): a store
+// purchase, a trade, a party hunt with shared exp, a clan founded and
+// joined, and the friend notices. Against a running stack the steps that
+// need GM rights or adena skip.
+//
 // The NPC dialog pages (data/html) are not in git: make data copies them
 // from the Mobius checkout. Without them the steps that open those pages
 // skip. TestSmoke looks for them in L2GO_HTML_DIR, by default the

@@ -4,17 +4,23 @@ import "context"
 
 // Boss state (Plan 13, decision A8): what Mobius keeps in raidboss_spawnlist,
 // grandboss_data, grandboss_list and character_raid_points. The spawn points
-// and delays stay in the data files; the stores keep only what changes.
-// Times are Unix milliseconds, 0 for none.
+// and delays stay in the data files, but for a raid boss a GM moved; the
+// stores keep only what changes. Times are Unix milliseconds, 0 for none.
 
 // RaidBossState is a raid boss's stored state (the respawn_time, currentHP
-// and currentMP columns of Mobius raidboss_spawnlist).
+// and currentMP columns of Mobius raidboss_spawnlist, and its loc_x, loc_y,
+// loc_z and heading once a GM moved the boss).
 type RaidBossState struct {
 	BossID int32
 	// RespawnTime is when a dead boss comes back, 0 while it lives.
 	RespawnTime int64
 	CurHP       float64
 	CurMP       float64
+	// Moved is set once a GM moved the boss's spawn (//recall_npc, which
+	// rewrites Mobius's raidboss_spawnlist row); X, Y, Z and Heading are
+	// then its spawn point instead of the data's.
+	Moved            bool
+	X, Y, Z, Heading int32
 }
 
 // GrandBossState is a grand boss's stored state (a Mobius grandboss_data

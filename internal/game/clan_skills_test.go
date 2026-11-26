@@ -1,6 +1,8 @@
 package game
 
 import (
+	"maps"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -181,6 +183,134 @@ func TestClanSkillLearning(t *testing.T) {
 		if sk.ID == clanSkillVitality {
 			t.Error("the clan skill was saved with the leader")
 		}
+	}
+}
+
+// //give_clan_skills gives the target's clan a level of every clan skill its
+// level allows, the one last in the tree's order as in Mobius (a member
+// target only adds "... is not a clan leader."), with PledgeSkillList to the
+// members and the clan written; again it raises the skills left below their
+// best level. //add_clan_skill gives a leader's clan one skill level,
+// checks the leader and the range, and shows the skill editor page.
+func TestClanSkillGMCommands(t *testing.T) {
+	e := newClanExtrasEnv(t, nil, time.Time{}, nil)
+	var dir string
+	e.onLoop(func() { dir = e.srv.settings.HTMLDir })
+	writeDialogFile(t, filepath.Join(dir, "admin", "charskills.htm"), adminGMPages["admin/charskills.htm"])
+	sessA, a := e.enterClanChar(clanChar{account: "lead", name: "Leader", level: 40})
+	sessB, b := e.enterClanChar(clanChar{account: "bob", name: "Bob", level: 20})
+	sessG, gm := e.enterClanChar(clanChar{account: "gm", name: "Master", level: 20, access: storage.AccessLevelAdmin})
+	c := e.foundClan(a, "Dragons")
+	e.inviteToClan(sessA, a, sessB, b, 0, 1)
+	// Mobius keeps the level it meets last in the tree's order, not the
+	// highest; the second call raises the skills left below their best.
+	want, best := map[int32]int32{}, map[int32]int32{}
+	e.onLoop(func() {
+		e.srv.ChangeClanLevel(c, 5)
+		for _, l := range e.srv.clanSkills.tree {
+			if !l.ResidenceSkill && l.GetLevel <= 5 {
+				want[int32(l.SkillID)] = int32(l.Level)
+				best[int32(l.SkillID)] = max(best[int32(l.SkillID)], int32(l.Level))
+			}
+		}
+		gm.Target = b
+	})
+	raised := 0
+	for id, level := range want {
+		if level < best[id] {
+			raised++
+		}
+	}
+	if len(want) == 0 {
+		t.Fatal("no clan skill up to clan level 5 in the tree")
+	}
+	sessA.take(t)
+	sessB.take(t)
+	ps := adminRun(t, e, sessG, gm, "give_clan_skills")
+	n := strconv.Itoa(len(want))
+	if ids, says := sysMsgs(ps), sysSays(ps); !slices.Equal(ids, []int32{int32(adminSysMsgNotClanLeader)}) ||
+		!slices.Equal(says, []string{"You gave " + n + " skills to Bob's clan Dragons."}) {
+		t.Errorf("//give_clan_skills on a member: %v, %q", ids, says)
+	}
+	psB := sessB.take(t)
+	if msgs := messages(psB); !slices.Equal(msgs, []string{"Your clan received " + n + " skills."}) {
+		t.Errorf("the target was told %q", msgs)
+	}
+	for who, got := range map[string][]testclient.Packet{"leader": sessA.take(t), "member": psB} {
+		lists := only[testclient.PledgeSkillList](got)
+		if len(only[testclient.PledgeSkillListAdd](got)) != len(want) || len(lists) != 1 || len(lists[0].Skills) != len(want) {
+			t.Errorf("%s: %d PledgeSkillListAdd, PledgeSkillList %+v", who, len(only[testclient.PledgeSkillListAdd](got)), lists)
+		}
+	}
+	e.onLoop(func() {
+		got := map[int32]int32{}
+		for _, cs := range c.Skills {
+			got[cs.SkillID] = cs.Level
+		}
+		if !maps.Equal(got, want) {
+			t.Errorf("clan skills %v, want %v", got, want)
+		}
+		if a.SkillLevel(clanSkillVitality) != int(want[clanSkillVitality]) {
+			t.Errorf("the leader has Clan Vitality %d", a.SkillLevel(clanSkillVitality))
+		}
+	})
+	if doc, err := e.storedClan(c.ID); err != nil || len(doc.Skills) != len(want) {
+		t.Errorf("stored clan skills %+v, %v", doc.Skills, err)
+	}
+	e.onLoop(func() { gm.Target = a })
+	if says := sysSays(adminRun(t, e, sessG, gm, "give_all_clan_skills")); !slices.Equal(says, []string{"You gave " + strconv.Itoa(raised) + " skills to Leader's clan Dragons."}) {
+		t.Errorf("//give_all_clan_skills again: %q, want %d skills", says, raised)
+	}
+
+	// //add_clan_skill.
+	e.onLoop(func() {
+		c.Skills = nil
+		gm.Target = b
+	})
+	ps = adminRun(t, e, sessG, gm, "add_clan_skill 374 1")
+	if ids := sysMsgs(ps); !slices.Equal(ids, []int32{int32(adminSysMsgNotClanLeader)}) || !strings.Contains(lastPage(t, ps), "Skills Editor") {
+		t.Errorf("//add_clan_skill on a member: %v, %q", ids, testclient.Names(ps))
+	}
+	e.onLoop(func() { gm.Target = a })
+	for line, page := range map[string]bool{"add_clan_skill 369 1": true, "add_clan_skill 374 4": true, "add_clan_skill x 1": false} {
+		ps := adminRun(t, e, sessG, gm, line)
+		if says := sysSays(ps); !slices.Equal(says, []string{"Usage: //add_clan_skill <skill_id> <level>"}) || (len(only[testclient.NpcHtmlMessage](ps)) == 1) != page {
+			t.Errorf("//%s: %q, %q", line, says, testclient.Names(ps))
+		}
+	}
+	morale, ok := e.srv.Skill(clanSkillMorale, 1)
+	if !ok {
+		t.Fatal("no Clan Morale")
+	}
+	sessA.take(t)
+	sessB.take(t)
+	ps = adminRun(t, e, sessG, gm, "add_clan_skill 374 1")
+	if says := sysSays(ps); !slices.Equal(says, []string{"You gave the Clan Skill: " + morale.Name + " to the clan Dragons."}) || !strings.Contains(lastPage(t, ps), "Skills Editor") {
+		t.Errorf("//add_clan_skill 374 1: %q, %q", says, testclient.Names(ps))
+	}
+	added := func(ps []testclient.Packet) int {
+		n := 0
+		for _, id := range sysMsgs(ps) {
+			if id == int32(clanSkillMsgAdded) {
+				n++
+			}
+		}
+		return n
+	}
+	psA, psB := sessA.take(t), sessB.take(t)
+	if added(psA) != 3 || added(psB) != 2 {
+		t.Errorf("\"clan skill added\": the leader got %d, a member %d; want 3 and 2 as in Mobius", added(psA), added(psB))
+	}
+	if lists := only[testclient.PledgeSkillList](psB); len(lists) != 1 || !slices.Equal(lists[0].Skills, []testclient.PledgeSkill{{ID: clanSkillMorale, Level: 1}}) {
+		t.Errorf("PledgeSkillList %+v", lists)
+	}
+	e.onLoop(func() {
+		if a.SkillLevel(clanSkillMorale) != 1 || b.SkillLevel(clanSkillMorale) != 1 {
+			t.Errorf("Clan Morale %d/%d", a.SkillLevel(clanSkillMorale), b.SkillLevel(clanSkillMorale))
+		}
+	})
+	if doc, err := e.storedClan(c.ID); err != nil || !slices.Equal(doc.Skills, []storage.ClanSkill{{SkillID: clanSkillMorale, Level: 1, Unit: storage.ClanSkillAllUnit}}) {
+		t.Errorf("stored clan skills %+v, %v", doc.Skills, err)
 	}
 }
 

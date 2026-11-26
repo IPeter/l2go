@@ -257,6 +257,10 @@ var serverPackets = map[byte]serverPacket{
 	OpAllyCrest:                     {"AllyCrest", readAllyCrest},
 	OpAllianceInfo:                  {"AllianceInfo", readAllianceInfo},
 	OpPledgeStatusChanged:           {"PledgeStatusChanged", readPledgeStatusChanged},
+
+	// A title change and the clan view of a GM (M9, socialpackets.go).
+	OpNicknameChanged:  {"NicknameChanged", readNicknameChanged},
+	OpGMViewPledgeInfo: {"GMViewPledgeInfo", readGMViewPledgeInfo},
 }
 
 // exServerPackets lists the Ex server packets by sub-opcode.

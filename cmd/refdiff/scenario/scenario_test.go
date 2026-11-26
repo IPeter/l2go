@@ -26,7 +26,9 @@ func TestScenariosAreRegistered(t *testing.T) {
 		"items-equip", "items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private",
 		"kill-monster", "pvp-death-restart", "sample-sword", "sample-unarmed",
 		"cast-wind-strike", "learn-skill", "buff-stack", "potion", "soulshot", "newbie-buffs",
-		"private-store",
+		"private-store", "party-hunt", "trade", "friends", "clan-create",
+		// Milestone 10 (worldai.go), after the others.
+		"door-open-close", "static-object-click", "raid-spawn", "raid-kill", "ferry-departure", "cruma-heights",
 	}
 	if !slices.Equal(names, want) {
 		t.Errorf("scenarios = %v, want %v", names, want)
@@ -34,7 +36,8 @@ func TestScenariosAreRegistered(t *testing.T) {
 	gm := []string{
 		"items-bow", "items-drop-pickup", "shop-buy-sell", "multisell-galladucci", "warehouse-private",
 		"cast-wind-strike", "learn-skill", "buff-stack", "potion", "soulshot", "newbie-buffs",
-		"private-store",
+		"private-store", "party-hunt", "trade", "clan-create",
+		"door-open-close", "static-object-click", "raid-spawn", "raid-kill", "ferry-departure", "cruma-heights",
 	}
 	for _, sc := range All() {
 		if sc.GM != slices.Contains(gm, sc.Name) {

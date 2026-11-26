@@ -20,10 +20,10 @@ import (
 // The GM menu (//admin7), the Effects page (//admin3) and the skill pages of
 // the admin panel: Mobius AdminAdmin's gmliston, gmlistoff, silence, diet and
 // tradeoff, AdminInvul, AdminSuperHaste, AdminGmChat, AdminEnchant,
-// AdminEffects, the page commands of AdminSkill and AdminBuffs, and
-// RequestGmList (/gmlist). The buttons of systems the server does not have
-// yet (mounts, petitions, events, clans, sieges, the Olympiad, ...) answer
-// that they are not available yet.
+// AdminEffects, the page and clan skill commands of AdminSkill, AdminBuffs,
+// and RequestGmList (/gmlist). The buttons of systems the server does not
+// have yet (mounts, petitions, events, sieges, the Olympiad, ...) answer that
+// they are not available yet.
 func init() { registerFeature("admin_gm", setupAdminGM) }
 
 const (
@@ -1317,38 +1317,131 @@ func (s *Server) gmRemoveAllSkills(p *Player, args []string) {
 }
 
 // gmGiveClanSkills is //give_clan_skills and //give_all_clan_skills (Mobius
-// AdminSkill): a target without a clan gets Mobius's answer; clans do not
-// exist yet.
+// AdminSkill.adminGiveClanSkills; the squad flag of the second changes
+// nothing in Interlude): the target's clan gets a level of every clan skill
+// its level allows (gmMaxClanSkills) through addNewClanSkill, the members
+// online get PledgeSkillList and SkillList, and the clan is written. A
+// target who does not lead the clan only makes the GM see "... is not a clan
+// leader." first.
+// The GM gets "You gave N skills to ...'s clan ...", the target "Your clan
+// received N skills.".
 func (s *Server) gmGiveClanSkills(p *Player, args []string) {
 	if len(args) > 0 {
+		return
+	}
+	t, ok := gmTargetPlayer(p)
+	if !ok {
+		p.SendSystemMessage(gmSysMsgInvalidTarget)
+		return
+	}
+	c := t.clan.clan
+	if c == nil {
+		p.SendSystemMessage(adminSysMsgMustBeClanMember)
+		return
+	}
+	if !t.IsClanLeader() {
+		p.SendSystemMessage(adminSysMsgNotClanLeader, serverpackets.TextParam(t.Name()))
+	}
+	learns := s.gmMaxClanSkills(c)
+	for _, l := range learns {
+		if sk, found := s.Skill(l.SkillID, l.Level); found {
+			s.addNewClanSkill(c, sk) // clan_skills.go
+		}
+	}
+	broadcastToClan(c, s.clanSkillListPacket(c))
+	for _, q := range c.OnlineMembers() {
+		q.SendSkillList()
+	}
+	s.saveClan(c)
+	n := strconv.Itoa(len(learns))
+	gmSysMessage(p, "You gave "+n+" skills to "+t.Name()+"'s clan "+c.Name+".")
+	t.SendMessage("Your clan received " + n + " skills.")
+	s.log.Info("GM gave clan skills", append(p.logArgs(), "clan", c.Name, "skills", len(learns))...)
+}
+
+// gmMaxClanSkills is Mobius SkillTreeData.getMaxPledgeSkills: for each skill
+// of the pledge tree but the residence skills, of the levels up to c's level
+// and above the one c has, the one met last in the tree's order (not the
+// highest: as in Mobius, a second call can raise a skill again), in the
+// order Mobius's HashMap of skill IDs iterates them.
+func (s *Server) gmMaxClanSkills(c *Clan) []*data.SkillLearn {
+	byID := make(map[int]*data.SkillLearn)
+	var order chmOrder
+	for i := range s.clanSkills.tree {
+		l := &s.clanSkills.tree[i]
+		if l.ResidenceSkill || c.Level < l.GetLevel || clanSkillLevel(c, l.SkillID) >= l.Level {
+			continue
+		}
+		if _, seen := byID[l.SkillID]; !seen {
+			order.put(l.SkillID)
+		}
+		byID[l.SkillID] = l
+	}
+	out := make([]*data.SkillLearn, 0, len(byID))
+	for _, id := range order.keys() {
+		out = append(out, byID[id])
+	}
+	return out
+}
+
+// gmAddClanSkill is //add_clan_skill <id> <level> (Mobius
+// AdminSkill.adminAddClanSkill): the clan of the target, who must lead it,
+// gets the skill level (IDs 370 to 391, levels 1 to 3) through
+// addNewClanSkill. The leader gets "The clan skill S1 has been added." and
+// every member online gets it again (Mobius sends it to the leader, to the
+// clan, then once more with the skill), the GM gets "You gave the Clan
+// Skill: ...", the members online PledgeSkillList and SkillList, and the
+// clan is written. The skill editor page follows, but not after an unknown
+// skill level or arguments that are not numbers.
+func (s *Server) gmAddClanSkill(p *Player, args []string) {
+	const usage = "Usage: //add_clan_skill <skill_id> <level>"
+	if len(args) < 2 {
+		gmSysMessage(p, usage)
+		return
+	}
+	id, ok1 := javaParseInt(args[0])
+	level, ok2 := javaParseInt(args[1])
+	if !ok1 || !ok2 {
+		gmSysMessage(p, usage)
 		return
 	}
 	t, ok := gmTargetPlayer(p)
 	switch {
 	case !ok:
 		p.SendSystemMessage(gmSysMsgInvalidTarget)
-	case t.char.ClanID == 0:
-		p.SendSystemMessage(adminSysMsgMustBeClanMember)
-	default:
-		p.SendMessage("Clans are not available yet.")
-	}
-}
-
-// gmAddClanSkill is //add_clan_skill <id> <level> (Mobius AdminSkill): no
-// player leads a clan yet, so it answers "... is not a clan leader." and
-// shows the skill editor page.
-func (s *Server) gmAddClanSkill(p *Player, args []string) {
-	if len(args) < 2 {
-		gmSysMessage(p, "Usage: //add_clan_skill <skill_id> <level>")
-		return
-	}
-	t, ok := gmTargetPlayer(p)
-	if !ok {
-		p.SendSystemMessage(gmSysMsgInvalidTarget)
-	} else {
+	case !t.IsClanLeader():
 		p.SendSystemMessage(adminSysMsgNotClanLeader, serverpackets.TextParam(t.Name()))
+	case id < 370 || id > 391 || level < 1 || level > 3:
+		gmSysMessage(p, usage)
+	default:
+		sk, found := s.Skill(id, level)
+		if !found {
+			gmSysMessage(p, "Error: there is no such skill.")
+			return
+		}
+		c := t.clan.clan
+		added := clanSysMsg(clanSkillMsgAdded, gmSkillNameParam(sk))
+		t.Send(added)
+		broadcastToClan(c, added)
+		s.addNewClanSkill(c, sk) // clan_skills.go
+		gmSysMessage(p, "You gave the Clan Skill: "+sk.Name+" to the clan "+c.Name+".")
+		broadcastToClan(c, s.clanSkillListPacket(c))
+		for _, q := range c.OnlineMembers() {
+			q.SendSkillList()
+		}
+		s.saveClan(c)
+		s.log.Info("GM added a clan skill", append(p.logArgs(), "clan", c.Name, "skill", id, "level", level)...)
 	}
 	s.gmShowSkillsPage(p)
+}
+
+// gmSkillNameParam is Mobius SystemMessage.addSkillName(skill): the skill's
+// name as text when it shows another skill, else its ID and level.
+func gmSkillNameParam(sk *skills.Skill) serverpackets.SystemMessageParam {
+	if sk.DisplayID != sk.ID {
+		return serverpackets.TextParam(sk.Name)
+	}
+	return serverpackets.SkillNameParam(int32(sk.ID), int32(sk.Level)) //nolint:gosec // skill IDs and levels are small
 }
 
 // gmSetSkill is //setskill <id> <level> (Mobius AdminSkill): the GM gets

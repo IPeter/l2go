@@ -727,8 +727,9 @@ func TestClanGMCommands(t *testing.T) {
 			t.Errorf("level %d reputation %d", c.Level, c.Reputation)
 		}
 	})
-	if u := only[testclient.Unknown](gmRun("pledge info")); len(u) != 1 || u[0].Opcode != 0x90 {
-		t.Errorf("//pledge info: %+v", u)
+	if v := only[testclient.GMViewPledgeInfo](gmRun("pledge info")); len(v) != 1 || v[0].PlayerName != "Leader" ||
+		v[0].ClanName != "Dragons" || v[0].Level != 5 || v[0].Reputation != 100 || len(v[0].Members) != 1 {
+		t.Errorf("//pledge info: %+v", v)
 	}
 	if pg := onePage(t, gmRun("clan_info")); !strings.Contains(pg.HTML, "Dragons Leader 5 100 1") {
 		t.Errorf("//clan_info page %q", pg.HTML)

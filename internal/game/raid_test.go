@@ -677,6 +677,75 @@ func TestRaidCurseRules(t *testing.T) {
 	})
 }
 
+// //recall_npc on a raid boss moves its spawn to the GM (Mobius
+// RaidBossSpawnManager.deleteSpawn and addNewSpawn): the boss leaves with its
+// group and spawns at the GM at once with its HP, in the same respawn
+// window; the point is stored, and the next server spawns him there. A
+// minion cannot be recalled.
+func TestRaidBossRecall(t *testing.T) {
+	store := memstore.NewBosses()
+	e := newBossEnv(t, bossEnvOptions{store: store})
+	sess, gm := bossPlayer(e, "gm", "Gm", storage.AccessLevelAdmin)
+	boss, minions := kutusOf(e)
+	var at world.Position
+	var hurt float64
+	e.onLoop(func() {
+		boss.SetCurrentHP(float64(boss.MaxHP() / 2))
+		hurt = boss.CurHP
+		gm.Target = boss
+		at = gm.Position()
+	})
+	ps := adminRun(t, e, sess, gm, "recall_npc")
+	if says, ids := sysSays(ps), sysMsgs(ps); len(says) != 0 || len(ids) != 0 {
+		t.Errorf("//recall_npc on Kutus: %q, %v; want nothing, as in Mobius", says, ids)
+	}
+	moved, newMinions := kutusOf(e)
+	if moved == nil || moved == boss {
+		t.Fatalf("after //recall_npc Kutus is %v, want a new boss", moved)
+	}
+	if npcInWorld(e, boss) || npcInWorld(e, minions[0]) {
+		t.Error("the old Kutus or his guard is still in the world")
+	}
+	var pos world.Position
+	var hp float64
+	var status RaidStatus
+	var lo, hi time.Duration
+	e.onLoop(func() {
+		pos, hp, status = moved.Position(), moved.CurHP, e.srv.RaidBossStatus(bossTestKutus)
+		lo, hi = moved.spawn.respawnMin, moved.spawn.respawnMax
+	})
+	if pos.X != at.X || pos.Y != at.Y || hp != hurt || status != RaidAlive || len(newMinions) != 4 {
+		t.Errorf("the moved Kutus: at %v (GM at %v), %v HP, %v, %d minions", pos, at, hp, status, len(newMinions))
+	}
+	if lo != bossTestRespawnLo || hi != bossTestRespawnHi {
+		t.Errorf("respawn window %v..%v, want %v..%v", lo, hi, bossTestRespawnLo, bossTestRespawnHi)
+	}
+	bossWrites(e)
+	raids, _ := store.LoadRaidBosses(t.Context())
+	var mp float64
+	e.onLoop(func() { mp = moved.CurMP })
+	want := []storage.RaidBossState{{BossID: bossTestKutus, CurHP: hurt, CurMP: mp, Moved: true, X: at.X, Y: at.Y, Z: at.Z, Heading: at.Heading}}
+	if !slices.Equal(raids, want) {
+		t.Errorf("stored %+v, want %+v", raids, want)
+	}
+
+	e.onLoop(func() { gm.Target = newMinions[0] })
+	if ids := sysMsgs(adminRun(t, e, sess, gm, "recall_npc")); !slices.Equal(ids, []int32{int32(gmSysMsgInvalidTarget)}) {
+		t.Errorf("//recall_npc on a minion: %v", ids)
+	}
+
+	e.stop()
+	e2 := newBossEnv(t, bossEnvOptions{store: store, start: testStart.Add(time.Hour)})
+	again, _ := kutusOf(e2)
+	if again == nil {
+		t.Fatal("Kutus did not spawn after the restart")
+	}
+	e2.onLoop(func() { pos = again.Position() })
+	if pos.X != at.X || pos.Y != at.Y {
+		t.Errorf("after the restart Kutus is at %v, want the GM's %v", pos, at)
+	}
+}
+
 // //grandboss shows the boss page with its status; the event commands
 // check their arguments.
 func TestGrandBossGMCommands(t *testing.T) {

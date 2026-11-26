@@ -6,7 +6,7 @@ L2Go is an open-source Lineage ][ server emulator written in Go. It speaks the *
 Status
 ----
 
-**In development.** A real Interlude client can log in, create a character and enter the world: walk around, see other players, chat, target and talk to NPCs, travel with gatekeepers, and come back where it left. There is no fighting and no trading yet.
+**In development.** A real Interlude client can log in, create a character and enter the world: walk around, see other players, chat, talk to NPCs, travel with gatekeepers, fight, play in parties and clans, trade, and meet raid and grand bosses. Items, shops, warehouses, combat, skills and quests (Milestones 5–8) are built too; their part of this README is still to be written. The tables below describe the character screen, the world (Milestones 3 and 4), playing together (Milestone 9) and the world's AI (Milestone 10).
 
 Logging in and the character screen, the parity checklist from the move to Interlude (each item is covered by the end-to-end test in `internal/e2e`):
 
@@ -29,25 +29,56 @@ In the world (Milestones 3 and 4, ported from L2J Mobius):
 | Feature | What works |
 |---|---|
 | Entering the world | Selecting a character and Mobius's enter-world sequence. The character stands where it left the game, with its equipment on. The character window (Alt+T) shows the stats Mobius computes from the class, level, base stats and equipped items (no skills or buffs yet). |
-| Movement | Walking by mouse click or keyboard with Mobius's `ValidatePosition` policy, sitting and standing, walking or running, and teleporting with the loading screen. With geodata (`geodata.dir` pointing to L2J `.l2j` tiles), heights follow the ground, a mouse walk stops at a wall and a click on a closed cell is refused. |
+| Movement | Walking by mouse click or keyboard with Mobius's `ValidatePosition` policy, sitting and standing, walking or running, and teleporting with the loading screen. With geodata (`geodata.dir` pointing to L2J `.l2j` tiles), heights follow the ground, a mouse walk goes around walls and a click on a closed cell is refused (see Milestone 10 below). |
 | Seeing others | Players and NPCs appear and disappear as in Mobius: the world is cut into regions of 2048×2048 units with 16 height layers, and everyone sees the 3×3×3 regions around them. |
 | Chat | General chat (heard within 1,250 units), shout (`!`) and trade (`+`, from level 20) heard in the speaker's map region by default, or in the whole world, from GMs only, or not at all (`chat.shout`, `chat.trade`), and whispers (`"name text`) with Mobius's messages for players who are not online. A Lua handler (`events.on_chat`) can change or drop messages. |
 | Restart and logout | Back to the character screen, or out of the game. Position, HP, MP and CP are saved then, every 15 minutes, and when the server stops. Selecting a character while the same account is in the game disconnects the other session first. |
 | Deleting and restoring characters | A deleted character stays in the list with its timer for 7 days (`world.deleteCharAfterDays`) and can be restored until then. |
-| NPCs and spawns | All NPCs and monsters of the Mobius spawn lists, with their names and titles. Respawn timers; NPCs that exist only by day or by night follow the game clock. NPCs stand still for now: they do not walk around or fight. |
+| NPCs and spawns | All NPCs and monsters of the Mobius spawn lists, with their names and titles. Respawn timers; NPCs that exist only by day or by night follow the game clock. Monsters wander and fight (Milestone 6, with skills since Milestone 10); walkers follow their routes. |
 | Targeting | Clicking an NPC or a player targets it, with the level-difference colour and its HP bar. Social actions (greet, bow, dance, ...) are shown to the players around. |
-| Dialogs | Clicking the target again walks up to the NPC and opens its dialog, with Mobius's page rules and placeholders. Links that were not on the last page, and clicks too far from the NPC, are refused. Shops, warehouses and trainers answer with a "not available yet" page, the quest link with Mobius's "no quests" page. The pages come from `make data` (see [Game data](#game-data)). |
+| Dialogs | Clicking the target again walks up to the NPC and opens its dialog, with Mobius's page rules and placeholders. Links that were not on the last page, and clicks too far from the NPC, are refused. The pages come from `make data` (see [Game data](#game-data)). |
 | Gatekeepers | Teleport lists with their prices: free up to level 40 (`npcs.maxFreeTeleportLevel`), otherwise paid in adena. |
 | Zones and map regions | Every Mobius zone is loaded, and the server knows which zones each player is in. In water the character swims, at swim speed. `/loc` names the nearest town, and the map window (Alt+M) opens. |
 | Lua NPC scripts | Scripts answer the first click on an NPC, its quest link and their own dialog links with a page, inline HTML or a message, and can make the NPC speak. Like every Lua script, they reload without a restart (see [Lua scripting](#lua-scripting)). |
 | GM commands | For characters with access level 1 or more ([how](#connecting-an-interlude-client)): `//teleport x y z` (also `//move_to`), `//loc`, `//gmspeed n`, `//heal [name or radius]`, `//invis` and `//vis`, `//online`, `//spawn <npcId or name> [count]`, `//delete [range]` (the targeted NPC, or the NPCs around, with their spawns), `//respawn`, `//npcinfo`, and shift-click on an NPC for its info page. `//admin` opens Mobius's admin panel (`data/html/admin/`): its menus, help, teleport and item pages work, and a button whose command is not ported yet answers "The command '...' does not exist!". |
 
+Playing together (Milestone 9, Plan 12):
+
+| Feature | What works |
+|---|---|
+| Parties | Up to 9 players. The invitation carries one of the five loot modes (finders keepers, random, random including spoil, by turn, by turn including spoil). The party window shows live CP/HP/MP and buff icons; member positions go to the map every 12 s. Party chat, `/partyinfo`, leader change, kick and leave; a party of two disperses when one leaves, and a leader who logs out hands over to the next member. Exp and SP are shared among the living members within 1,500 units with Mobius's party bonus and level cutoff (`party`, `rates.partyXp`); drops and adena go to members in range by the loot mode. Party skills reach the members; Summon Friend asks the target first. Parties are not saved: a restart clears them. |
+| Friends and block list | Friend list with online notices at login and logout, and friend messages. Deleting a friend removes both sides, also for an offline friend. The ignore list stops whispers, party and clan chat, and party, friend and trade requests; "refuse all" turns on message refusal with its status icon. GMs cannot be blocked. |
+| Trade | Direct trade within 150 units. When both confirm, weight and slots are checked on both sides, then the items move both ways and are written in one database transaction. Cancel, distance, a partner who leaves, and the 15 s request timeout work as in Mobius. Items cannot be used, dropped, destroyed or enchanted during a trade. |
+| Private stores | Sell stores, package sales (bought whole) and buy stores, with a message. The owner sits; others see the message, click twice and buy. Slot limits per race (`stores`); no stores in no-store zones, within 50 units of a sitting player or within 100 of an NPC; no restart or item use in store mode. Each purchase is one transaction. No offline trade: a store closes when its owner leaves. |
+| Clans | Created at a village master from character level 10. Clan levels 0–8 with Mobius's SP, adena, item, reputation and member costs. Members with their online state, ranks and privileges, titles (clan level 3), the clan crest and the large crest, the academy (clan level 5) with graduation reputation and the Academy Circlet, Royal Guard and Knight units with captains, clan skills learned for reputation (disabled while the reputation is below 0), the clan warehouse (clan level 1, 200 slots, only the leader withdraws unless `clan.membersCanWithdrawFromWarehouse`), clan chat. Join, leave, dismiss and create penalties, `/clanpenalty`, dissolution after 7 days, the leader change at the Wednesday 06:30 reset (`clan.leaderInstantActivation` makes it immediate). Clan members and leaders cannot be deleted. The clan quests (Q501, Q503, Q508–Q510) are open. |
+| Alliances | Created at a village master by a clan of level 5. Up to 3 clans (`ally.maxClans`): invite, leave, dismiss and dissolve with Mobius's penalties, the alliance window, alliance chat and the alliance crest. |
+| Clan wars | One-sided declarations as in Mobius; both clans need level 3 and 15 members (`clan.membersForWar`). When both sides have declared, the members see the double fist and attack each other without Ctrl; a kill counts as PvP, moves reputation (`clan.reputationPerKill`) and costs the victim a quarter of the usual exp. War lists in the clan window and as user commands 88–90; stop and surrender. |
+| Saving | Trades, store purchases, clan warehouse moves and every clan, crest, alliance, friend and block change are written in one transaction each (see [Saves and write order](#saves-and-write-order)). Friends, blocks, clans, ranks, crests, alliances and wars survive a restart. |
+| GM commands | `//pledge create <name>`, `dismiss`, `info [clan]`, `setlevel <0-8>` and `rep <points>` (clan level 5 and up) for the targeted clan leader, or the GM itself; `//clan_info`, `//clan_changeleader`, `//clan_show_pending`, `//clan_force_pending`; `//give_clan_skills`, `//add_clan_skill`. |
+
+World and AI (Milestone 10, Plan 13):
+
+| Feature | What works |
+|---|---|
+| Geodata and pathfinding | With L2J tiles in `geodata.dir` (see [Geodata](#geodata)): players, monsters, spawns, drops and teleport arrivals stand on the right floor. Walls and closed cells stop a walk; when that cuts it by more than 30 units, the walker goes around on an A* path (player clicks up to 3,000 units away; farther clicks, keyboard moves and water walk straight). Nobody attacks, casts or aggroes through walls ("Cannot see target."). GM: `//geo_pos`, `//geo_spawn_pos`, `//geo_can_see`, `//geo_can_move`, `//path_find`. |
+| Doors, fences and static objects | All 547 doors with their state, groups, auto-close and the timed doors (the Tower of Insolence doors open and close on their own every 2–4 minutes). Closed doors block walking and sight, with or without geodata. Town maps and signboards open on click; the fence of the data is shown. GM: `//open` and `//close` (a door ID, or the targeted door), `//openall`, `//closeall`, `//showdoors`. |
+| Monster AI | Mobius's `AttackableAI` with skills: buffs, heals of itself, its leader and its clan, debuffs, nukes, resurrection, suicide skills, the skill chances and parameterized skill slots, fear, clan help, and target switches ("chaos") for raids and minions. |
+| Minions and raid bosses | The 196 raid boss spawns come with their minions and respawn on Mobius's timers (`npcs.raid*`). A dead raid minion returns after 5 minutes while its master lives (`npcs.raidMinionRespawnTime`); a raid's minions vanish with it. Players more than 8 levels above a raid boss are petrified or silenced (Raid Curse). The raid success message, raid points (level / 2 ± 5 per party member) and their Monday reset, which gives clans reputation. Respawn times, and the HP and MP of living bosses, survive restarts. |
+| Grand bosses | Queen Ant, Core, Orfen, Zaken, Baium, Antharas, Valakas and Sailren run as Lua scripts (`scripts/ai/bosses/`) with saved state and the respawn times of `grandBosses`; Dr. Chaos has its script too. Boss zones let in only the allowed players. GM: `//grandboss [id]` shows a boss's status and respawn time; `//grandboss_skip`, `//grandboss_respawn`, `//grandboss_minions` and `//grandboss_abort` drive the Antharas and Baium scripts. |
+| Scripted monsters and areas | Mobius's monster scripts (chests, fleeing and polymorphing monsters, Varka and Ketra, town pets, ...) and its area scripts (Cruma Tower, Forest of the Dead, Four Sepulchers, Pagan Temple, Primeval Isle, Hot Springs, ...), in `scripts/ai/` (see [`scripts/README.md`](scripts/README.md)). |
+| Time of day | Night is game hours 0–6; a game day lasts 4 real hours. Night spawns come and go, Dark Elves get Shadow Sense with its messages, and scripts hear the change (Zaken's door, Eilhalder von Hellmann). |
+| Walkers and animations | NPCs walk Mobius's routes, wait and speak at their nodes (the fake-player route stays off). Idle NPCs and monsters play an animation every 5–60 s (`world.minNpcAnimation` and the other animation keys). |
+| Boats | The five ferry routes (Talking Island–Gludin, Giran–Talking Island, Gludin–Rune, Rune–Primeval Isle and the Innadril tour) with their calls and horns. Tickets are taken at departure; a player without one is put ashore. Passengers move with the ship, and others see them on board (`world.allowBoat`, `world.boatBroadcastRadius`). |
+
 What does not work yet:
 
-- Fighting: monsters can be targeted but not attacked. No damage, death, experience or drops (Milestone 6).
-- Items and shops: no buying, selling, equipping, using or dropping items, and no warehouses (Milestone 5).
-- Skills, quests, parties, clans and the rest of the game, which come after those.
-- Pathfinding: with geodata a mouse walk stops at the first obstacle instead of going around it. Without geodata (the default) heights come from the client and the spawn data, and every place is walkable.
+- Without geodata tiles in `geodata.dir` (the default: L2Go ships none, see [Geodata](#geodata)) there is no pathfinding: heights come from the client and the spawn data, and every place is walkable and visible, except through closed doors.
+- No mounts, pets or summons yet. The grand bosses' skills against striders are left out, and a pet's or summon's kill gives no raid points.
+- Later milestones: Frintezza (it needs command channels), the FeedableBeasts, Tunatun and Venom scripts, castles, sieges, clan halls, the Olympiad, the Seven Signs, command channels, party matching rooms (the window opens empty), duels, crafting and recipe shops, offline trade.
+- Core's teleport cube (NPC 899099) is missing from the NPC data, so no cube appears after Core dies.
+- Clan skills that are disabled because the reputation fell below 0 keep their passive stats, as in Mobius.
+- `refdiff` has no scenario for alliances and clan wars yet.
+- A monster that sees its target far above or below it does not take Mobius's direct way there; it walks the clipped path.
 
 Requirements
 ----
@@ -107,6 +138,62 @@ docker compose exec mongo mongosh l2go-server --eval 'db.characters.updateOne({n
 ### Smoke test
 
 With the stack running, `make smoke` walks two fake clients through the whole flow with new random accounts and characters each time: the character screen (login, server list, character list, creation, logging in again, wrong password), then the world (walking, seeing each other, chat, NPC dialogs, a Lua NPC, restart, delete and restore, a second login). The steps that need a GM or adena skip, since the test cannot reach into the server's store. Like a real client, it connects to the game server at the address the server list announces. `L2GO_LOGIN_ADDR` (default `127.0.0.1:2106`) points it at another login server; `L2GO_GAME_ADDR` overrides the announced game server address.
+
+### Real-client checklist
+
+What to try by hand with Interlude clients, for what only a client shows: windows, crests, cameras, ship docking, door animations. It merges the demo checklists of Plans 12 and 13. Use three accounts A, B and C, with A's character a GM ([how](#connecting-an-interlude-client)). Most GM commands act on the target: click your own character to use them on yourself.
+
+GM commands that make the steps quick:
+
+| Command | What it does |
+|---|---|
+| `//admin` | The admin panel, with its teleport pages (towns, Cruma Tower, ...). |
+| `//teleport x y z` | Go to a point. |
+| `//list_positions <npc ID> 1` | Go to the first spawn of an NPC; for an NPC without a spawn (a raid boss, a scripted NPC), to the living one. |
+| `//set_level <n>`, `//add_exp_sp <exp> <sp>` | Level, exp and SP of the targeted player. |
+| `//create_item <id> [count]`, `//give_item_target <id> [count]` | Items for yourself, or for the targeted player (57 is adena). |
+| `//heal`, `//res`, `//kill` | Heal, revive or kill the target. |
+| `//spawn <npc ID or name> [count]`, `//npcinfo` | Spawn NPCs; the targeted NPC's info page. |
+| `//pledge setlevel <n>`, `//pledge rep <points>` | Clan level of the targeted clan leader's clan (or your own); reputation, from clan level 5. |
+| `//open <door ID>`, `//close <door ID>`, `//showdoors` | Doors. |
+| `//geo_pos`, `//geo_can_see`, `//path_find` | Geodata at your position, sight to the target, the path to the target. |
+| `//grandboss <boss ID>` | A grand boss's status and respawn time. |
+
+Playing together (Milestone 9):
+
+1. Party: A invites B with loot "Random"; B accepts and both see the party window. A invites C. Hurt and heal C (`//kill`, `//res`, `//heal`): the bars move in A's and B's windows, C's buffs show there, and a party-target skill reaches every member in range. Party chat reaches members only; a member who blocked the speaker does not see it.
+2. Hunt: the three kill monsters together. Exp and SP match the reference server for the same levels (`//set_level`). Drops go to random members in range, with `$s1 has obtained $s2.` to the others; adena is split.
+3. Leader change, kick and leave from the party window. A two-member party disperses when one leaves. When the leader logs out, the next member leads.
+4. Friends: A adds B and sees B online. B logs out and in: A gets both notices. Friend messages work. Deleting B removes A from B's list too.
+5. Block: A blocks C. C's whispers get "That person is in message refusal mode."; C's party invites and trade requests get "$s1 has placed you on his/her Ignore List.". A's ignore list shows C. "Refuse all" shows its status icon.
+6. Trade: A and B, within 150 units, trade a weapon for adena (`//create_item`). Both confirm; inventories and weight update. Cancel moves nothing. A full inventory fails the trade on both sides.
+7. Sell store in Giran: A lists items with a message. Others see A sitting with the message. B clicks A twice, walks up and buys; the adena moves; the store closes when sold out. In a Giran no-store corridor the store refuses to open.
+8. A package sale can only be bought whole. B's buy store accepts A's items. Restart is refused in store mode.
+9. Kill the game server process right after a purchase and start it again: the items and adena have all moved, or none.
+10. Clan: A at level 10 (`//set_level 10`) creates a clan at a village master, invites B (the clan window lists both, with live online state), and raises the clan to level 1 (20,000 SP and 650,000 adena: `//add_exp_sp 0 20000`, `//create_item 57 650000`). After `//pledge setlevel 3`: A gives B a title, uploads a clan crest (C sees it above both), and sets rank privileges.
+11. B leaves (the 1-day penalty message). C joins and A dismisses C: C and the clan get their penalties (`/clanpenalty`).
+12. Alliance: two clans at level 5 (`//pledge setlevel 5` on each leader): create the alliance at a village master, invite, alliance chat, alliance crest, leave.
+13. War, with `clan.membersForWar` lowered in the config: first give both clans a score above 0 (`//pledge setlevel 5`, then `//pledge rep 1000`, on each leader). One clan declares (single fist), the other declares back (double fist). Members attack each other without Ctrl, and kills move reputation.
+14. Clan warehouse: a member deposits; only the leader withdraws.
+15. Clan extras: at clan level 5 the academy, at 6 and 7 a Royal Guard and Knights (5,000 and 10,000 reputation); clan skills from the village master for reputation.
+16. Restart the server: parties are gone; friends, blocks, clans, ranks, crests, alliances and wars are back.
+
+World and AI (Milestone 10). Both servers use the same geodata folder when you compare with the reference server.
+
+1. With a full Interlude `.l2j` set in `geodata.dir`, the log reports the loaded tiles. With an empty folder the server plays as without Milestone 10 and pathfinding is off.
+2. As GM in Cruma Tower: `//geo_pos` prints the cell, the height and the position; `//geo_can_see` at a target behind a pillar says "Cannot see target."; `//path_find` to a target behind a wall lists waypoints.
+3. Click a spot behind a building corner, closer than 3,000 units: the character walks around the corner. Attack or cast at a monster behind a pillar: "Cannot see target."
+4. Stand behind a wall inside an aggressive monster's aggro range: nothing happens until it can see you. Pull one round a corner: it runs around the wall, never through it.
+5. In multi-floor places (Cruma Tower, Tower of Insolence) monsters, drops and teleport arrivals stand on the right floor.
+6. Doors: the Tower of Insolence 3rd-floor door (23180001, at 113876 16952 -1979) opens and closes by itself every 2–4 minutes. `//close 17220001` (a Gludin clan hall door, at -84495 155208 -3150) blocks walking and sight; `//open 17220001` lets you pass. A second client sees each change.
+7. Greyclaw Kutus (raid boss 25001, `//teleport -54416 146480 -2887`) stands with 3 Guards of Kutus and a Pawn of Kutus.
+   - Hit a guard: the whole group joins. A dead guard comes back after 5 minutes while Kutus lives.
+   - Kutus casts Hold (4197) at attackers. A character of level 32 or more that hits him is petrified (Raid Curse; `//set_level 32`).
+   - Kill him: the raid success message; the minions vanish; his respawn time, 12–60 hours later, survives a server restart.
+8. Queen Ant (`//teleport -21610 181594 -5734`): the nurses heal the larva first, then the queen. Kill her: `//grandboss 29001` shows her dead with a respawn 28–44 hours away, unchanged after a restart.
+9. Game midnight (every 4 real hours; night lasts one real hour): the Forest of the Dead night monsters and Eilhalder von Hellmann appear, and Zaken's door opens for 5 minutes. At 06:00 the night spawns leave.
+10. Talking Island: Leandro (31357) and Remy (31356) walk their routes and speak at their stops (`//list_positions 31357 1`); idle NPCs play an animation now and then; town pets wander around their spot.
+11. Ferry Talking Island → Gludin: the 5-minute and 1-minute calls; ticket 1074 (`//create_item 1074`) is taken at departure, and a player without one is put ashore; passengers move with the ship and get off at Gludin. The ferries start their schedules 3 minutes after the server starts.
 
 Build and run without Docker
 ----
@@ -383,6 +470,8 @@ With Docker Compose, put the tiles in `./geodata` (it holds only a placeholder i
 GEODATA_DIR=/srv/l2/geodata make up
 ```
 
+In the game, `//geo_pos` shows the geodata cell and ground height where a GM stands ("There is no geodata at this position." on a tile without a file), `//geo_can_see` and `//geo_can_move` test sight to the target, and `//path_find` lists the waypoints to it ("PathFinding is disabled." when no tile loaded or `geodata.pathfinding` is off).
+
 The engine (`internal/geo`) answers terrain only. Doors and fences block too, but they are game objects that open and close, so the game checks them before the terrain, in Mobius's order. Tests never need real tiles: `internal/geo/geotest` builds synthetic ones from small ASCII pictures.
 
 Lua scripting
@@ -462,6 +551,18 @@ Lint and vulnerability tools are pinned in `tools/go.mod` and run with `go tool 
 - **Time is injectable.** The loop takes a clock, so tests use `world.NewFakeClock` or `testing/synctest` instead of sleeping.
 - **Mobius is the reference.** Packet layouts come from the Mobius `writeImpl`/`readImpl` methods, golden tests are built from them by hand, and `refdiff` compares whole packet streams with a running Mobius.
 
+### Saves and write order
+
+The world loop never waits for MongoDB. Every write goes through one background writer, the saver (`internal/game/persist.go`, Plan 08 I2 and Plan 12 T5/T6), which writes one job at a time in the order the loop handed them over. Parties, trade windows, store lists and pending requests are not stored, as in Mobius.
+
+- **Single saves, giver first.** A handler that changes a player's items calls `RequestSave`; at the end of the tick the requested saves go to the saver in the order they were asked for, and `Save` hands over the earlier requests before its own. An item that moves from one player to another is therefore written giver first: a crash between the two writes can lose it, never duplicate it. A new snapshot merges into a waiting save of the same character only if no waiting job after that one touches the character.
+- **Joint saves.** `Server.SaveJoint(players, extra)` writes several owners in one transaction (`storage.BatchWriter.WriteBatch`): a snapshot of each listed player that is in the game, with its item and quest changes since its last save, plus `extra` (a `storage.Batch`): other owners' item changes (a clan warehouse), clan documents and deleted clans, crests and alliance crests, friend and block changes, patches to offline characters, and further character saves. Trades, store purchases and clan warehouse moves use it, and so does every clan, crest, alliance and relation change. A crash loses the whole exchange or none of it, never one side.
+- **The listed players' pending requests go into the batch.** Saves other players asked for earlier in the tick, before the first listed player, are handed over first. A listed player's own request is taken into the batch: written alone, its snapshot could reach the database without the other side. Requests asked for after it stay for the end of the tick, after the batch.
+- **Queue position and merges.** The batch takes the queue position of the earliest waiting save of a listed player. Every waiting job from there on that touches the same characters, clans or crests, and whatever those touch in turn, merges into it, so nothing overtakes an older write of the same key. Without a waiting save of a listed player the batch goes to the end of the queue: a patch to an offline character, a relation change or a clan's item change is written after that character's or clan's pending writes. In a batch, patches apply after every save, so they are only for characters that are not in the game.
+- **Loading waits.** Selecting a character waits until no write that touches it is waiting or being written.
+- **Failures.** A failed write is retried, first after 0.5 s and then twice as long each time up to 30 s, before anything after it is written. When a joint save fails for good (a character that does not exist, a clan name that is taken, a store that cannot write batches, or the server stopped first), the listed players still in the game are disconnected without a save, so that they reload what the database has. After the server stops, a failing write gets 3 more tries.
+- **Transactions need a replica set.** The Docker Compose MongoDB is a one-node replica set (`rs0`); a MongoDB of your own needs one too, with `replicaSet` in the URI. The in-memory store used by the tests writes batches as well.
+
 ### Load test: `make bots`
 
 `cmd/bots` runs N fake players (default 50) against the running stack until Ctrl+C. Each logs in with its own account, creates a Human Fighter if it has none, enters the world, and every few seconds walks to a random point nearby, says something in general chat, or targets and talks to the nearest NPC. Every 10 seconds it prints the bots in the world, the errors, the packets per second and the latency percentiles of each kind of request (move, say, target, talk, login, enter).
@@ -517,6 +618,8 @@ internal/gameserver/htmlutil/       the links of dialog pages (the bypass link c
 internal/game/                      the game on the world loop: players, NPCs, movement, chat, dialogs, ...
 internal/world/                     world loop, clock and timers, regions and visibility, broadcasting
 internal/stats/                     stat engine: Mobius formulas and modifiers
+internal/social/                    pure rules of parties, clans and alliances: exp shares, loot, clan levels, privileges
+internal/npcai/                     pure monster AI decisions: skill lists and choices, target switches, minion positions
 internal/geo/                       geodata: L2J tiles, heights, walls, line of sight, paths, door and fence segments
 internal/geo/geotest/               synthetic geodata tiles from ASCII pictures, for tests
 internal/scripting/                 Lua engine: sandbox, loader, events, NPC scripts, reload

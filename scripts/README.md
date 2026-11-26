@@ -3,20 +3,25 @@ Lua scripts
 
 Game content that changes often is written here in Lua. The game server loads every script at startup and can reload them without a restart. Networking, data loading and anything that runs every tick stay in Go.
 
-The hooks today: character creation, chat, NPC scripts (first talk, quest-link talk and dialog links) and quests (quest states, items, kills and the other world events, timers). Commands come as the game grows.
+The hooks today: character creation, chat, NPC scripts (first talk, quest-link talk and dialog links), quests (quest states, items, kills and the other world events, timers), the scripted monster, area and boss AI, and the ferry schedules. Commands come as the game grows.
 
 Layout
 ----
 
 ```
-events/     event rules, e.g. character_create.lua
-npcs/       NPC scripts, one folder each with its pages, e.g. talking_island_guard/
-quests/     quests, one folder each, named after the Mobius class: quests/Q00001_LettersOfLove/
-lib/        shared helpers, loaded only through require("lib.name"), e.g. lib/java.lua
-types/      API definitions for the editor (never run)
+events/          event rules, e.g. character_create.lua
+npcs/            NPC scripts, one folder each with its pages, e.g. talking_island_guard/
+quests/          quests, one folder each, named after the Mobius class: quests/Q00001_LettersOfLove/
+village_master/  the village master scripts: class changes, clan and alliance pages
+ai/monsters/     monster scripts from Mobius ai/others, one file each: chests.lua, town_pets.lua, ...
+ai/areas/        area scripts, one folder per area: ai/areas/<Area>/<Class>.lua, or <Area>/<Class>/<Class>.lua
+ai/bosses/       boss scripts, one file per Mobius class (QueenAnt.lua, ZakenDoor.lua, ...), with their pages
+vehicles/        the five ferry schedules, e.g. talking_gludin.lua
+lib/             shared helpers, loaded only through require("lib.name"), e.g. lib/java.lua
+types/           API definitions for the editor (never run)
 ```
 
-More folders (`commands/`, `village_master/`) appear when those features exist. Every `.lua` file outside `lib/` and `types/` runs when the scripts load, in path order (`events/a.lua` before `events/b.lua` before `npcs/x.lua`). Files and folders starting with `.` are skipped, and so is everything that is not `.lua` (pages are read by the game server when it shows them).
+A `commands/` folder appears when that feature exists. Every `.lua` file outside `lib/` and `types/` runs when the scripts load, in path order (`events/a.lua` before `events/b.lua` before `npcs/x.lua`). Files and folders starting with `.` are skipped, and so is everything that is not `.lua` (pages are read by the game server when it shows them).
 
 Writing a script
 ----
@@ -172,7 +177,7 @@ Every link a page offers is remembered for the player; a link that the last page
 | `npcs/asamah/` | `Asamah` | Asamah (32115) | Mobius's `ai/others/Asamah`: the Elroki pages and the capture skill explanations. |
 | `npcs/kier/` | `Kier` | Kierre's statue (32022) | Mobius's `ai/others/Kier`. |
 
-`village_master/` holds Mobius's 16 village master scripts, ported by hand with the same names: the first and second class changes (`ElfHumanFighterChange1`, `ElfHumanWizardChange1`, `DarkElfChange1`, `OrcChange1`, `DwarfBlacksmithChange1`, `DwarfWarehouseChange1` and their `...Change2`, plus `ElfHumanClericChange2`), the newbie village headmasters (`FirstClassTransferTalk`) and the clan and alliance pages (`ClanMaster`, `AllianceMaster`; the clan actions of their pages, `npc_%objectId%_create_clan` and the others, are commands of the game's village masters, and the alliance, unit and clan skill ones answer as not available yet until those features exist). `lib/class_master.lua` holds their shared class change step. Their pages are Mobius's, in `data/html/scripts/village_master/`.
+`village_master/` holds Mobius's 16 village master scripts, ported by hand with the same names: the first and second class changes (`ElfHumanFighterChange1`, `ElfHumanWizardChange1`, `DarkElfChange1`, `OrcChange1`, `DwarfBlacksmithChange1`, `DwarfWarehouseChange1` and their `...Change2`, plus `ElfHumanClericChange2`), the newbie village headmasters (`FirstClassTransferTalk`) and the clan and alliance pages (`ClanMaster`, `AllianceMaster`; the clan, unit, clan skill and alliance actions of their pages, `npc_%objectId%_create_clan`, `..._create_ally` and the others, are commands of the game's village masters, as in Mobius `VillageMaster`). `lib/class_master.lua` holds their shared class change step. Their pages are Mobius's, in `data/html/scripts/village_master/`.
 
 The Mobius ports keep their page names and links. Where Mobius asks for quest states or items, which the Lua API does not have yet, the scripts take the branch of a player who never took the quest (marked in the code).
 
@@ -212,7 +217,7 @@ end)
 ```
 
 - `quest.new(id, name, description)` makes a quest: `id` ≥ 1 is listed in the quest log and can be aborted; `name` is the Mobius class name, used in `Script <name> <event>` links; `description` is the quest window's name. `script.new(name)` is `quest.new(-1, name, "")`, so everything here works for plain scripts too.
-- **Registration**, while the scripts load: `add_start_npc`, `add_talk_id`, `add_first_talk_id` (one owning script per NPC), `add_kill_id`, `add_attack_id`, `add_spawn_id`, `add_skill_see_id`, `add_spell_finished_id`, `add_aggro_range_enter_id`, `add_enter_zone_id`, `add_exit_zone_id`, `add_item_talk_id`. Each takes IDs or lists, as many as you like; duplicates count once. Plus `register_quest_items(...)` (taken on exit and abort), `set_custom(true)` (no quest mark, no `start_quest`), `set_on_enter_world(true)`, and `requires("clans", ...)` for quests that need a later feature (`clans`, `clan_halls`, `subclass`, `noblesse`, `pets`, `fishing`, `seven_signs`, `sepulchers`, `grand_bosses`, `doors`): they are not offered until it exists (`clans` does since M9).
+- **Registration**, while the scripts load: `add_start_npc`, `add_talk_id`, `add_first_talk_id` (one owning script per NPC), `add_kill_id`, `add_attack_id`, `add_spawn_id`, `add_skill_see_id`, `add_spell_finished_id`, `add_aggro_range_enter_id`, `add_enter_zone_id`, `add_exit_zone_id`, `add_item_talk_id`. Each takes IDs or lists, as many as you like; duplicates count once. Plus `register_quest_items(...)` (taken on exit and abort), `set_custom(true)` (no quest mark, no `start_quest`), `set_on_enter_world(true)`, and `requires("clans", ...)` for quests that need a later feature (`clans`, `clan_halls`, `subclass`, `noblesse`, `pets`, `fishing`, `seven_signs`, `sepulchers`, `grand_bosses`, `doors`): they are not offered until it exists (`clans` does since M9, `sepulchers` since M10).
 - **Handlers**, one per kind: `q:on_x(fn)` handles every ID registered for x; `q:on_x(ids, fn)` registers the IDs and binds `fn` to them (the NPC script form above).
 
 | Handler | Arguments | Returns |
@@ -236,7 +241,7 @@ end)
 
 **Quest state.** `q:get_quest_state(player, create)` returns the player's `QuestState` (nil when there is none and `create` is false). The state lives in the server and is saved with the character, so it survives reloads and restarts; keep progress there, never in Lua variables. Its methods: `get_state()` / `is_created()` / `is_started()` / `is_completed()` / `set_state(State.X)`, `start_quest()`, `get_cond()` (0 unless started), `is_cond(n)` (whatever the state, as Mobius), `set_cond(n, play_middle)`, `set` / `get` / `get_int` / `unset` / `is_set` (string values; names up to 20 characters, values up to 255), the memo states, `exit_quest(repeatable, play_finish)` (true deletes the state, false keeps it COMPLETED; or a `QuestType`), `is_now_available()` / `set_restart_time()` (daily quests, 06:30 server time), `get_player()`, and the tutorial methods.
 
-**Helpers** (Mobius `Quest` methods): `give_items`, `reward_items` (quest rates), `give_adena`, `take_items` (-1 takes all; these three also take Mobius's `ItemHolder` as `{id = , count = }`), `take_items_ids`, `get_quest_items_count`, `has_quest_items`, `has_at_least_one_quest_item`, `give_item_randomly(player, npc, id, min, max, limit, chance, play_sound)`, `add_exp_and_sp`, `play_sound(player, QuestSound.X)`, `get_item_equipped(player, Paperdoll.RHAND)`, `get_enchant_level`, `get_no_quest_msg`, `get_already_completed_msg`, `get_htm`, `show_html_file`, `add_spawn` (heading -1 is random), `add_radar` / `remove_radar` / `clear_radar`, `show_on_screen_msg`, and the party helpers `get_random_party_member`, `get_random_party_member_state`, `execute_for_each_player` (each player is alone until parties exist).
+**Helpers** (Mobius `Quest` methods): `give_items`, `reward_items` (quest rates), `give_adena`, `take_items` (-1 takes all; these three also take Mobius's `ItemHolder` as `{id = , count = }`), `take_items_ids`, `get_quest_items_count`, `has_quest_items`, `has_at_least_one_quest_item`, `give_item_randomly(player, npc, id, min, max, limit, chance, play_sound)`, `add_exp_and_sp`, `play_sound(player, QuestSound.X)`, `get_item_equipped(player, Paperdoll.RHAND)`, `get_enchant_level`, `get_no_quest_msg`, `get_already_completed_msg`, `get_htm`, `show_html_file`, `add_spawn` (heading -1 is random), `add_radar` / `remove_radar` / `clear_radar`, `show_on_screen_msg`, and the party helpers `get_random_party_member`, `get_random_party_member_state`, `execute_for_each_player` (over the player's party, as Mobius).
 
 **Timers.** `q:start_quest_timer(name, ms, npc, player, repeating)` runs `on_event(name, npc, player)` later; a reply goes to the timer's player. A timer is known by its name, NPC and player (nil matches only nil); starting one that runs already does nothing. A one-shot timer is gone before its handler runs, so the handler may start it again. `get_quest_timer`, `cancel_quest_timer`, `cancel_quest_timers(name)`. Timers stop when their NPC or player leaves the world and on reload; they are not saved.
 
@@ -260,6 +265,31 @@ end)
 
 The world is only there in handlers: a quest helper, `time`, `world`, `globals`, `skills` or `items` called while the scripts load is an error (use `on_start`).
 
+### AI scripts and ferries: `ai/` and `vehicles/`
+
+Mobius's scripted AI (`dist/game/data/scripts/ai/`) and its ferry schedules (`scripts/vehicles/`) are ported one Lua file per Mobius class, named after it. They are plain scripts (`script.new`) with Mobius's AI callbacks. The monster AI itself (thinking, skills, minions, raid bosses, the grand boss store) is Go; Lua runs only on the events and timers of the NPCs a script registered, never per tick.
+
+| Folder | What | Mobius source |
+|---|---|---|
+| `ai/monsters/` | 13 monster scripts, file names in snake case: `chests.lua`, `fairy_trees.lua`, `flee_monsters.lua`, `gordon.lua`, `non_lethalable_npcs.lua`, `polymorphing_angel.lua`, `polymorphing_on_attack.lua`, `see_through_silent_move.lua`, `timak_orc_troop_leader.lua`, `town_pets.lua`, `turek_orcs.lua`, `varka_ketra.lua`, `wasted_corpse.lua` | `ai/others` |
+| `ai/areas/<Area>/` | 22 area scripts: `<Class>.lua` next to each other (`CrumaTower/CrumaTower.lua`, `PaganTemple/PaganKeys.lua`), or `<Class>/<Class>.lua` with its pages where Mobius gives the class a folder (`ImperialTomb/FourSepulchers/FourSepulchers.lua`) | `ai/areas`, without FeedableBeasts, Tunatun and Venom (M11) |
+| `ai/bosses/` | `QueenAnt`, `Core`, `Orfen`, `Zaken`, `ZakenDoor`, `Baium`, `Antharas`, `Valakas`, `ValakasTeleporters`, `Sailren`, `DrChaos`, with their pages | `ai/bosses`, without Frintezza (M11) |
+| `vehicles/` | The five ferry schedules: `talking_gludin.lua`, `giran_talking.lua`, `gludin_rune.lua`, `rune_primeval.lua`, `innadril_tour.lua` | `vehicles/Boat*.java` |
+
+Shared libraries in `lib/`:
+
+| File | What |
+|---|---|
+| `lib/boss.lua` | The grand boss pattern: the statuses, the respawn delay from `GrandBoss.ini` (`respawn_ms`), the restart-safe start (`start`: a live boss after a reload re-arms its timers, a dead one re-arms its respawn timer from the saved time, a living one in the store spawns where it was), `spawn_saved`, `died` (status, timer and respawn time saved at once), `oust`, sounds and desires. |
+| `lib/four_sepulchers.lua` | The room spawns of the Four Sepulchers (data from Mobius `FourSepulchers.xml`), for `ai/areas/ImperialTomb/FourSepulchers/`. |
+| `lib/boat.lua` | The docks, tickets and ferry announcements, `say`, `with_horn`, `await`, and `route`, which declares a schedule (`vehicles.add_route`) starting 3 minutes after the server. |
+
+- **Events.** Besides the quest handlers above, scripts register `add_faction_call_id`, `add_creature_see_id`, `add_event_received_id`, `add_move_finished_id`, `add_node_arrived_id`, `add_route_finished_id`, `add_teleport_id` and `add_npc_hate_id`, with the handlers `on_faction_call`, `on_creature_see`, `on_event_received`, `on_move_finished`, `on_node_arrived`, `on_route_finished`, `on_teleport` and `on_npc_hate` (which runs at once and can veto a monster's hate by returning `false`). `on_day_night_change(fn)` reaches every script that sets it, at game 00:00 (`true`) and 06:00 (`false`). Events Mobius sends asynchronously (all but `on_npc_hate`) wait until the running handler ends, then run in order, each with its own time limit.
+- **Modules.** `zones` (players and NPCs inside, move or oust them, allowed entry to boss zones), `doors` (open, close, state), `grandboss` (saved status and info, the live boss), `cinematics` (camera, earthquake, sound, screen message), `vehicles` (ferry schedules), more of `world` (`npcs_by_id`, `npcs_around`, `players_around`, `visible_objects`, `can_see_target`, `valid_location`) and `time` (`game_time`, `game_hour`, `is_night`). The NPC methods that drive the AI (hate, casts, movement, minions, script values, ...) are in `types/l2go.lua`.
+- **Reloads.** A reload keeps the NPCs in the world but drops every timer. `on_start` gets `ev.reload`; a boss script then finds its live boss (`grandboss.boss`, `world.npcs_by_id`) and starts its timers again instead of spawning a second one. A reload does not change running ferries.
+
+Tests: `internal/scripting/ai_*_test.go` run the scripts against the fake world, bosses on the fake clock; `internal/game/boss_script_test.go`, `quest_world_ai_*_test.go` and `vehicle_test.go` run them in a game server.
+
 ### `Player` and `Npc`
 
 Handlers get players and NPCs as values with methods. They are valid only while that handler runs; keep `player:object_id()` instead of the player.
@@ -273,7 +303,8 @@ Handlers get players and NPCs as values with methods. They are valid only while 
 | `player:sex()`, `player:base_class()`, `player:is_mage_class()`, `player:is_newbie()`, `player:is_dead()`, `player:is_in_category(Category.X)` | |
 | `player:var(name, default)`, `var_int`, `var_bool`, `set_var(name, value)` | player variables, saved with the character |
 | `player:set_class_id(ClassId.X)`, `player:set_base_class(id)`, `player:broadcast_user_info()` | the class change (effect, message, skill list) |
-| `player:is_in_party()`, `party_members()`, `is_sub_class_active()` | alone until those features exist |
+| `player:is_in_party()`, `party()`, `party_members()` | the party: `party()` is nil without one, else `{leader, members, loot}`; `party_members()` is the player alone without one |
+| `player:is_sub_class_active()` | false until sub-classes exist |
 | `player:clan()`, `player:is_clan_leader()` | the clan (nil without one): `clan:id()`, `name()`, `level()`, `reputation()`, `leader_id()`, `leader()` (`:object_id()`, `:name()`, `:player()`, nil offline), `add_reputation(n)`, `broadcast_pledge_info_update()` |
 | `player:is_noble()`, `set_noble(bool)` | noblesse (the flag and the noble skills) |
 | `player:active_weapon()`, `player:target()` | the right-hand weapon's item ID (nil without one), the target (Player, Npc or nil) |

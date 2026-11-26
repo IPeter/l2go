@@ -25,6 +25,10 @@
 //     hunting bots, the server's "game world ticks" log line (every
 //     minute) gives the tick percentiles of the load test (Plan 09, Plan
 //     10).
+//   - cruma: it hunts like hunt, on the first floor of Cruma Tower (Plan
+//     13's load test with geodata): it gets -level (default 40) with
+//     //set_level, teleports to one of a few spots there with //teleport,
+//     and teleports back after a restart, so the characters need GM rights.
 //
 // Every -report interval and at the end, bots prints the bots in the
 // world, the errors by kind, the game events (kill, death, cast, store, store refused, purchase), the
@@ -45,7 +49,10 @@
 //
 //	bots [-n 50] [-login 127.0.0.1:2106] [-server 1] [-game addr] [-prefix bot] [-rate 10] [-duration 5m] [-seed N] ...
 //	bots -mode hunt [-class mystic|fighter] [-skill id] [-cast 5s] [-buffs 10] [-hunt-range 3000] ...
+//	bots -mode cruma [-level 40] [hunt flags] ...
 //	bots [-stores 0.1] [-buy 0.2] ...
+//	bots -mode hunt -party 3 [-ping 1s] ...   (social.go: parties, trades, friends, the world loop ping)
+//	bots [-trade 0.05] [-friend 0.05] [-ping 1s] ...
 package main
 
 import (
@@ -94,12 +101,19 @@ type config struct {
 	cast      time.Duration
 	buffs     int
 	huntRange float64
+	// level is the level a bot of modeCruma gets with //set_level (0
+	// keeps it); resolve sets crumaLevel when -level is not given.
+	level int32
 
 	// The private stores of wandering bots: the share of the bots that keep
 	// a sell store, and the probability that an action of the others is a
 	// purchase at the nearest store.
 	stores float64
 	buy    float64
+
+	// social is the parties, trades, friend messages and the ping
+	// (social.go).
+	social socialConfig
 }
 
 // maxAccountLength is the longest account name the login packet holds.
@@ -113,6 +127,7 @@ func parseFlags(args []string, output io.Writer) (config, error) {
 		serverID int
 		level    string
 		skill    int
+		charLvl  = -1
 	)
 	fs := flag.NewFlagSet("bots", flag.ContinueOnError)
 	fs.SetOutput(output)
@@ -134,14 +149,16 @@ func parseFlags(args []string, output io.Writer) (config, error) {
 	fs.DurationVar(&cfg.timeout, "timeout", 15*time.Second, "time limit of each request and its answer")
 	fs.IntVar(&cfg.queue, "queue", 64, "packets each bot keeps unread at most (older ones are dropped)")
 	fs.StringVar(&level, "log-level", "warn", "log level: debug, info, warn or error")
-	fs.StringVar(&cfg.mode, "mode", modeWander, "what the bots do: wander (walk, chat, talk to NPCs) or hunt (fight monsters, cast, hold buffs, die and restart)")
+	fs.StringVar(&cfg.mode, "mode", modeWander, "what the bots do: wander (walk, chat, talk to NPCs), hunt (fight monsters, cast, hold buffs, die and restart) or cruma (hunt in Cruma Tower; needs GM rights)")
 	fs.StringVar(&cfg.class, "class", "", "character class: fighter or mystic (default: fighter to wander, mystic to hunt)")
 	fs.IntVar(&skill, "skill", 0, "attack skill ID a hunter casts (default: Wind Strike for a mystic, none for a fighter)")
 	fs.DurationVar(&cfg.cast, "cast", 5*time.Second, "time between two attack skill casts of a hunter (0: no casts)")
 	fs.IntVar(&cfg.buffs, "buffs", 0, fmt.Sprintf("buffs a hunter holds, 0 to %d, given with //buff (needs GM rights)", len(huntBuffs)))
 	fs.Float64Var(&cfg.huntRange, "hunt-range", 3000, "how far from its start point a hunter looks for monsters")
+	fs.IntVar(&charLvl, "level", -1, fmt.Sprintf("level a cruma bot gets with //set_level, 0 to keep its own (default %d)", crumaLevel))
 	fs.Float64Var(&cfg.stores, "stores", 0, "share of the wandering bots that keep a sell store (needs GM rights for //create_item)")
 	fs.Float64Var(&cfg.buy, "buy", 0, "probability that an action of a wandering bot is a purchase at the nearest store (needs GM rights for the adena)")
+	cfg.social.addFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -149,6 +166,9 @@ func parseFlags(args []string, output io.Writer) (config, error) {
 		return config{}, fmt.Errorf("-skill %d is not a skill ID", skill)
 	}
 	cfg.skill = int32(skill)
+	if err := cfg.resolveLevel(charLvl); err != nil {
+		return config{}, err
+	}
 	cfg.resolve()
 	if fs.NArg() > 0 {
 		return config{}, fmt.Errorf("unexpected arguments: %v", fs.Args())
@@ -196,8 +216,8 @@ func (c config) validate() error {
 		return errors.New("-talk-range must not be negative")
 	case c.queue < 1:
 		return errors.New("-queue must be at least 1")
-	case c.mode != modeWander && c.mode != modeHunt:
-		return fmt.Errorf("-mode %q: use %s or %s", c.mode, modeWander, modeHunt)
+	case c.mode != modeWander && c.mode != modeHunt && c.mode != modeCruma:
+		return fmt.Errorf("-mode %q: use %s, %s or %s", c.mode, modeWander, modeHunt, modeCruma)
 	case c.class != classFighter && c.class != classMystic:
 		return fmt.Errorf("-class %q: use %s or %s", c.class, classFighter, classMystic)
 	case c.cast < 0:
@@ -207,7 +227,7 @@ func (c config) validate() error {
 	case c.huntRange <= 0:
 		return errors.New("-hunt-range must be positive")
 	}
-	return nil
+	return c.social.validate(c.mode)
 }
 
 // resolve fills in the defaults that depend on other flags: the class (a
@@ -216,7 +236,7 @@ func (c config) validate() error {
 func (c *config) resolve() {
 	if c.class == "" {
 		c.class = classFighter
-		if c.mode == modeHunt {
+		if c.mode == modeHunt || c.mode == modeCruma {
 			c.class = classMystic
 		}
 	}
@@ -279,9 +299,14 @@ func run(ctx context.Context, cfg config, out io.Writer, logger *slog.Logger) er
 		fmt.Fprintf(out, "bots: hunting within %g of the start, skill %d every %v, %d buffs\n",
 			cfg.huntRange, cfg.skill, cfg.cast, cfg.buffs)
 	}
+	if cfg.mode == modeCruma {
+		fmt.Fprintf(out, "bots: hunting in Cruma Tower within %g of %d spots, level %d, skill %d every %v, %d buffs\n",
+			cfg.huntRange, len(crumaSpots), cfg.level, cfg.skill, cfg.cast, cfg.buffs)
+	}
 	if cfg.mode == modeWander && (cfg.stores > 0 || cfg.buy > 0) {
 		fmt.Fprintf(out, "bots: %g of the bots keep a store, the others buy with probability %g\n", cfg.stores, cfg.buy)
 	}
+	cfg.social.describe(out)
 
 	reportDone := make(chan struct{})
 	stopReports := make(chan struct{})

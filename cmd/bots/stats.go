@@ -299,6 +299,7 @@ func (r Report) Write(w io.Writer) error {
 		for _, l := range r.Latency {
 			fmt.Fprintf(&b, "  %-8s %8d %10s %10s %10s %10s\n", l.Op, l.N, fmtDur(l.P50), fmtDur(l.P90), fmtDur(l.P99), fmtDur(l.Max))
 		}
+		writeTickLine(&b, r) // social.go: the world loop at this many bots
 	}
 	if len(r.Events) > 0 {
 		parts := make([]string, len(r.Events))
